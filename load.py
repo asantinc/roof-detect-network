@@ -1,5 +1,5 @@
 import os
-
+import glob
 import numpy as np
 import cv2
 #from pandas.io.parsers import read_csv
@@ -13,7 +13,12 @@ FTEST = '~/roof/data/test/'
 
 def load_images(test=false):
     fname = FTEST if test else FTRAIN
-    
+    X = None
+    for f in glob.glob(fname+'*.jpg'):
+        x = cv2.imread(f)
+	total_shape = x.shape[0]*x.shape[1]*x.shape[2]
+	x.shape = (1,total_shape)
+        X = x if X==None else np.concatenate(X, x, axis=0)
     return X
 
 
