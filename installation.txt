@@ -1,0 +1,38 @@
+************************
+Installation process:
+************************
+General instructions are here: 
+http://caffe.berkeleyvision.org/installation.html#prerequisites
+
+I actually followed these:
+http://hoondy.com/2015/04/03/how-to-install-caffe-on-mac-os-x-10-10-for-dummies-like-me/
+
+Installed:
+1. Added skeleton directories under /Code/
+2. Connected to github 
+3. Installed Anaconda, can be found in ~/anaconda (Python environment with many of the required dependencies)
+4. Installed CUDA 7 (under /Developer/NVIDIA/CUDA-7.0 )
+    https://developer.nvidia.com/cuda-downloads
+5. Downloaded lastest driver for CUDA 
+    http://www.nvidia.com/object/mac-driver-archive.html
+6. Updated paths for CUDA 
+    export PATH=/Developer/NVIDIA/CUDA-7.0/bin:$PATH
+    export DYLD_LIBRARY_PATH=/Developer/NVIDIA/CUDA-7.0/lib:$DYLD_LIBRARY_PATH
+7. Install Intel MKL (math kernal library, which is a component of Intel Parallel Studio XE Composer Edition) using free student license, https://software.intel.com/en-us/qualify-for-free-software/student 
+8. export  DYLD_FALLBACK_LIBRARY_PATH=/usr/local/cuda/lib:$HOME/anaconda/lib:/usr/local/lib:/usr/lib:/opt/intel/composer_xe_2015.2.132/compiler/lib:/opt/intel/composer_xe_2015.2.132/mkl/lib
+9. Edit the Makefile.config file
+
+TODO: 
+<cuDNN>
+Install NVIDIA cuDNN from https://developer.nvidia.com/cudnn (Later, don’t forget to uncomment the USE_CUDNN := 1 flag in Makefile.config). You first need to signup and get approved by NVIDIA CUDA Register Developer Program.
+
+    tar -xzvf cudnn-6.5-osx-v2.tgz
+
+    cd cudnn-6.5-osx-v2
+
+    sudo cp lib* /usr/local/cuda/lib
+
+    sudo cp cudnn.h /usr/local/cuda/include/
+
+
+
