@@ -1,8 +1,14 @@
 from lasagne import layers
 from lasagne.updates import nesterov_momentum
-from nolearn.lasagne import NeuralNet
-import load.py
+import load
+import sys
+import pdb
 
+sys.path.append('~/roof/Lasagne/lasagne')
+sys.path.append('~/roof/nolearn/nolearn')
+
+#pdb.set_trace()
+from nolearn.lasagne import NeuralNet
 
 net1 = NeuralNet(
     layers=[  # three layers: one hidden layer
@@ -13,7 +19,7 @@ net1 = NeuralNet(
     # layer parameters:
     input_shape=(None, 4800),  # 96x96 input pixels per batch
     hidden_num_units=100,  # number of units in hidden layer
-    output_nonlinearity=None,  # output layer uses identity function
+    #output_nonlinearity=None,  # output layer uses identity function
     output_num_units=3,  # 30 target values
 
     # optimization method:
@@ -26,5 +32,5 @@ net1 = NeuralNet(
     verbose=1,
     )
 
-X, y = load()
+X, y = load.load()
 net1.fit(X, y)

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt #display images
 import xml.etree.ElementTree as ET #traverse the xml files
 import pdb  
 import os #import the image files
-import cv2 #for Gaussian Pyramid
+#import cv2 #for Gaussian Pyramid
 import random
 
 
