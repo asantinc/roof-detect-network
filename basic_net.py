@@ -1,16 +1,21 @@
 from lasagne import layers
+#import nolearn.lasagne.visualize
 from lasagne.updates import nesterov_momentum
 import load
 import sys
 import pdb
 import lasagne
 import numpy as np
+import matplotlib.pyplot as plt
 
+IMG_SIZE = 40
 sys.path.append('~/roof/Lasagne/lasagne')
 sys.path.append('~/roof/nolearn/nolearn')
 
 #pdb.set_trace()
 from nolearn.lasagne import NeuralNet
+from nolearn.lasagne import visualize
+
 net1 = NeuralNet(
     layers=[  # three layers: one hidden layer
         ('input', layers.InputLayer),
@@ -18,7 +23,7 @@ net1 = NeuralNet(
         ('output', layers.DenseLayer),
         ],
     # layer parameters:
-    input_shape=(None, 4800),  # 96x96 input pixels per batch
+    input_shape=(None, 3, IMG_SIZE, IMG_SIZE),  # 96x96 input pixels per batch
     hidden_num_units=100,  # number of units in hidden layer
     #output_nonlinearity=None,  # output layer uses identity function
     output_num_units=3,  # 30 target values
@@ -38,14 +43,5 @@ X, y = load.load()
 #pdb.set_trace()
 net1.fit(X, y)
 
-train_loss = np.array([i["train_loss"] for i in net1.train_history_])
-valid_loss = np.array([i["valid_loss"] for i in net1.train_history_])
-pyplot.plot(train_loss, linewidth=3, label="train")
-pyplot.plot(valid_loss, linewidth=3, label="valid")
-pyplot.grid()
-pyplot.legend()
-pyplot.xlabel("epoch")
-pyplot.ylabel("loss")
-pyplot.ylim(1e-3, 1e-2)
-
-pyplot.show()
+visualize.plot_loss(net1)
+plt.savefig('basic_net.png')

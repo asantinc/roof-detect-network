@@ -10,7 +10,7 @@ import pdb
 FTRAIN = 'data/train/'
 FTRAIN_LABEL = 'data/labels.csv'
 FTEST = 'data/test/'
-
+IMG_SIZE = 40
 
 def load_images(test=False):
     fname = FTEST if test else FTRAIN
@@ -19,13 +19,17 @@ def load_images(test=False):
     for f in glob.glob(fname+'*.jpg'):
         file_number = f[11:-4]
         x = cv2.imread(f)
-        total_shape = x.shape[0]*x.shape[1]*x.shape[2]
-        x.shape = (1,total_shape)
+        #pdb.set_trace()
+        x = np.asarray(x, dtype='float32') / 255
+        #total_shape = x.shape[0]*x.shape[1]*x.shape[2]
+        x = x.transpose(2,0,1)
+        x.shape = (1,x.shape[0], x.shape[1], x.shape[2])
         try:
+        #    pdb.set_trace()
             X = x if X==None else np.concatenate((X, x), axis=0)
             #print X.shape, x.shape
         except ValueError, e:
-            #pdb.set_trace()
+            pdb.set_trace()
             ignore_rows.append(int(file_number))
             #print X.shape, x.shape
             print e
