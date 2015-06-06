@@ -29,7 +29,7 @@ def load_images(test=False):
             X = x if X==None else np.concatenate((X, x), axis=0)
             #print X.shape, x.shape
         except ValueError, e:
-            pdb.set_trace()
+            #pdb.set_trace()
             ignore_rows.append(int(file_number))
             #print X.shape, x.shape
             print e

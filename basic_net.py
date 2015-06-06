@@ -42,6 +42,6 @@ net1 = NeuralNet(
 X, y = load.load()
 #pdb.set_trace()
 net1.fit(X, y)
-
+pdb.set_trace()
 visualize.plot_loss(net1)
 plt.savefig('basic_net.png')
