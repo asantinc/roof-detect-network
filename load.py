@@ -29,6 +29,7 @@ def load_images(test=False):
             ignore_rows.append(int(file_number))
             #print X.shape, x.shape
             print e
+    X = X.astype(np.float32)
     return X, ignore_rows
 
 
@@ -40,13 +41,14 @@ def load(test=False):
     #get the labels
     if not test:  # only FTRAIN has any target columns
         y = np.loadtxt(open(FTRAIN_LABEL,"rb"),delimiter=",", usecols=[1])
-        #np.delete(y, ignore_rows, axis=0)
+        #pdb.set_trace()
+        y = np.delete(y, ignore_rows, axis=0)
         #X, y = shuffle(X, y, random_state=42)  # shuffle train data
-        y = y.astype(np.float32)
+        y = y.astype(np.int32)
     else:
         y = None
     print X.shape, y.shape
-    pdb.set_trace()
+    #pdb.set_trace()
     return X, y
 
 if __name__ == "__main__":
