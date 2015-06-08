@@ -3,6 +3,7 @@ import glob
 import numpy as np
 import cv2
 import pdb
+import matplotlib.pyplot as plt
 #from pandas.io.parsers import read_csv
 #from sklearn.utils import shuffle
 
@@ -13,28 +14,41 @@ FTEST = 'data/test/'
 IMG_SIZE = 40
 
 def load_images(test=False):
+    '''
+    Load the images into a numpy array X.
+    We divide pixels by 255 and then subtract the mean from each image.
+    '''
     fname = FTEST if test else FTRAIN
     X = None
     ignore_rows = list()
-    for f in glob.glob(fname+'*.jpg'):
+    #for f in glob.glob(fname+'*.jpg'):
+    for f in ['data/train/3.jpg', 'data/train/4.jpg']:
         file_number = f[11:-4]
         x = cv2.imread(f)
-        #pdb.set_trace()
         x = np.asarray(x, dtype='float32') / 255
-        #total_shape = x.shape[0]*x.shape[1]*x.shape[2]
         x = x.transpose(2,0,1)
         x.shape = (1,x.shape[0], x.shape[1], x.shape[2])
         try:
-        #    pdb.set_trace()
             X = x if X==None else np.concatenate((X, x), axis=0)
-            #print X.shape, x.shape
         except ValueError, e:
-            #pdb.set_trace()
             ignore_rows.append(int(file_number))
-            #print X.shape, x.shape
             print e
+
+    #subtract mean of images
+    mean_X = np.mean(X, axis=0)
+    mean_X.reshape(mean_X.shape, 1)    
+
+    X = X - mean_X
+
     X = X.astype(np.float32)
     return X, ignore_rows
+
+def display_image(data_x, index_list):
+    '''
+    Display the image stored in the data array to ensure that we are storing the right thing
+    '''
+    for i in index_list:
+        pass
 
 
 def load(test=False):
@@ -56,8 +70,12 @@ def load(test=False):
     return X, y
 
 if __name__ == "__main__":
-    X, y = load()
+    X, y = load(test=True)
     print("X.shape == {}; X.min == {:.3f}; X.max == {:.3f}".format(
         X.shape, X.min(), X.max()))
     print("y.shape == {}; y.min == {:.3f}; y.max == {:.3f}".format(
         y.shape, y.min(), y.max()))
+    pdb.set_trace()
+    plt.imshow(X[1,:,:,:])
+    plt.show()
+
