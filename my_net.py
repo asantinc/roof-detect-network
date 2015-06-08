@@ -45,33 +45,32 @@ class MyNeuralNet(NeuralNet):
 	        more_params=None,
 	        verbose=0,
 	        **kwargs):
-        NeuralNet.__init__(
-	        self,
-	        layers,
-	        update=update,
-	        loss=loss,
-            objective=objective,
-            objective_loss_function=objective_loss_function,
-	        batch_iterator_train=batch_iterator_train,
-	        batch_iterator_test=batch_iterator_test,
-	        regression=regression,
-	        max_epochs=max_epochs,
-	        eval_size=eval_size,
-            custom_score=custom_score,
-	        X_tensor_type=X_tensor_type,
-	        y_tensor_type=y_tensor_type,
-	        use_label_encoder=use_label_encoder,
-	        on_epoch_finished=on_epoch_finished,
-	        on_training_finished=on_training_finished,
-	        more_params=more_params,
-	        verbose=verbose,
-	        **kwargs
-			)
-	    self.regression = regression
-        self.batch_iterator_test = batch_iterator_test
+		NeuralNet.__init__(
+			self,
+		    layers,
+		    update=update,
+		    loss=loss,
+		    objective=objective,
+		    objective_loss_function=objective_loss_function,
+		    batch_iterator_train=batch_iterator_train,
+		    batch_iterator_test=batch_iterator_test,
+		    regression=regression,
+		    max_epochs=max_epochs,
+		    eval_size=eval_size,
+		    custom_score=custom_score,
+		    X_tensor_type=X_tensor_type,
+		    y_tensor_type=y_tensor_type,
+		    use_label_encoder=use_label_encoder,
+		    on_epoch_finished=on_epoch_finished,
+		    on_training_finished=on_training_finished,
+		    more_params=more_params,
+		    verbose=verbose,
+		    **kwargs)
+		self.regression = regression
+		self.batch_iterator_test = batch_iterator_test
 		self.preproc_scaler = preproc_scaler
 
-    def predict_proba(self, X):
+	def predict_proba(self, X):
 	    if self.preproc_scaler is not None:
 	        X = self.preproc_scaler.transform(X)
 	    probas = []
