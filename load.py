@@ -21,8 +21,8 @@ def load_images(test=False):
     fname = FTEST if test else FTRAIN
     X = None
     ignore_rows = list()
-    #for f in glob.glob(fname+'*.jpg'):
-    for f in ['data/train/3.jpg', 'data/train/4.jpg']:
+    for f in glob.glob(fname+'*.jpg'):
+    #for f in ['data/train/3.jpg', 'data/train/4.jpg']:
         file_number = f[11:-4]
         x = cv2.imread(f)
         x = np.asarray(x, dtype='float32') / 255
@@ -33,12 +33,6 @@ def load_images(test=False):
         except ValueError, e:
             ignore_rows.append(int(file_number))
             print e
-
-    #subtract mean of images
-    mean_X = np.mean(X, axis=0)
-    mean_X.reshape(mean_X.shape, 1)    
-
-    X = X - mean_X
 
     X = X.astype(np.float32)
     return X, ignore_rows

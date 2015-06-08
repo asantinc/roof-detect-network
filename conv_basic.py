@@ -1,13 +1,15 @@
 import lasagne
 from lasagne.updates import nesterov_momentum
 from lasagne import layers
-from nolearn.lasagne import NeuralNet
+#from nolearn.lasagne import NeuralNet
+from my_net import MyNeuralNet
+from sklearn.preprocessing import StandardScaler
 import load
 
 IMG_SIZE = 40
 
-
-net2 = NeuralNet(
+#same call as to NeuralNet, but with a StandardScaler parameter also
+net2 = MyNeuralNet(
     layers=[
         ('input', layers.InputLayer),
         ('conv1', layers.Conv2DLayer),
@@ -27,7 +29,7 @@ net2 = NeuralNet(
     hidden4_num_units=500, hidden5_num_units=500,
     output_num_units=3,
     output_nonlinearity=lasagne.nonlinearities.softmax,
-
+    preproc_scaler = StandardScaler(), 
     update_learning_rate=0.01,
     update_momentum=0.9,
 
