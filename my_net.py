@@ -92,10 +92,10 @@ class MyNeuralNet(NeuralNet):
 	        X_train, y_train = X, y
 	        X_valid, y_valid = _sldict(X, slice(len(X), None)), y[len(y):]
 
-	    if self.preproc_scaler is not None:
-            pdb.set_trace()
-            X_train = self.preproc_scaler.fit_transform(X_train)
-            X_valid = self.preproc_scaler.transform(X_valid)
+		if self.preproc_scaler is not None:
+			pdb.set_trace()
+			X_train = self.preproc_scaler.fit_transform(X_train)
+			X_valid = self.preproc_scaler.transform(X_valid)
 
 	    return X_train, X_valid, y_train, y_valid
 
