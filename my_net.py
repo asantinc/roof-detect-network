@@ -16,7 +16,7 @@ IMG_SIZE = 40
 sys.path.append('~/roof/Lasagne/lasagne')
 sys.path.append('~/roof/nolearn/nolearn')
 
-from nolearn.lasagne import NeuralNet, _sldict, BatchIterator
+from nolearn.lasagne.base import NeuralNet, _sldict, BatchIterator
 
 class MyNeuralNet(NeuralNet):
 	'''
@@ -93,8 +93,9 @@ class MyNeuralNet(NeuralNet):
 	        X_valid, y_valid = _sldict(X, slice(len(X), None)), y[len(y):]
 
 	    if self.preproc_scaler is not None:
-	        X_train = self.preproc_scaler.fit_transform(X_train)
-	        X_valid = self.preproc_scaler.transform(X_valid)
+            pdb.set_trace()
+            X_train = self.preproc_scaler.fit_transform(X_train)
+            X_valid = self.preproc_scaler.transform(X_valid)
 
 	    return X_train, X_valid, y_train, y_valid
 
