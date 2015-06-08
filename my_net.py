@@ -44,12 +44,8 @@ class MyNeuralNet(NeuralNet):
 	        preproc_scaler=None,
 	        more_params=None,
 	        verbose=0,
-	        **kwargs
-	        ):
-        self.preproc_scaler = preproc_scaler
-        self.regression = regression
-        self.batch_iterator_test = batch_iterator_test
-		NeuralNet.__init__(
+	        **kwargs):
+        NeuralNet.__init__(
 	        self,
 	        layers,
 	        update=update,
@@ -57,8 +53,8 @@ class MyNeuralNet(NeuralNet):
             objective=objective,
             objective_loss_function=objective_loss_function,
 	        batch_iterator_train=batch_iterator_train,
-	        batch_iterator_test=self.batch_iterator_test,
-	        regression=self.regression,
+	        batch_iterator_test=batch_iterator_test,
+	        regression=regression,
 	        max_epochs=max_epochs,
 	        eval_size=eval_size,
             custom_score=custom_score,
@@ -71,7 +67,10 @@ class MyNeuralNet(NeuralNet):
 	        verbose=verbose,
 	        **kwargs
 			)
-	
+	    self.regression = regression
+        self.batch_iterator_test = batch_iterator_test
+		self.preproc_scaler = preproc_scaler
+
     def predict_proba(self, X):
 	    if self.preproc_scaler is not None:
 	        X = self.preproc_scaler.transform(X)
