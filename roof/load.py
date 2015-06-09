@@ -5,8 +5,7 @@ import cv2
 import pdb
 import matplotlib.pyplot as plt
 #from pandas.io.parsers import read_csv
-from sklearn.utils import shuffle
-
+import sklearn.utils
 
 FTRAIN = '../data/train/'
 FTRAIN_LABEL = '../data/labels.csv'
@@ -35,14 +34,6 @@ def load_images(test=False):
 
     X = X.astype(np.float32)
     return X, ignore_rows
-
-def display_image(data_x, index_list):
-    '''
-    Display the image stored in the data array to ensure that we are storing the right thing
-    '''
-    for i in index_list:
-        pass
-
 
 def load(test=False):
     """Loads data from FTEST if *test* is True, otherwise from FTRAIN.
