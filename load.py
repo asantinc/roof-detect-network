@@ -25,7 +25,7 @@ def load_images(test=False):
     #for f in ['data/train/3.jpg', 'data/train/4.jpg']:
         file_number = f[11:-4]
         x = cv2.imread(f)
-        x = np.asarray(x, dtype='float32') / 255
+        x = np.asarray(x, dtype='float32')
         x = x.transpose(2,0,1)
         x.shape = (1,x.shape[0], x.shape[1], x.shape[2])
         try:

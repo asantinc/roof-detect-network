@@ -40,7 +40,7 @@ net2 = MyNeuralNet(
     )
 
 X, y = load.load()  # load 2-d data
-#pdb.set_trace()
+pdb.set_trace()
 net2.fit(X, y)
 
 # Training for 1000 epochs will take a while.  We'll pickle the
