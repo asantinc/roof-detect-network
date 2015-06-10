@@ -8,10 +8,11 @@ import load
 import pdb
 
 IMG_SIZE = 40
+CROP_SIZE = 32
+
+#Using FlipBatchIterator we rotate, flip and crop the input for data augmentation purposes
 
 #same call as to NeuralNet, but with a StandardScaler parameter also
-#This network uses the FlipBatchIterator to make flips of the input
-
 net3 = MyNeuralNet(
     layers=[
         ('input', layers.InputLayer),
@@ -25,17 +26,20 @@ net3 = MyNeuralNet(
         ('hidden5', layers.DenseLayer),
         ('output', layers.DenseLayer),
         ],
-    input_shape=(None, 3, IMG_SIZE, IMG_SIZE),
+    input_shape=(None, 3, CROP_SIZE, CROP_SIZE),
     conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2),
     conv2_num_filters=64, conv2_filter_size=(2, 2), pool2_pool_size=(2, 2),
     conv3_num_filters=128, conv3_filter_size=(2, 2), pool3_pool_size=(2, 2),
     hidden4_num_units=500, hidden5_num_units=500,
     output_num_units=3,
+    
     output_nonlinearity=lasagne.nonlinearities.softmax,
     preproc_scaler = StandardScaler(), 
+    
     update_learning_rate=0.01,
     update_momentum=0.9,
 
+    batch_iterator_test=flip.CropOnlyBatchIterator(batch_size=128),
     batch_iterator_train=flip.FlipBatchIterator(batch_size=128),
     max_epochs=3000,
     verbose=1,

@@ -96,7 +96,7 @@ class MyNeuralNet(NeuralNet):
 	        X_train, y_train = X, y
 	        X_valid, y_valid = _sldict(X, slice(len(X), None)), y[len(y):]
 	    if self.preproc_scaler is not None:
-                pdb.set_trace()
+                #pdb.set_trace()
                 train_shape = X_train.shape
                 X_train_reshaped = X_train.reshape(train_shape[0], train_shape[1]*train_shape[2]*train_shape[3]) 
                 X_train_reshaped = self.preproc_scaler.fit_transform(X_train_reshaped)
