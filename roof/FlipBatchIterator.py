@@ -11,7 +11,9 @@ class FlipBatchIterator(BatchIterator):
         Xb, yb = super(FlipBatchIterator, self).transform(Xb, yb)
         # Flip half of the images in this batch at random:
         bs = Xb.shape[0]
-        indices = np.random.choice(bs, bs / 2, replace=False)
-        Xb[indices] = Xb[indices, :, :, ::-1]
+        indices_hor = np.random.choice(bs, bs / 2, replace=False)
+        indices_vert =  np.random.choice(bs, bs / 2, replace=False)
+        Xb[indices_hor] = Xb[indices_hor, :, :, ::-1]
+        Xb[indices_vert] = Xb[indices_vert, :, ::-1, :]
 
         return Xb, yb

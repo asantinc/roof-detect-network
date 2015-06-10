@@ -39,7 +39,7 @@ net1 = NeuralNet(
     verbose=1,
     )
 
-X, y = load.load()
+X, y, _ = load.load()
 #pdb.set_trace()
 net1.fit(X, y)
 pdb.set_trace()

@@ -39,15 +39,17 @@ def load(test=False):
     """Loads data from FTEST if *test* is True, otherwise from FTRAIN.
     """
     X, ignore_rows = load_images(test)
-    #get the labels
+    data_stats = []
+    #get the labels  
     if not test:  # only FTRAIN has any target columns
         y = np.loadtxt(open(FTRAIN_LABEL,"rb"),delimiter=",", usecols=[1])
         y = np.delete(y, ignore_rows, axis=0)
         X, y = sklearn.utils.shuffle(X, y, random_state=42)  # shuffle train data
         y = y.astype(np.int32)
+        data_stats = np.bincount(y)
     else:
         y = None
-    return X, y
+    return X, y, data_stats
 
 if __name__ == "__main__":
     X, y = load(test=True)

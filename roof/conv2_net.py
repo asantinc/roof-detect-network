@@ -39,7 +39,8 @@ net3 = MyNeuralNet(
     verbose=1,
     )
 
-X, y = load.load() 
+X, y, data_stats = load.load() 
+print data_stats
 net3.fit(X, y)
 
 # Training for 1000 epochs will take a while.  We'll pickle the
