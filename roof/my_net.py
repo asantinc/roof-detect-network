@@ -46,8 +46,7 @@ class MyNeuralNet(NeuralNet):
 	        verbose=0,
             net_name='no_name',
 	        **kwargs):
-        self.net_name = net_name
-        NeuralNet.__init__(
+		NeuralNet.__init__(
 			self,
 		    layers,
 		    update=update,
@@ -68,9 +67,10 @@ class MyNeuralNet(NeuralNet):
 		    more_params=more_params,
 		    verbose=verbose,
 		    **kwargs)
-        self.regression = regression
-        self.batch_iterator_test = batch_iterator_test
-        self.preproc_scaler = preproc_scaler
+		self.net_name = net_name
+		self.regression = regression
+		self.batch_iterator_test = batch_iterator_test
+		self.preproc_scaler = preproc_scaler
 
 	def predict_proba(self, X):
 	    if self.preproc_scaler is not None:
