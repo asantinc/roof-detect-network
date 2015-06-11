@@ -31,7 +31,7 @@ net1 = MyNeuralNet(
     
     #printing
     net_name='logistic',
-    on_epoch_finished=[PrintLogSave],
+    on_epoch_finished=[PrintLogSave()],
 
     # optimization method:
     update=nesterov_momentum,

@@ -15,13 +15,15 @@ import matplotlib.pyplot as plt
 sys.path.append('~/roof/Lasagne/lasagne')
 sys.path.append('~/roof/nolearn/nolearn')
 
-from nolearn.lasagne.handlers import Printlog 
+from nolearn.lasagne.handlers import PrintLog 
 
 class PrintLogSave(PrintLog):
+    
     def __call__(self, nn, train_history):
         file = open(nn.net_name, 'a')
         file.write(self.table(nn, train_history))
         file.close()
 
+    def table():
 
 
