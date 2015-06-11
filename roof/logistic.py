@@ -1,5 +1,4 @@
 from lasagne import layers
-#import nolearn.lasagne.visualize
 from lasagne.updates import nesterov_momentum
 import load
 import sys
@@ -15,8 +14,11 @@ sys.path.append('~/roof/nolearn/nolearn')
 #pdb.set_trace()
 from nolearn.lasagne import NeuralNet
 from nolearn.lasagne import visualize
+from my_net import MyNeuralNet
+from print_log import PrintLogSave
 
-net1 = NeuralNet(
+
+net1 = MyNeuralNet(
     layers=[  # three layers: one hidden layer
         ('input', layers.InputLayer),
         ('hidden', layers.DenseLayer),
@@ -25,24 +27,22 @@ net1 = NeuralNet(
     # layer parameters:
     input_shape=(None, 3, IMG_SIZE, IMG_SIZE),  # 96x96 input pixels per batch
     hidden_num_units=100,  # number of units in hidden layer
-    #output_nonlinearity=None,  # output layer uses identity function
     output_num_units=3,  # 30 target values
+    
+    #printing
+    net_name='logistic',
+    on_epoch_finished=[PrintLogSave],
 
     # optimization method:
     update=nesterov_momentum,
     update_learning_rate=0.01,
     update_momentum=0.9,
 
-    #regression=True,  # flag to indicate we're dealing with regression problem
     output_nonlinearity=lasagne.nonlinearities.softmax,
     max_epochs=50,  # we want to train this many epochs
     verbose=1,
     )
 
 X, y, _ = load.load()
-#pdb.set_trace()
-pdb.set_trace()
 net1.fit(X, y)
-pdb.set_trace()
-visualize.plot_loss(net1)
-plt.savefig('basic_net.png')
+
