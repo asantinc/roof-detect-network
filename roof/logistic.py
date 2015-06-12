@@ -15,23 +15,22 @@ sys.path.append('~/roof/nolearn/nolearn')
 from nolearn.lasagne import NeuralNet
 from nolearn.lasagne import visualize
 from my_net import MyNeuralNet
-from print_log import PrintLogSave
+from print_log import PrintLogSave, SaveLayerInfo
 
-
+'''
 net1 = MyNeuralNet(
     layers=[  # three layers: one hidden layer
         ('input', layers.InputLayer),
-        ('hidden', layers.DenseLayer),
         ('output', layers.DenseLayer),
         ],
     # layer parameters:
-    input_shape=(None, 3, IMG_SIZE, IMG_SIZE),  # 96x96 input pixels per batch
-    hidden_num_units=100,  # number of units in hidden layer
+    input_shape=(None, 3*IMG_SIZE*IMG_SIZE), 
     output_num_units=3,  # 30 target values
     
     #printing
     net_name='logistic',
     on_epoch_finished=[PrintLogSave()],
+    on_training_started=[SaveLayerInfo()],
 
     # optimization method:
     update=nesterov_momentum,
@@ -44,5 +43,37 @@ net1 = MyNeuralNet(
     )
 
 X, y, _ = load.load()
+X = np.reshape(X, (X.shape[0], X.shape[1]*X.shape[2]*X.shape[3]))
 net1.fit(X, y)
+'''
+
+net2 = MyNeuralNet(
+    layers=[  # three layers: one hidden layer
+        ('input', layers.InputLayer),
+        ('output', layers.DenseLayer),
+        ],
+    # layer parameters:
+    input_shape=(None, 3*IMG_SIZE*IMG_SIZE), 
+    output_num_units=2,
+    
+    #printing
+    net_name='logistic_roofs_only',
+    on_epoch_finished=[PrintLogSave()],
+    on_training_started=[SaveLayerInfo()],
+
+    # optimization method:
+    update=nesterov_momentum,
+    update_learning_rate=0.001,
+    update_momentum=0.9,
+
+    output_nonlinearity=lasagne.nonlinearities.softmax,
+    max_epochs=500,  # we want to train this many epochs
+    verbose=1,
+    )
+
+X, y, data_stats = load.load(roof_only=True)
+pdb.set_trace()
+X = np.reshape(X, (X.shape[0], X.shape[1]*X.shape[2]*X.shape[3]))
+net2.fit(X, y)
+
 

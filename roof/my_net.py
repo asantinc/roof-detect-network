@@ -64,6 +64,7 @@ class MyNeuralNet(NeuralNet):
 		    use_label_encoder=use_label_encoder,
 		    on_epoch_finished=on_epoch_finished,
 		    on_training_finished=on_training_finished,
+            on_training_started=on_training_started,
 		    more_params=more_params,
 		    verbose=verbose,
 		    **kwargs)
