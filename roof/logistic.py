@@ -71,7 +71,8 @@ net2 = MyNeuralNet(
     verbose=1,
     )
 
-X, y, data_stats = load.load(roof_only=True)
+X, y, _ = load.load(roof_only=True)
+print np.bincount(y)
 pdb.set_trace()
 X = np.reshape(X, (X.shape[0], X.shape[1]*X.shape[2]*X.shape[3]))
 net2.fit(X, y)

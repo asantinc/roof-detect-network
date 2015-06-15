@@ -2,4 +2,6 @@ data/*
 Lasagne/
 nolearn/
 *.pyc
-
+*.swp
+.*.swp
+.__*

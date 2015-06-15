@@ -1,0 +1,5 @@
+1. Large convolutional network
+2. SKlearn based logistic regression with graylevel and RGB patches
+
+
+1. Smaller network

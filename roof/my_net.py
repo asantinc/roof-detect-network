@@ -3,6 +3,7 @@ import sys
 import pdb
 import numpy as np
 import matplotlib.pyplot as plt
+import cPickle as pickle
 
 import lasagne
 from lasagne import layers
@@ -12,7 +13,6 @@ from lasagne.objectives import Objective
 from sklearn.cross_validation import KFold
 from sklearn.cross_validation import StratifiedKFold
 
-IMG_SIZE = 40
 sys.path.append('~/roof/Lasagne/lasagne')
 sys.path.append('~/roof/nolearn/nolearn')
 
@@ -72,19 +72,19 @@ class MyNeuralNet(NeuralNet):
 		self.regression = regression
 		self.batch_iterator_test = batch_iterator_test
 		self.preproc_scaler = preproc_scaler
-
-	def predict_proba(self, X):
-	    if self.preproc_scaler is not None:
-                X_shape = X.shape
-                X_reshaped = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
-                X_reshaped = self.preproc_scaler.fit_transform(X_reshaped)
-                X = X_reshaped.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
-	        X = self.preproc_scaler.transform(X)
-	    probas = []
-	    for Xb, yb in self.batch_iterator_test(X):
-	        probas.append(NeuralNet.apply_batch_func(self.predict_iter_, Xb))
-		return np.vstack(probas)
-
+    
+	#def predict_proba(self, X):
+	#    if self.preproc_scaler is not None:
+    #            X_shape = X.shape
+    #            X_reshaped = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
+    #            X_reshaped = self.preproc_scaler.fit_transform(X_reshaped)
+    #            X = X_reshaped.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
+	#        X = self.preproc_scaler.transform(X)
+	#    probas = []
+	#    for Xb, yb in self.batch_iterator_test(X):
+	#        probas.append(NeuralNet.apply_batch_func(self.predict_iter_, Xb))
+    #    return np.vstack(probas)
+   
 	def train_test_split(self, X, y, eval_size):
 	    if eval_size:
 	        if self.regression:
@@ -99,7 +99,6 @@ class MyNeuralNet(NeuralNet):
 	        X_train, y_train = X, y
 	        X_valid, y_valid = _sldict(X, slice(len(X), None)), y[len(y):]
 	    if self.preproc_scaler is not None:
-                #pdb.set_trace()
                 train_shape = X_train.shape
                 X_train_reshaped = X_train.reshape(train_shape[0], train_shape[1]*train_shape[2]*train_shape[3]) 
                 X_train_reshaped = self.preproc_scaler.fit_transform(X_train_reshaped)
@@ -111,9 +110,12 @@ class MyNeuralNet(NeuralNet):
                 X_valid = X_valid_reshaped.reshape(valid_shape[0], valid_shape[1], valid_shape[2], valid_shape[3])
 
 	    return X_train, X_valid, y_train, y_valid
-
-
-
+    
+        def save_weights(self):
+            ''' Saves weigts of model so they can be loaded back later:
+            '''
+            with open('../saved_weights/'+self.net_name+'.pickle', 'wb') as f:
+                pickle.dump(self, f, -1)
 
 if __name__ == "__main__":
     net = MyNeuralNet()
