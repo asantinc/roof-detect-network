@@ -32,10 +32,14 @@ class PrintLogSave(PrintLog):
         info = train_history[-1]
         return str(info['epoch'])+'\t'+ str(info['train_loss'])+ '\t'+str(info['valid_loss'])+'\t'+str( info['train_loss'] / info['valid_loss'])+'\t'+str(info['valid_accuracy'])+'\n'
             
-    def log_to_file(self, nn, log, overwrite=False):
+    def log_to_file(self, nn, log, overwrite=False, binary=False, title=''):
         write_type = 'w' if overwrite else 'a'
         file = open(OUT_PATH+nn.net_name, write_type)
-        file.write(log)
+        file.write(title)
+        if binary:
+            print >> file, log
+        else:
+            file.write(log)
         file.close()
 
 

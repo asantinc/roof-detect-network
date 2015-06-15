@@ -98,13 +98,13 @@ class DataScaler(StandardScaler):
     def fit_transform(self, X):
         X_shape = X.shape
         X = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
-        super(DataScaler, self).fit_transform(X)
+        X = super(DataScaler, self).fit_transform(X)
         return X.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
 
     def transform2(self, X):
         X_shape = X.shape
         X = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
-        super(DataScaler, self).transform(X)
+        X = super(DataScaler, self).transform(X)
         return X.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
 
 

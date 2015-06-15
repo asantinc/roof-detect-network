@@ -28,15 +28,15 @@ testing metrics.
 
 #experiment settings
 exper = ExperimentSettings()
-exper.epochs = 150
-exper.net_name = 'conv_large_10test'
+exper.epochs = 250
+exper.net_name = 'conv_large'
 exper.data_augmentation = True 
 exper.test_percent = .10
 exper.scaler = 'StandardScaler'
        
 #declare the conv. net
 printer = PrintLogSave()
-net3 = MyNeuralNet(
+net = MyNeuralNet(
     layers=[
         ('input', layers.InputLayer),
         ('conv1', layers.Conv2DLayer),
@@ -65,7 +65,6 @@ net3 = MyNeuralNet(
     #printing
     net_name=exper.net_name,
     on_epoch_finished=[printer],
-    #on_training_started=[SaveLayerInfo(exper)],
     on_training_started=[SaveLayerInfo()],
 
     #data augmentation
@@ -75,28 +74,27 @@ net3 = MyNeuralNet(
     max_epochs=exper.epochs,
     verbose=1,
     )
+
 #save settings to file
-printer.log_to_file(net3, exper.__str__(), overwrite=True)
+printer.log_to_file(net, exper.__str__(), overwrite=True)
 
 #load data
 roof_loader = load.RoofLoader()
 X_train, X_test, y_train, y_test, file_names = roof_loader.load(test_percent=exper.test_percent)
 
 #rescale X_train and X_test
-if exper.scaler is not None:
-    scaler = load.DataScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform2(X_test)
+scaler = load.DataScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform2(X_test)
 
 #fit the network to X_train
-net3.fit(X_train, y_train)
+net.fit(X_train, y_train)
+net.save_weights()
 
 #find predictions for test set
-predicted = net3.predict(X_test)
-pdb.set_trace()
+predicted = net.predict(X_test)
 
 #print evaluation
-printer.log_to_file(net3, confusion_matrix(y_test, predicted))
-printer.log_to_file(net3, classification_report(y_test, predicted))
-
+printer.log_to_file(net, confusion_matrix(y_test, predicted), binary=True, title='\n\nConfusion Matrix\n')
+printer.log_to_file(net, classification_report(y_test, predicted), title='\n\nReport\n')
 

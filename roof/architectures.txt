@@ -1,5 +1,14 @@
-1. Large convolutional network
-2. SKlearn based logistic regression with graylevel and RGB patches
+Number of layers:
+1. SKlearn based logistic regression with graylevel and RGB patches
+2. 1 Conv&Pool, 2 Conv&Pool, 3 Conv&Pool, 3+2 Fully connected with 500 neurons
+
+NEXT:
+Increase the amount of non-roof training data: try with different proportions
+
+Other changes:
+- Amount of testing: increase the test_percent, see how it is affected
+- Use larger filters?
+- Make larger patches?
+- Try rescaling instead of cutting into patches?
 
 
-1. Smaller network

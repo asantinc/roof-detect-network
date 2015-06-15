@@ -114,7 +114,7 @@ class MyNeuralNet(NeuralNet):
         def save_weights(self):
             ''' Saves weigts of model so they can be loaded back later:
             '''
-            with open('../saved_weights/'+self.net_name+'.pickle', 'wb') as f:
+            with open('saved_weights/'+self.net_name+'.pickle', 'wb') as f:
                 pickle.dump(self, f, -1)
 
 if __name__ == "__main__":
