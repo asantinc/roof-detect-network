@@ -11,7 +11,7 @@ from sklearn.preprocessing import StandardScaler
 import experiment_settings as settings
 
 class RoofLoader(object):
-    def string_type(self, y):
+    def roof_type(self, y):
         if y == 1:
             return 'Metal'
         elif y == 2:
@@ -19,11 +19,13 @@ class RoofLoader(object):
         elif y == 0:
             return 'No roof'
 
-    def display_images(self, X, y=[], indeces=[0], file_names=[]):
+    def display_images(self, X, labels=[], indeces=[0], file_names=[]):
         '''
         Display the images indicated by indeces that are contained in X
         '''
         for i in indeces:
+            if len(labels)==len(X):
+                print self.roof_type(labels[i])
             if len(X.shape) == 2:
                 if X.shape[1] > settings.IMG_SIZE:
                     x = np.reshape(X[i, :], (settings.IMG_SIZE, settings.IMG_SIZE))
@@ -31,7 +33,7 @@ class RoofLoader(object):
                 x = X[i,:,:]
             else:
                 x = np.squeeze(X[i,:,:,:])
-                x = np.transpose(x, (1,2,0))
+                x = np.transpose(x, (1,2,0))*255
             plt.imshow(x)
             plt.show()
 
@@ -105,6 +107,12 @@ class DataScaler(StandardScaler):
         X_shape = X.shape
         X = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
         X = super(DataScaler, self).transform(X)
+        return X.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
+
+    def inverse_transform(self, X): 
+        X_shape = X.shape
+        X = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
+        X = super(DataScaler, self).inverse_transform(X)
         return X.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
 
 
