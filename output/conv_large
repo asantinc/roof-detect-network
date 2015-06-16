@@ -1,11 +1,12 @@
-printer: <experiment_settings.PrintLogSave instance at 0x7fd7a1f8f488>
+printer: <experiment_settings.PrintLogSave instance at 0x7f8364cad440>
 data_augmentation: True
 scaler: StandardScaler
 display_mistakes: True
+non_roofs: 2
 test_percent: 0.1
 net: MyNeuralNet(X_tensor_type=None,
-      batch_iterator_test=<FlipBatchIterator.CropOnlyBatchIterator object at 0x7fd7a2004d50>,
-      batch_iterator_train=<FlipBatchIterator.FlipBatchIterator object at 0x7fd7a2004d90>,
+      batch_iterator_test=<FlipBatchIterator.CropOnlyBatchIterator object at 0x7f8364d21d50>,
+      batch_iterator_train=<FlipBatchIterator.FlipBatchIterator object at 0x7f8364d21d90>,
       conv1_filter_size=(3, 3), conv1_num_filters=32,
       conv2_filter_size=(2, 2), conv2_num_filters=64,
       conv3_filter_size=(2, 2), conv3_num_filters=128, custom_score=None,
@@ -14,32 +15,16 @@ net: MyNeuralNet(X_tensor_type=None,
       layers=[('input', <class 'lasagne.layers.input.InputLayer'>), ('conv1', <class 'lasagne.layers.conv.Conv2DLayer'>), ('pool1', <class 'lasagne.layers.pool.MaxPool2DLayer'>), ('conv2', <class 'lasagne.layers.conv.Conv2DLayer'>), ('pool2', <class 'lasagne.layers.pool.MaxPool2DLayer'>), ('conv3', <class..., <class 'lasagne.layers.dense.DenseLayer'>), ('output', <class 'lasagne.layers.dense.DenseLayer'>)],
       loss=None, max_epochs=250, more_params={}, net_name='conv_large',
       objective=<class 'lasagne.objectives.Objective'>,
-      objective_loss_function=<function categorical_crossentropy at 0x7fd7bcad58c0>,
-      on_epoch_finished=[<experiment_settings.PrintLogSave instance at 0x7fd7a1f8f488>, <nolearn.lasagne.handlers.PrintLog instance at 0x7fd7a1f8f710>],
+      objective_loss_function=<function categorical_crossentropy at 0x7f837f7f38c0>,
+      on_epoch_finished=[<experiment_settings.PrintLogSave instance at 0x7f8364cad440>, <nolearn.lasagne.handlers.PrintLog instance at 0x7f8364cad680>],
       on_training_finished=[],
-      on_training_started=[<experiment_settings.SaveLayerInfo instance at 0x7fd7a1f8f680>, <nolearn.lasagne.handlers.PrintLayerInfo instance at 0x7fd7a1f8f758>],
-      output_nonlinearity=<function softmax at 0x7fd7abf61938>,
+      on_training_started=[<experiment_settings.SaveLayerInfo instance at 0x7f8364cad5f0>, <nolearn.lasagne.handlers.PrintLayerInfo instance at 0x7f8364cad6c8>],
+      output_nonlinearity=<function softmax at 0x7f836ec7f938>,
       output_num_units=3, pool1_pool_size=(2, 2), pool2_pool_size=(2, 2),
       pool3_pool_size=(2, 2), preproc_scaler=None, regression=False,
-      update=<function nesterov_momentum at 0x7fd7abd0d1b8>,
+      update=<function nesterov_momentum at 0x7f836ea2b1b8>,
       update_learning_rate=0.01, update_momentum=0.9,
       use_label_encoder=False, verbose=1,
       y_tensor_type=TensorType(int32, vector))
 preloaded: True
 
-
-
-Confusion Matrix
-[[102   0   0]
- [  0  72   5]
- [  0   0  32]]
-
-
-Report
-             precision    recall  f1-score   support
-
-          0       1.00      1.00      1.00       102
-          1       1.00      0.94      0.97        77
-          2       0.86      1.00      0.93        32
-
-avg / total       0.98      0.98      0.98       211

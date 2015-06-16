@@ -28,7 +28,7 @@ CROP_SIZE = 32
 
 class Experiment(object):
     def __init__(self, net=None, data_augmentation=True, display_mistakes=False, 
-                test_percent=.10, scaler=True, preloaded=True, printer=None, non_roofs=1):
+                test_percent=.10, scaler=True, preloaded=True, printer=None, non_roofs=2, roof_only=False):
         self.net=net
         self.data_augmentation=data_augmentation
         self.test_percent=test_percent
@@ -37,15 +37,15 @@ class Experiment(object):
         self.printer=printer
         self.display_mistakes=display_mistakes
         self.non_roofs=non_roofs    #the proportion of non_roofs relative to roofs to be used in data
-    
-   def run(self):
+        self.roof_only=roof_only
+
+    def run(self):
         #save settings to file
         self.printer.log_to_file(self.net, self.__str__(), overwrite=True)
 
         #load data
         roof_loader = load.RoofLoader()
-        X_train, X_test, y_train, y_test, file_names = roof_loader.load(test_percent=self.test_percent, non_roofs=self.non_roofs)
-
+        X_train, X_test, y_train, y_test = roof_loader.load(test_percent=self.test_percent, non_roofs=self.non_roofs, roof_only=self.roof_only)
         #rescale X_train and X_test
         if self.scaler:
             scaler = load.DataScaler()
@@ -75,7 +75,7 @@ class Experiment(object):
             roof_loader.display_images(mistaken_imgs, labels=y_test[mistakes], indeces=range(len(mistaken_imgs)))
      
      
-     def __str__(self):
+    def __str__(self):
         out_list = list()
         for key, value in self.__dict__.items():
             out_list.append(str(key)+': '+str(value))

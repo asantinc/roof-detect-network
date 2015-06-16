@@ -72,19 +72,7 @@ class MyNeuralNet(NeuralNet):
 		self.regression = regression
 		self.batch_iterator_test = batch_iterator_test
 		self.preproc_scaler = preproc_scaler
-    
-	#def predict_proba(self, X):
-	#    if self.preproc_scaler is not None:
-    #            X_shape = X.shape
-    #            X_reshaped = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
-    #            X_reshaped = self.preproc_scaler.fit_transform(X_reshaped)
-    #            X = X_reshaped.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
-	#        X = self.preproc_scaler.transform(X)
-	#    probas = []
-	#    for Xb, yb in self.batch_iterator_test(X):
-	#        probas.append(NeuralNet.apply_batch_func(self.predict_iter_, Xb))
-    #    return np.vstack(probas)
-   
+      
 	def train_test_split(self, X, y, eval_size):
 	    if eval_size:
 	        if self.regression:
@@ -111,6 +99,12 @@ class MyNeuralNet(NeuralNet):
 
 	    return X_train, X_valid, y_train, y_valid
     
+        def set_params(self, **kwargs):
+            for key in kwargs.keys():
+                assert not hasattr(self, key)
+            vars(self).update(kwargs)
+            self._kwargs_keys = list(kwargs.keys())
+
         def save_weights(self):
             ''' Saves weigts of model so they can be loaded back later:
             '''

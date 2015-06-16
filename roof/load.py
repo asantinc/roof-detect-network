@@ -42,31 +42,34 @@ class RoofLoader(object):
         plt.imshow(img)
         plt.show()
 
-    def load_images(self, accepted_ids):
+    def load_images(self, labels_tuples):
         '''
         Load the images into a numpy array X.
         '''
         X = None
         file_names = list()
         img_to_remove = list()
-        for f in glob.glob(settings.FTRAIN+'*.jpg'):
-            file_number = int(f[len(settings.FTRAIN):-4])
-            if file_numer in accepted_ids: #only accept the image if the label set contains it
-                x = cv2.imread(f)
-                x = np.asarray(x, dtype='float32')/255
-                x = x.transpose(2,0,1)
-                x.shape = (1,x.shape[0], x.shape[1], x.shape[2])
+        labels = list()
 
-                try:
-                    X = x if X==None else np.concatenate((X, x), axis=0)
-                    file_names.append(file_number)
-                #some images are not loading properly because they are smaller than expected
-                except ValueError, e:
-                    print e
-                    img_to_remove.append(file_number)
-            
+        #for f in glob.glob(settings.FTRAIN+'*.jpg'):
+        for f_name, roof_type in labels_tuples:
+            f_number = int(f_name)
+            f_path = settings.FTRAIN+str(f_number)+'.jpg'                
+            x = cv2.imread(f_path)
+            x = np.asarray(x, dtype='float32')/255
+            x = x.transpose(2,0,1)
+            x.shape = (1,x.shape[0], x.shape[1], x.shape[2])
+
+            try:
+                X = x if X==None else np.concatenate((X, x), axis=0)
+                file_names.append(f_number)
+                labels.append(roof_type)
+            #some images are not loading properly because they are smaller than expected
+            except ValueError, e:
+                print e
+        
         X = X.astype(np.float32)
-        return X, file_names
+        return X, labels
 
 
     def load(self, roof_only=False, test_percent=0.10, non_roofs=1):
@@ -76,39 +79,30 @@ class RoofLoader(object):
         roof_only: If roof_only is true we discard the non-roofs from the data
         non_roofs: the proportion of non_roofs relative to roof patches to include in the dataset
         """
-        X, self.file_names = self.load_images()
         #get the labels   
         labels_list = np.loadtxt(open(settings.FTRAIN_LABEL,"rb"),delimiter=",")
         labels_dict = dict(labels_list)
        
-        data_stats = np.bincount(labels_list)
+        data_stats = np.bincount(labels_dict.values())
         total_roofs = data_stats[1]+data_stats[2]
-        non_roofs_allows = non_roofs*total_roofs 
- 
-        #only keep the labels for the images that we have loaded properly
-        labels = []
-        non_roofs_added = 0
-        for i, f in enumerate(self.file_names): #images found
-            f_int = int(f)                      #file_number
-            if f_int in labels_dict:            #labels found
-                cur_label = int(labels_dict[f_int])
-                if cur_label == 0 and non_roofs_added <= non_roofs_allowed:              #if it's a roof
-                    labels.append(cur_label)
-                    non_roofs_added += 1
-                else:
-                    labels.append(cur_label)
-            
-        labels = np.array(labels, dtype=np.int32)
-        X, labels, self.file_names = sklearn.utils.shuffle(X, labels, self.file_names, random_state=42)  # shuffle train data    
         
+        #the non_roofs always come after, we take the roof labels and the proportion of non-roofs we want
+        labels_list = labels_list[:(total_roofs+(non_roofs*total_roofs))]
+
+        X, labels = self.load_images(labels_list)
+        labels = np.array(labels, dtype=np.int32)
+        
+        X, labels = sklearn.utils.shuffle(X, labels, random_state=42)  # shuffle train data    
+
         if roof_only:
             roof = (labels[:]>0)
             labels = labels[roof]
             X = X[roof]
             labels[labels[:]==2] = 0 
-        #data_stats = np.bincount(labels)
+        
         self.X_train, self.X_test, self.labels_train, self.labels_test = cross_validation.train_test_split(X, labels, test_size=test_percent, random_state=0)
-        return self.X_train, self.X_test, self.labels_train, self.labels_test, self.file_names
+        return self.X_train, self.X_test, self.labels_train, self.labels_test
+
 
 class DataScaler(StandardScaler):
     '''Subclass of sklearn.StandardScaler that reshapes data as needed and then calls super to do scaling
