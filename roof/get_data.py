@@ -133,6 +133,7 @@ def roof_patch(img_loc, img_id, roof, label_file, num_patch=0):
 #TODO: you are missing the very last corner
     return num_patch
 
+
 def get_negative_patches(num_patch, label_file):
     #get patches
     cur_type = 0     #background patch
@@ -144,8 +145,8 @@ def get_negative_patches(num_patch, label_file):
             img_names.add(file)
 
     negative_patches = (num_patch)/len(img_names)
-    #Get around same number of negative patches
-    pdb.set_trace()
+    
+    #Get negative patches
     for i, img in enumerate(img_names):
         for p in range(negative_patches):
             im = misc.imread(uninhabited_path+img)
@@ -157,7 +158,7 @@ def get_negative_patches(num_patch, label_file):
             ymin = random.randint(0, h_max)
             patch = im[xmin:xmin+PATCH_W, ymin:ymin+PATCH_H]
 
-            misc.imsave('data/train/'+str(num_patch)+'.jpg', patch)
+            misc.imsave('../data/train/'+str(num_patch)+'.jpg', patch)
             label_file.write(str(num_patch)+','+str(cur_type)+'\n')
             print i, num_patch
             num_patch += 1
@@ -166,16 +167,13 @@ def get_negative_patches(num_patch, label_file):
 
 if __name__ == '__main__':
     img_names = set()
-    inhabited_path = "data/inhabited/"
-    label_loc = "data/labels.csv"
-
-    if DEBUG: #only use one image
-        img_names.add("0001.jpg")
-    else:
-        #Get the filenames
-        for file in os.listdir(inhabited_path):
-            if file.endswith(".jpg"):
-                img_names.add(file)
+    inhabited_path = "../data/inhabited/"
+    label_loc = ".../data/labels.csv"
+    
+    #Get the filenames
+    for file in os.listdir(inhabited_path):
+        if file.endswith(".jpg"):
+            img_names.add(file)
 
     #Get the roofs defined in the xml, save the corresponding image patches
     max_w = 0
@@ -197,32 +195,4 @@ if __name__ == '__main__':
     print num_patch
 
     label_file.close()
-
-# def save_roof_patch(img_loc, img_id, roof, roof_id):
-#     im = misc.imread(img_loc)
-#     if ((roof.ycentroid-(PATCH_H/2) < 0) or \
-#             (roof.ycentroid+(PATCH_H/2)-1)>im.shape[1] or \
-#                 ((roof.xcentroid-(PATCH_W/2)) < 0) or \
-#                     (roof.xcentroid+(PATCH_W/2)-1)>im.shape[0]):
-#         pass
-
-#     else:
-#         patch = im[(roof.ycentroid-(PATCH_H/2)):(roof.ycentroid+(PATCH_H/2)-1),
-#                     (roof.xcentroid-(PATCH_W/2)):(roof.xcentroid+(PATCH_W/2)-1)]
-#         patch_loc = 'data/positive-patches/'+roof.roof_type+'/'+str(img_id)+'_'+str(roof_id)+'.jpg'
-#         misc.imsave(patch_loc, patch)
-
-# def patchify(img, patch_shape):
-#     img = np.ascontiguousarray(img)  # won't make a copy if not needed
-#     X, Y = img.shape
-#     x, y = patch_shape
-#     shape = ((X-x+1), (Y-y+1), x, y) # number of patches, patch_shape
-#     # The right strides can be thought by:
-#     # 1) Thinking of `img` as a chunk of memory in C order
-#     # 2) Asking how many items through that chunk of memory are needed when indices
-#     #    i,j,k,l are incremented by one
-#     strides = img.itemsize*np.array([Y, 1, Y, 1])
-#     return np.lib.stride_tricks.as_strided(img, shape=shape, strides=strides)
-
-
 
