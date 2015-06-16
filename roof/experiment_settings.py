@@ -19,8 +19,8 @@ from sklearn.metrics import classification_report, confusion_matrix
 
 #Constants
 OUT_PATH = "../output/" 
-FTRAIN = '../data/train/'
-FTRAIN_LABEL = '../data/labels.csv'
+FTRAIN = '../data/debug/'
+FTRAIN_LABEL = '../data/debug/labels.csv'
 FTEST = '../data/test/'
 IMG_SIZE = 40
 CROP_SIZE = 32
@@ -28,7 +28,7 @@ CROP_SIZE = 32
 
 class Experiment(object):
     def __init__(self, net=None, data_augmentation=True, display_mistakes=False, 
-                test_percent=.10, scaler=True, preloaded=True, printer=None):
+                test_percent=.10, scaler=True, preloaded=True, printer=None, non_roofs=1):
         self.net=net
         self.data_augmentation=data_augmentation
         self.test_percent=test_percent
@@ -36,21 +36,15 @@ class Experiment(object):
         self.preloaded=preloaded
         self.printer=printer
         self.display_mistakes=display_mistakes
-
-    def __str__(self):
-        out_list = list()
-        for key, value in self.__dict__.items():
-            out_list.append(str(key)+': '+str(value))
-        out_list.append('\n')
-        return '\n'.join(out_list)          
-
-    def run(self):
+        self.non_roofs=non_roofs    #the proportion of non_roofs relative to roofs to be used in data
+    
+   def run(self):
         #save settings to file
         self.printer.log_to_file(self.net, self.__str__(), overwrite=True)
 
         #load data
         roof_loader = load.RoofLoader()
-        X_train, X_test, y_train, y_test, file_names = roof_loader.load(test_percent=self.test_percent)
+        X_train, X_test, y_train, y_test, file_names = roof_loader.load(test_percent=self.test_percent, non_roofs=self.non_roofs)
 
         #rescale X_train and X_test
         if self.scaler:
@@ -79,6 +73,15 @@ class Experiment(object):
             mistaken_imgs = X_test[mistakes]
             mistaken_imgs = scaler.inverse_transform(mistaken_imgs)
             roof_loader.display_images(mistaken_imgs, labels=y_test[mistakes], indeces=range(len(mistaken_imgs)))
+     
+     
+     def __str__(self):
+        out_list = list()
+        for key, value in self.__dict__.items():
+            out_list.append(str(key)+': '+str(value))
+        out_list.append('\n')
+        return '\n'.join(out_list)          
+
 
 
 class PrintLogSave(PrintLog):

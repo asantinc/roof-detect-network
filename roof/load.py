@@ -42,45 +42,61 @@ class RoofLoader(object):
         plt.imshow(img)
         plt.show()
 
-    def load_images(self):
+    def load_images(self, accepted_ids):
         '''
         Load the images into a numpy array X.
         '''
         X = None
         file_names = list()
+        img_to_remove = list()
         for f in glob.glob(settings.FTRAIN+'*.jpg'):
-            x = cv2.imread(f)
-            x = np.asarray(x, dtype='float32')/255
-            x = x.transpose(2,0,1)
-            x.shape = (1,x.shape[0], x.shape[1], x.shape[2])
+            file_number = int(f[len(settings.FTRAIN):-4])
+            if file_numer in accepted_ids: #only accept the image if the label set contains it
+                x = cv2.imread(f)
+                x = np.asarray(x, dtype='float32')/255
+                x = x.transpose(2,0,1)
+                x.shape = (1,x.shape[0], x.shape[1], x.shape[2])
 
-            try:
-                X = x if X==None else np.concatenate((X, x), axis=0)
-                file_number = f[len(settings.FTRAIN):-4]
-                file_names.append(int(file_number))
-            #some images are not loading properly because they are smaller than expected
-            except ValueError, e:
-                print e
-        
+                try:
+                    X = x if X==None else np.concatenate((X, x), axis=0)
+                    file_names.append(file_number)
+                #some images are not loading properly because they are smaller than expected
+                except ValueError, e:
+                    print e
+                    img_to_remove.append(file_number)
+            
         X = X.astype(np.float32)
         return X, file_names
 
 
-    def load(self, roof_only=False, test_percent=0.10):
-        """
-        If roof_only is true we discard the non-roofs from the data
+    def load(self, roof_only=False, test_percent=0.10, non_roofs=1):
+        """Load the data to a numpy array, return dataset divided into training and testing sets
+
+        Parameters:
+        roof_only: If roof_only is true we discard the non-roofs from the data
+        non_roofs: the proportion of non_roofs relative to roof patches to include in the dataset
         """
         X, self.file_names = self.load_images()
         #get the labels   
         labels_list = np.loadtxt(open(settings.FTRAIN_LABEL,"rb"),delimiter=",")
         labels_dict = dict(labels_list)
+       
+        data_stats = np.bincount(labels_list)
+        total_roofs = data_stats[1]+data_stats[2]
+        non_roofs_allows = non_roofs*total_roofs 
+ 
+        #only keep the labels for the images that we have loaded properly
         labels = []
-        
-        #only get the labels for the images that we have loaded properly
-        for i, f in enumerate(self.file_names):
-            f_int = int(f)
-            if f_int in labels_dict:
-                labels.append(int(labels_dict[f_int]))
+        non_roofs_added = 0
+        for i, f in enumerate(self.file_names): #images found
+            f_int = int(f)                      #file_number
+            if f_int in labels_dict:            #labels found
+                cur_label = int(labels_dict[f_int])
+                if cur_label == 0 and non_roofs_added <= non_roofs_allowed:              #if it's a roof
+                    labels.append(cur_label)
+                    non_roofs_added += 1
+                else:
+                    labels.append(cur_label)
             
         labels = np.array(labels, dtype=np.int32)
         X, labels, self.file_names = sklearn.utils.shuffle(X, labels, self.file_names, random_state=42)  # shuffle train data    
