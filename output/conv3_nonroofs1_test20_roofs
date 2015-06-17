@@ -1,0 +1,77 @@
+printer: <experiment_settings.PrintLogSave instance at 0x7f24c605f9e0>
+roofs_only: True
+data_augmentation: True
+scaler: StandardScaler
+display_mistakes: True
+non_roofs: 1
+test_percent: 0.2
+net: MyNeuralNet(X_tensor_type=None,
+      batch_iterator_test=<FlipBatchIterator.CropOnlyBatchIterator object at 0x7f24c60d9dd0>,
+      batch_iterator_train=<FlipBatchIterator.FlipBatchIterator object at 0x7f24c60d9e10>,
+      custom_score=None, eval_size=0.2, input_shape=(None, 3, 32, 32),
+      layers=[('input', <class 'lasagne.layers.input.InputLayer'>), ('conv1', <class 'lasagne.layers.conv.Conv2DLayer'>), ('pool1', <class 'lasagne.layers.pool.MaxPool2DLayer'>), ('conv2', <class 'lasagne.layers.conv.Conv2DLayer'>), ('pool2', <class 'lasagne.layers.pool.MaxPool2DLayer'>), ('conv3', <class 'lasagne.layers.conv.Conv2DLayer'>), ('pool3', <class 'lasagne.layers.pool.MaxPool2DLayer'>), ('output', <class 'lasagne.layers.dense.DenseLayer'>)],
+      loss=None, max_epochs=250, more_params={},
+      net_name='conv3_nonroofs1_test20_roofs',
+      objective=<class 'lasagne.objectives.Objective'>,
+      objective_loss_function=<function categorical_crossentropy at 0x7f24e0bac8c0>,
+      on_epoch_finished=[<experiment_settings.PrintLogSave instance at 0x7f24c605f9e0>, <nolearn.lasagne.handlers.PrintLog instance at 0x7f24c605fc68>],
+      on_training_finished=[],
+      on_training_started=[<experiment_settings.SaveLayerInfo instance at 0x7f24c605fbd8>, <nolearn.lasagne.handlers.PrintLayerInfo instance at 0x7f24c605fcb0>],
+      output_nonlinearity=<function softmax at 0x7f24d0036938>,
+      output_num_units=3, preproc_scaler=None, regression=False,
+      update=<function nesterov_momentum at 0x7f24cfde21b8>,
+      update_learning_rate=0.01, update_momentum=0.9,
+      use_label_encoder=False, verbose=1,
+      y_tensor_type=TensorType(int32, vector))
+preloaded: False
+
+# Neural Network with 45507 learnable parameters
+## Layer information
+
+  #  name    size
+---  ------  --------
+  0  input   3x32x32
+  1  conv1   32x30x30
+  2  pool1   32x15x15
+  3  conv2   64x14x14
+  4  pool2   64x7x7
+  5  conv3   128x6x6
+  6  pool3   128x3x3
+  7  output  3 
+
+1	0.839467243906	0.733441514206	1.14455921521	0.7015625
+2	0.625300034284	0.569511941804	1.09795772202	0.7371875
+3	0.538281073859	0.483701300429	1.11283776451	0.82234375
+4	0.477491018966	0.42605340905	1.1207304268	0.79796875
+5	0.430176878882	0.368044125987	1.16881875978	0.8440625
+6	0.372842753839	0.418413112177	0.891087642782	0.8184375
+7	0.347164835316	0.405678947302	0.855762512759	0.8140625
+8	0.345560997962	0.379285212586	0.911084815582	0.84578125
+9	0.306076240027	0.351869866704	0.86985635597	0.84015625
+10	0.292322921662	0.336520743832	0.868662413891	0.8540625
+11	0.292253398939	0.317706274353	0.919885512286	0.8540625
+12	0.285290488229	0.311284517778	0.91649430645	0.8540625
+13	0.27723555228	0.315669169122	0.878247163164	0.86796875
+14	0.278944158522	0.314245704655	0.887662597738	0.85625
+15	0.263429266538	0.276136995975	0.953980344459	0.871875
+16	0.261514960677	0.281668685427	0.928448827319	0.871875
+17	0.256500525792	0.265096074234	0.967575723382	0.8640625
+18	0.259626305818	0.276725451028	0.938208989644	0.86796875
+19	0.256024057263	0.296851492279	0.862465117819	0.86015625
+20	0.261188449371	0.291786845162	0.8951344233	0.86015625
+21	0.239950591737	0.28871210985	0.83110677921	0.85625
+22	0.235699820714	0.270789065935	0.870418530011	0.86015625
+23	0.248904628465	0.254298106862	0.978790725328	0.89921875
+24	0.24834436374	0.243332270209	1.02059773464	0.86796875
+25	0.229289151373	0.280773615463	0.816633539428	0.87796875
+26	0.22949769909	0.2624239963	0.874530158546	0.8740625
+27	0.231900230571	0.277369093087	0.836070911831	0.8896875
+28	0.234750374255	0.23876477755	0.983186786021	0.86578125
+29	0.225293473225	0.285543905141	0.788997660845	0.8796875
+30	0.215711884828	0.277818640447	0.776448565442	0.8696875
+31	0.226341507804	0.275267805825	0.822259279926	0.8796875
+32	0.220576386811	0.232075920998	0.950449257566	0.88359375
+33	0.199903090553	0.227346947179	0.879286451978	0.871875
+34	0.211806499082	0.236335523867	0.896211012277	0.87578125
+35	0.201501607371	0.250139698707	0.805556288798	0.8796875
+36	0.194294009136	0.223377342634	0.869801775082	0.8796875
