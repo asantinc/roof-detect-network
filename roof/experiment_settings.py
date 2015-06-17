@@ -28,7 +28,7 @@ CROP_SIZE = 32
 
 class Experiment(object):
     def __init__(self, net=None, data_augmentation=True, display_mistakes=False, 
-                test_percent=.10, scaler=True, preloaded=True, printer=None, non_roofs=2, roof_only=False):
+                test_percent=.10, scaler=True, preloaded=True, printer=None, non_roofs=2, roofs_only=False):
         self.net=net
         self.data_augmentation=data_augmentation
         self.test_percent=test_percent
@@ -37,7 +37,7 @@ class Experiment(object):
         self.printer=printer
         self.display_mistakes=display_mistakes
         self.non_roofs=non_roofs    #the proportion of non_roofs relative to roofs to be used in data
-        self.roof_only=roof_only
+        self.roofs_only=roofs_only
 
     def run(self):
         #save settings to file
@@ -45,7 +45,7 @@ class Experiment(object):
 
         #load data
         roof_loader = load.RoofLoader()
-        X_train, X_test, y_train, y_test = roof_loader.load(test_percent=self.test_percent, non_roofs=self.non_roofs, roof_only=self.roof_only)
+        X_train, X_test, y_train, y_test = roof_loader.load(test_percent=self.test_percent, non_roofs=self.non_roofs, roofs_only=self.roofs_only)
         #rescale X_train and X_test
         if self.scaler:
             scaler = load.DataScaler()

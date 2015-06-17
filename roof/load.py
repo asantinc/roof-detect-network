@@ -72,11 +72,11 @@ class RoofLoader(object):
         return X, labels
 
 
-    def load(self, roof_only=False, test_percent=0.10, non_roofs=1):
+    def load(self, roofs_only=False, test_percent=0.10, non_roofs=1):
         """Load the data to a numpy array, return dataset divided into training and testing sets
 
         Parameters:
-        roof_only: If roof_only is true we discard the non-roofs from the data
+        roofs_only: If roofs_only is true we discard the non-roofs from the data
         non_roofs: the proportion of non_roofs relative to roof patches to include in the dataset
         """
         #get the labels   
@@ -94,7 +94,7 @@ class RoofLoader(object):
         
         X, labels = sklearn.utils.shuffle(X, labels, random_state=42)  # shuffle train data    
 
-        if roof_only:
+        if roofs_only:
             roof = (labels[:]>0)
             labels = labels[roof]
             X = X[roof]

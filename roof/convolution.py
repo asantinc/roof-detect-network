@@ -30,7 +30,7 @@ testing metrics.
 
 if __name__ == '__main__':
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "t:n:l:p:")
+        opts, args = getopt.getopt(sys.argv[1:], "t:n:l:p:r:")
     except getopt.GetoptError:
         print 'Command line error'
         sys.exit(2)
@@ -38,6 +38,7 @@ if __name__ == '__main__':
     non_roofs=1
     preloaded=False
     num_layers=0 #logistic
+    roofs_only=True
     for opt, arg in opts:
         if opt == '-t':
             test_percent=float(arg)
@@ -47,10 +48,13 @@ if __name__ == '__main__':
             preloaded=bool(arg)
         elif opt=='-l':
             num_layers=int(float(arg))
-
+        elif opt=='-r':
+            roofs_only=True
     printer = PrintLogSave()
     name_percent = str(int(100*test_percent))
     net_name = 'conv'+str(num_layers)+'_nonroofs'+str(non_roofs)+'_test'+name_percent
+    if roofs_only:
+        net_name = net_name+'_roofs'
     epochs=250
     experiment = Experiment(data_augmentation=True,
                     test_percent=test_percent,
@@ -58,7 +62,8 @@ if __name__ == '__main__':
                     preloaded=preloaded,
                     printer=printer,
                     display_mistakes=True,
-                    non_roofs=non_roofs
+                    non_roofs=non_roofs,
+                    roofs_only=roofs_only
                     )
     
     #declare convolutional net
