@@ -45,24 +45,22 @@ class Experiment(object):
         if log:
             self.printer.log_to_file(self.net, self.__str__(), overwrite=True)
 
-        #load data
-        roof_loader = load.RoofLoader()
-        X_train, X_test, y_train, y_test = roof_loader.load(test_percent=self.test_percent, non_roofs=self.non_roofs, roofs_only=self.roofs_only)
-        #rescale X_train and X_test
-        if self.scaler:
-            scaler = load.DataScaler()
-            X_train = scaler.fit_transform(X_train)
-            X_test = scaler.transform2(X_test)
-
         #only train the network if we choose not to preload weights
         if self.preloaded:
             self.net.load_params_from('saved_weights/'+self.net.net_name+'.pickle')
         else:
+            #load data
+            roof_loader = load.RoofLoader()
+            X_train, X_test, y_train, y_test = roof_loader.load(test_percent=self.test_percent, non_roofs=self.non_roofs, roofs_only=self.roofs_only)
+            #rescale X_train and X_test
+            if self.scaler:
+                scaler = load.DataScaler()
+                X_train = scaler.fit_transform(X_train)
+                X_test = scaler.transform2(X_test)
             #fit the network to X_train
             self.net.fit(X_train, y_train)
             self.net.save_weights()
         
-
         #find predictions for test set
         predicted = self.net.predict(X_test)
 
@@ -128,7 +126,6 @@ class SaveLayerInfo(PrintLayerInfo):
         if legend is not None:
             file.write(legend)
         file.write(" \n\n")
-        
 
         file.close()
 

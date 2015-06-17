@@ -46,6 +46,9 @@ def convolution(
     if roofs_only:
         net_name = net_name+'_roofs'
     
+    layers = MyNeuralNet.produce_layers(num_layers)    
+    
+    #set up the experiment
     experiment = Experiment(data_augmentation=True,
                     test_percent=test_percent,
                     scaler='StandardScaler',
@@ -55,9 +58,6 @@ def convolution(
                     non_roofs=non_roofs,
                     roofs_only=roofs_only
                     )
-
-    layers = MyNeuralNet.produce_layers(num_layers)    
-    
     experiment.net = MyNeuralNet(
         layers=layers,
         input_shape=(None, 3, settings.CROP_SIZE, settings.CROP_SIZE),
@@ -83,7 +83,7 @@ def convolution(
         verbose=1,
         ) 
 
-    #experiment settings
+    #more experiment settings dependent on number of layers
     if num_layers==5:
         experiment.net.set_params(conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2),
         conv2_num_filters=64, conv2_filter_size=(2, 2), pool2_pool_size=(2, 2),
@@ -106,14 +106,7 @@ def convolution(
 
     experiment.run(log=log, plot_loss=plot_loss) 
 
-
-
-if __name__ == '__main__':
-    try:
-        opts, args = getopt.getopt(sys.argv[1:], "t:n:l:p:r:a:e:")
-    except getopt.GetoptError:
-        print 'Command line error'
-        sys.exit(2)
+def command_line_process(opts):
     test_percent=0.2
     non_roofs=1
     preloaded=False
@@ -137,5 +130,15 @@ if __name__ == '__main__':
             net_name=arg
         elif opt=='-e':
             epoch=int(float(arg))
+    return test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epoch
+
+if __name__ == '__main__':
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "t:n:l:p:r:a:e:")
+    except getopt.GetoptError:
+        print 'Command line error'
+        sys.exit(2)
+    
+    test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epoch = command_line_process(opts) 
     convolution(epochs=epoch, net_name=net_name, test_percent=test_percent, non_roofs=non_roofs, preloaded=preloaded, num_layers=num_layers, roofs_only=roofs_only, plot_loss=plot)
 
