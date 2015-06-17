@@ -39,9 +39,11 @@ class Experiment(object):
         self.non_roofs=non_roofs    #the proportion of non_roofs relative to roofs to be used in data
         self.roofs_only=roofs_only
 
-    def run(self):
+    def run(self, log=True, plot_loss=False):
+        self.plot_loss=plot_loss
         #save settings to file
-        self.printer.log_to_file(self.net, self.__str__(), overwrite=True)
+        if log:
+            self.printer.log_to_file(self.net, self.__str__(), overwrite=True)
 
         #load data
         roof_loader = load.RoofLoader()
@@ -59,6 +61,7 @@ class Experiment(object):
             #fit the network to X_train
             self.net.fit(X_train, y_train)
             self.net.save_weights()
+        
 
         #find predictions for test set
         predicted = self.net.predict(X_test)
@@ -66,7 +69,9 @@ class Experiment(object):
         #print evaluation
         self.printer.log_to_file(self.net, confusion_matrix(y_test, predicted), binary=True, title='\n\nConfusion Matrix\n')
         self.printer.log_to_file(self.net, classification_report(y_test, predicted), title='\n\nReport\n')
-
+        if self.plot_loss:
+            self.net.save_loss()
+        
         #display mistakes
         if self.display_mistakes: 
             mistakes = np.array([True if y_test[i]-predicted[i] != 0 else False for i in range(len(y_test))])

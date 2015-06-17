@@ -28,34 +28,24 @@ As a result, the validation metrics produced are corrupted, so to measure perfor
 testing metrics.
 '''
 
-if __name__ == '__main__':
-    try:
-        opts, args = getopt.getopt(sys.argv[1:], "t:n:l:p:r:")
-    except getopt.GetoptError:
-        print 'Command line error'
-        sys.exit(2)
-    test_percent=0.2
-    non_roofs=1
-    preloaded=False
-    num_layers=0 #logistic
-    roofs_only=True
-    for opt, arg in opts:
-        if opt == '-t':
-            test_percent=float(arg)
-        elif opt == '-n':
-            non_roofs=int(float(arg))
-        elif opt=='-p':
-            preloaded=bool(arg)
-        elif opt=='-l':
-            num_layers=int(float(arg))
-        elif opt=='-r':
-            roofs_only=True
+
+def convolution(
+        epochs=250, 
+        log=True, 
+        plot_loss=False, 
+        net_name=None, 
+        test_percent=.20, 
+        non_roofs=1, 
+        preloaded=False, 
+        num_layers=1, 
+        roofs_only=False):    
+    
     printer = PrintLogSave()
     name_percent = str(int(100*test_percent))
-    net_name = 'conv'+str(num_layers)+'_nonroofs'+str(non_roofs)+'_test'+name_percent
+    net_name = 'conv'+str(num_layers)+'_nonroofs'+str(non_roofs)+'_test'+name_percent if net_name==None else net_name
     if roofs_only:
         net_name = net_name+'_roofs'
-    epochs=250
+    
     experiment = Experiment(data_augmentation=True,
                     test_percent=test_percent,
                     scaler='StandardScaler',
@@ -65,65 +55,9 @@ if __name__ == '__main__':
                     non_roofs=non_roofs,
                     roofs_only=roofs_only
                     )
+
+    layers = MyNeuralNet.produce_layers(num_layers)    
     
-    #declare convolutional net
-    if num_layers==0:
-        layers=[
-            ('input', layers.InputLayer),
-            ('output', layers.DenseLayer),
-            ]
-    elif num_layers==1:
-        layers=[
-            ('input', layers.InputLayer),
-            ('conv1', layers.Conv2DLayer),
-            ('pool1', layers.MaxPool2DLayer),
-            ('output', layers.DenseLayer),
-            ]
-    elif num_layers==2:
-        layers=[
-            ('input', layers.InputLayer),
-            ('conv1', layers.Conv2DLayer),
-            ('pool1', layers.MaxPool2DLayer),
-            ('conv2', layers.Conv2DLayer),
-            ('pool2', layers.MaxPool2DLayer),
-            ('output', layers.DenseLayer),
-            ]
-    elif num_layers==3:
-        layers=[
-            ('input', layers.InputLayer),
-            ('conv1', layers.Conv2DLayer),
-            ('pool1', layers.MaxPool2DLayer),
-            ('conv2', layers.Conv2DLayer),
-            ('pool2', layers.MaxPool2DLayer),
-            ('conv3', layers.Conv2DLayer),
-            ('pool3', layers.MaxPool2DLayer),
-            ('output', layers.DenseLayer),
-            ]
-    elif num_layers==4:
-        layers=[
-            ('input', layers.InputLayer),
-            ('conv1', layers.Conv2DLayer),
-            ('pool1', layers.MaxPool2DLayer),
-            ('conv2', layers.Conv2DLayer),
-            ('pool2', layers.MaxPool2DLayer),
-            ('conv3', layers.Conv2DLayer),
-            ('pool3', layers.MaxPool2DLayer),
-            ('hidden4', layers.DenseLayer),
-            ('output', layers.DenseLayer),
-            ]
-    elif num_layers==5:
-        layers=[
-            ('input', layers.InputLayer),
-            ('conv1', layers.Conv2DLayer),
-            ('pool1', layers.MaxPool2DLayer),
-            ('conv2', layers.Conv2DLayer),
-            ('pool2', layers.MaxPool2DLayer),
-            ('conv3', layers.Conv2DLayer),
-            ('pool3', layers.MaxPool2DLayer),
-            ('hidden4', layers.DenseLayer),
-            ('hidden5', layers.DenseLayer),
-            ('output', layers.DenseLayer),
-            ]
     experiment.net = MyNeuralNet(
         layers=layers,
         input_shape=(None, 3, settings.CROP_SIZE, settings.CROP_SIZE),
@@ -148,6 +82,7 @@ if __name__ == '__main__':
         max_epochs=epochs,
         verbose=1,
         ) 
+
     #experiment settings
     if num_layers==5:
         experiment.net.set_params(conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2),
@@ -169,4 +104,38 @@ if __name__ == '__main__':
     elif num_layers==1:
         experiment.net.set_params(conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2))
 
-    experiment.run() 
+    experiment.run(log=log, plot_loss=plot_loss) 
+
+
+
+if __name__ == '__main__':
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "t:n:l:p:r:a:e:")
+    except getopt.GetoptError:
+        print 'Command line error'
+        sys.exit(2)
+    test_percent=0.2
+    non_roofs=1
+    preloaded=False
+    num_layers=0 #logistic
+    roofs_only=True
+    plot=True
+    net_name=None
+    epoch=250
+    for opt, arg in opts:
+        if opt == '-t':
+            test_percent=float(arg)
+        elif opt == '-n':
+            non_roofs=int(float(arg))
+        elif opt=='-p':
+            preloaded=bool(arg)
+        elif opt=='-l':
+            num_layers=int(float(arg))
+        elif opt=='-r':
+            roofs_only=True
+        elif opt=='-a':
+            net_name=arg
+        elif opt=='-e':
+            epoch=int(float(arg))
+    convolution(epochs=epoch, net_name=net_name, test_percent=test_percent, non_roofs=non_roofs, preloaded=preloaded, num_layers=num_layers, roofs_only=roofs_only, plot_loss=plot)
+
