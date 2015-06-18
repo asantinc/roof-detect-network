@@ -1,12 +1,12 @@
-from scipy import misc, ndimage
 import numpy as np
-#import matplotlib.pyplot as plt #display images
-import xml.etree.ElementTree as ET #traverse the xml files
 import pdb  
 import os #import the image files
-import random
+import random #get random patches
+import xml.etree.ElementTree as ET #traverse the xml files
 
-import experiment_settings as settings
+from scipy import misc, ndimage #load images
+
+import experiment_settings as settings #getting constants
 
 class Roof(object):
     '''Roof class containing info about its location in an image
@@ -28,9 +28,10 @@ class Roof(object):
         return ((self.ymax-self.ymin), (self.xmax-self.xmin))
 
 
-def DataLoader(object):
+class DataLoader(object):
+
     def __init__(self):
-        self.total_patch_num = 0
+        self.total_patch_no = 0
 
 
     def get_roof_positions(self, xml_file):
@@ -106,7 +107,7 @@ def DataLoader(object):
         with open(settings.LABELS_PATH, 'a') as labels_file:
             try:
                 patch = img[ymin:(ymin+settings.PATCH_H), xmin:(xmin+settings.PATCH_W)]
-                misc.imsave(settings.PATCHES_OUT_PATH+str(total_patch_no)+'.jpg', patch)
+                misc.imsave(settings.PATCHES_OUT_PATH+str(self.total_patch_no)+'.jpg', patch)
                 
                 #save an image showing where the patch was taken for debugging
                 if settings.DEBUG:
@@ -140,7 +141,7 @@ def DataLoader(object):
             try:
                 patch = img[ymin:ymax, xmin:xmax]
                 patch_scaled = misc.imresize(patch, (settings.PATCH_H, settings.PATCH_W))
-                misc.imsave(settings.PATCHES_OUT_PATH+str(total_patch_no)+'.jpg', patch_scaled)
+                misc.imsave(settings.PATCHES_OUT_PATH+str(self.total_patch_no)+'.jpg', patch_scaled)
                 
                 #save an image showing where the patch was taken for debugging
                 if settings.DEBUG:
@@ -252,7 +253,7 @@ def DataLoader(object):
                 self.save_patch_scaled(img=img, roof=roof)
                 
 
-    def get_negative_patches(self, total_patch_no, total_patches, label_file):
+    def get_negative_patches(self, total_patches, label_file):
         settings.print_debug('Getting the negative patches....\n')
         img_names = DataLoader.get_img_names_from_path(path=settings.UNINHABITED_PATH)
 
@@ -287,7 +288,6 @@ if __name__ == '__main__':
     with open(settings.LABELS_PATH, 'w') as label_file:
         max_w = 0
         max_h = 0
-        total_patch_no = 0
         for i, img in enumerate(img_names):
             settings.print_debug('Processing image: '+str(i)+'\n', verbosity=1)
             img_path = settings.INHABITED_PATH+img
