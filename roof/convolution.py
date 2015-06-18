@@ -138,7 +138,7 @@ if __name__ == '__main__':
     except getopt.GetoptError:
         print 'Command line error'
         sys.exit(2)
-    
     test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epoch = command_line_process(opts) 
+    
     convolution(epochs=epoch, net_name=net_name, test_percent=test_percent, non_roofs=non_roofs, preloaded=preloaded, num_layers=num_layers, roofs_only=roofs_only, plot_loss=plot)
 
