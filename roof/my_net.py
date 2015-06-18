@@ -17,6 +17,7 @@ sys.path.append('~/roof/Lasagne/lasagne')
 sys.path.append('~/roof/nolearn/nolearn')
 
 from nolearn.lasagne.base import NeuralNet, _sldict, BatchIterator
+import experiment_settings as settings
 
 class MyNeuralNet(NeuralNet):
 	'''
@@ -72,19 +73,7 @@ class MyNeuralNet(NeuralNet):
 		self.regression = regression
 		self.batch_iterator_test = batch_iterator_test
 		self.preproc_scaler = preproc_scaler
-    
-	#def predict_proba(self, X):
-	#    if self.preproc_scaler is not None:
-    #            X_shape = X.shape
-    #            X_reshaped = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
-    #            X_reshaped = self.preproc_scaler.fit_transform(X_reshaped)
-    #            X = X_reshaped.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
-	#        X = self.preproc_scaler.transform(X)
-	#    probas = []
-	#    for Xb, yb in self.batch_iterator_test(X):
-	#        probas.append(NeuralNet.apply_batch_func(self.predict_iter_, Xb))
-    #    return np.vstack(probas)
-   
+      
 	def train_test_split(self, X, y, eval_size):
 	    if eval_size:
 	        if self.regression:
@@ -111,11 +100,96 @@ class MyNeuralNet(NeuralNet):
 
 	    return X_train, X_valid, y_train, y_valid
     
+        
+        def set_params(self, **kwargs):
+            for key in kwargs.keys():
+                assert not hasattr(self, key)
+            vars(self).update(kwargs)
+            self._kwargs_keys = list(kwargs.keys())
+
         def save_weights(self):
             ''' Saves weigts of model so they can be loaded back later:
             '''
-            with open('../saved_weights/'+self.net_name+'.pickle', 'wb') as f:
+            with open('saved_weights/'+self.net_name+'.pickle', 'wb') as f:
                 pickle.dump(self, f, -1)
+        
+        
+        def save_loss(self):
+            '''Save the plot of the training and validation loss
+            '''
+            train_loss = [row['train_loss'] for row in self.train_history_]
+            valid_loss = [row['valid_loss'] for row in self.train_history_]
+            pdb.set_trace()
+            plt.plot(train_loss, label='train loss')
+            plt.plot(valid_loss, label='valid loss')
+            plt.legend(loc='best')
+            plt.savefig(settings.OUT_PATH+self.net_name+'.png')
+        
+
+        @staticmethod
+        def produce_layers(num_layers=1):
+            assert num_layers<=5
+            assert num_layers>=0
+            if num_layers==0:
+                net_layers=[
+                    ('input', layers.InputLayer),
+                    ('output', layers.DenseLayer),
+                    ]
+            elif num_layers==1:
+                net_layers=[
+                    ('input', layers.InputLayer),
+                    ('conv1', layers.Conv2DLayer),
+                    ('pool1', layers.MaxPool2DLayer),
+                    ('output', layers.DenseLayer),
+                    ]
+            elif num_layers==2:
+                net_layers=[
+                    ('input', layers.InputLayer),
+                    ('conv1', layers.Conv2DLayer),
+                    ('pool1', layers.MaxPool2DLayer),
+                    ('conv2', layers.Conv2DLayer),
+                    ('pool2', layers.MaxPool2DLayer),
+                    ('output', layers.DenseLayer),
+                    ]
+            elif num_layers==3:
+                net_layers=[
+                    ('input', layers.InputLayer),
+                    ('conv1', layers.Conv2DLayer),
+                    ('pool1', layers.MaxPool2DLayer),
+                    ('conv2', layers.Conv2DLayer),
+                    ('pool2', layers.MaxPool2DLayer),
+                    ('conv3', layers.Conv2DLayer),
+                    ('pool3', layers.MaxPool2DLayer),
+                    ('output', layers.DenseLayer),
+                    ]
+            elif num_layers==4:
+                net_layers=[
+                    ('input', layers.InputLayer),
+                    ('conv1', layers.Conv2DLayer),
+                    ('pool1', layers.MaxPool2DLayer),
+                    ('conv2', layers.Conv2DLayer),
+                    ('pool2', layers.MaxPool2DLayer),
+                    ('conv3', layers.Conv2DLayer),
+                    ('pool3', layers.MaxPool2DLayer),
+                    ('hidden4', layers.DenseLayer),
+                    ('output', layers.DenseLayer),
+                    ]
+            elif num_layers==5:
+                net_layers=[
+                    ('input', layers.InputLayer),
+                    ('conv1', layers.Conv2DLayer),
+                    ('pool1', layers.MaxPool2DLayer),
+                    ('conv2', layers.Conv2DLayer),
+                    ('pool2', layers.MaxPool2DLayer),
+                    ('conv3', layers.Conv2DLayer),
+                    ('pool3', layers.MaxPool2DLayer),
+                    ('hidden4', layers.DenseLayer),
+                    ('hidden5', layers.DenseLayer),
+                    ('output', layers.DenseLayer),
+                    ]
+            return net_layers 
+
+
 
 if __name__ == "__main__":
     net = MyNeuralNet()

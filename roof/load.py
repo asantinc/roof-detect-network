@@ -11,7 +11,7 @@ from sklearn.preprocessing import StandardScaler
 import experiment_settings as settings
 
 class RoofLoader(object):
-    def string_type(self, y):
+    def roof_type(self, y):
         if y == 1:
             return 'Metal'
         elif y == 2:
@@ -19,11 +19,13 @@ class RoofLoader(object):
         elif y == 0:
             return 'No roof'
 
-    def display_images(self, X, y=[], indeces=[0], file_names=[]):
+    def display_images(self, X, labels=[], indeces=[0], file_names=[]):
         '''
         Display the images indicated by indeces that are contained in X
         '''
         for i in indeces:
+            if len(labels)==len(X):
+                print self.roof_type(labels[i])
             if len(X.shape) == 2:
                 if X.shape[1] > settings.IMG_SIZE:
                     x = np.reshape(X[i, :], (settings.IMG_SIZE, settings.IMG_SIZE))
@@ -31,7 +33,7 @@ class RoofLoader(object):
                 x = X[i,:,:]
             else:
                 x = np.squeeze(X[i,:,:,:])
-                x = np.transpose(x, (1,2,0))
+                x = np.transpose(x, (1,2,0))*255
             plt.imshow(x)
             plt.show()
 
@@ -40,57 +42,67 @@ class RoofLoader(object):
         plt.imshow(img)
         plt.show()
 
-    def load_images(self):
+    def load_images(self, labels_tuples):
         '''
         Load the images into a numpy array X.
         '''
         X = None
         file_names = list()
-        for f in glob.glob(settings.FTRAIN+'*.jpg'):
-            x = cv2.imread(f)
+        img_to_remove = list()
+        labels = list()
+
+        #for f in glob.glob(settings.FTRAIN+'*.jpg'):
+        for f_name, roof_type in labels_tuples:
+            f_number = int(f_name)
+            f_path = settings.FTRAIN+str(f_number)+'.jpg'                
+            x = cv2.imread(f_path)
             x = np.asarray(x, dtype='float32')/255
             x = x.transpose(2,0,1)
             x.shape = (1,x.shape[0], x.shape[1], x.shape[2])
 
             try:
                 X = x if X==None else np.concatenate((X, x), axis=0)
-                file_number = f[len(settings.FTRAIN):-4]
-                file_names.append(int(file_number))
+                file_names.append(f_number)
+                labels.append(roof_type)
             #some images are not loading properly because they are smaller than expected
             except ValueError, e:
                 print e
         
         X = X.astype(np.float32)
-        return X, file_names
+        return X, labels
 
 
-    def load(self, roof_only=False, test_percent=0.10):
+    def load(self, roofs_only=False, test_percent=0.10, non_roofs=1):
+        """Load the data to a numpy array, return dataset divided into training and testing sets
+
+        Parameters:
+        roofs_only: If roofs_only is true we discard the non-roofs from the data
+        non_roofs: the proportion of non_roofs relative to roof patches to include in the dataset
         """
-        If roof_only is true we discard the non-roofs from the data
-        """
-        X, self.file_names = self.load_images()
         #get the labels   
         labels_list = np.loadtxt(open(settings.FTRAIN_LABEL,"rb"),delimiter=",")
         labels_dict = dict(labels_list)
-        labels = []
+       
+        data_stats = np.bincount(labels_dict.values())
+        total_roofs = data_stats[1]+data_stats[2]
         
-        #only get the labels for the images that we have loaded properly
-        for i, f in enumerate(self.file_names):
-            f_int = int(f)
-            if f_int in labels_dict:
-                labels.append(int(labels_dict[f_int]))
-            
+        #the non_roofs always come after, we take the roof labels and the proportion of non-roofs we want
+        labels_list = labels_list[:(total_roofs+(non_roofs*total_roofs))]
+
+        X, labels = self.load_images(labels_list)
         labels = np.array(labels, dtype=np.int32)
-        X, labels, self.file_names = sklearn.utils.shuffle(X, labels, self.file_names, random_state=42)  # shuffle train data    
         
-        if roof_only:
+        X, labels = sklearn.utils.shuffle(X, labels, random_state=42)  # shuffle train data    
+
+        if roofs_only:
             roof = (labels[:]>0)
             labels = labels[roof]
             X = X[roof]
             labels[labels[:]==2] = 0 
-        #data_stats = np.bincount(labels)
+        
         self.X_train, self.X_test, self.labels_train, self.labels_test = cross_validation.train_test_split(X, labels, test_size=test_percent, random_state=0)
-        return self.X_train, self.X_test, self.labels_train, self.labels_test, self.file_names
+        return self.X_train, self.X_test, self.labels_train, self.labels_test
+
 
 class DataScaler(StandardScaler):
     '''Subclass of sklearn.StandardScaler that reshapes data as needed and then calls super to do scaling
@@ -98,13 +110,19 @@ class DataScaler(StandardScaler):
     def fit_transform(self, X):
         X_shape = X.shape
         X = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
-        super(DataScaler, self).fit_transform(X)
+        X = super(DataScaler, self).fit_transform(X)
         return X.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
 
     def transform2(self, X):
         X_shape = X.shape
         X = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
-        super(DataScaler, self).transform(X)
+        X = super(DataScaler, self).transform(X)
+        return X.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
+
+    def inverse_transform(self, X): 
+        X_shape = X.shape
+        X = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
+        X = super(DataScaler, self).inverse_transform(X)
         return X.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
 
 

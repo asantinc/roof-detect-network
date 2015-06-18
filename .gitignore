@@ -5,3 +5,5 @@ nolearn/
 *.swp
 .*.swp
 .__*
+old/
+delete/
