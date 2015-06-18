@@ -32,6 +32,7 @@ class DataLoader(object):
 
     def __init__(self):
         self.total_patch_no = 0
+        self.step_size = settings.PATCH_W/4
 
 
     def get_roof_positions(self, xml_file):
@@ -154,30 +155,36 @@ class DataLoader(object):
 
                     patch = img[ymin:ymax, xmin:xmax]
                     misc.imsave(settings.DELETE_PATH+str(self.total_patch_no)+'_DEL_NOTscaled.jpg', patch)
-                
+
             except (IndexError, IOError, KeyError, ValueError) as e:
                 print e
+
             else:
                 labels_file.write(str(self.total_patch_no)+','+str(roof_type)+'\n')
                 self.total_patch_no = self.total_patch_no+1
 
 
-    def get_horizontal_patches(self, img=None, roof=None, y_pos=-1, hor_patches=-1):
+    def get_horizontal_patches(self, img=None, roof=None, y_pos=-1):
         '''Get patches along the width of a roof for a given y_pos (i.e. a given height in the image)
         '''
         roof_type = settings.METAL if roof.roof_type=='metal' else settings.THATCH
 
+        h, w = roof.get_roof_size()
+        hor_patches = ((w - settings.PATCH_W) // self.step_size) + 1  #hor_patches = w/settings.PATCH_W
+
+
         for horizontal in range(hor_patches):
-            x_pos = roof.xmin+(horizontal*settings.PATCH_W)
+            x_pos = roof.xmin+(horizontal*self.step_size)
+            print 'x_pos', str(x_pos)
+            print 'xmin', str(roof.xmin)
             self.save_patch(img= img, xmin=x_pos, ymin=y_pos, roof_type=roof.roof_type)
 
-        #grab the patch in the last column but ensure we don't go off the image
-        _, width = roof.get_roof_size()
-        if ( width  % settings.PATCH_W > 0) and (width > settings.PATCH_W):
-            #subtract from the current x_pos the amount of roof width that we have missed
-            leftover = width - (hor_patches*settings.PATCH_W)
-            x_pos = x_pos+leftover
-            self.save_patch(img=img, xmin=x_pos, ymin=y_pos, roof_type=roof.roof_type)
+        # #grab the patch in the last column but ensure we don't go off the image
+        # if ( w  % settings.PATCH_W > 0) and (w > settings.PATCH_W):
+        #     #subtract from the current x_pos the amount of roof width that we have missed
+        #     leftover = w - (hor_patches*settings.PATCH_W)
+        #     x_pos = x_pos+leftover
+        #     self.save_patch(img=img, xmin=x_pos, ymin=y_pos, roof_type=roof.roof_type)
 
 
     def overlap_percent(self, roof_list):
@@ -186,11 +193,13 @@ class DataLoader(object):
         roof_list: list of Roofs
             roofs in current image
         '''
+        raise ValueError
 
 
     def produce_roof_patches(self, img_path='', img_id=-1, roof=None, label_file=settings.LABELS_PATH,
                             max_h=-1, max_w=-1):
         '''Given a roof in an image, produce a patch or set of patches for it
+        
         Parameters:
         ----------------
         img_loc: string path
@@ -209,7 +218,7 @@ class DataLoader(object):
             img = misc.imread(img_path)
 
         except IOError:
-            print 'Cannot open'+img_path
+            print 'Cannot open '+img_path
 
         else:
             roof_type = settings.METAL if roof.roof_type=='metal' else settings.THATCH
@@ -232,22 +241,22 @@ class DataLoader(object):
             # if roof is too large, get multiple equally sized patches from it, and a scaled down patch also
             if w > settings.PATCH_W or h > settings.PATCH_H:
                 settings.print_debug('The roof is large, need to process several patches from it \n')
-                hor_patches = w/settings.PATCH_W
-                vert_patches = h/settings.PATCH_H
                 x_pos = roof.xmin
                 y_pos = roof.ymin
 
-                #get patches at every height
+                vert_patches = ((h - settings.PATCH_H) // self.step_size) + 1  #vert_patches = h/settings.PATCH_H
+
+                #get patches along roof height
                 for vertical in range(vert_patches):
-                    y_pos = roof.ymin+(vertical*settings.PATCH_H)
-                    #along the roof's width
-                    self.get_horizontal_patches(img=img, roof=roof, y_pos=y_pos, hor_patches=hor_patches)
+                    y_pos = roof.ymin+(vertical*self.step_size)
+                    #along roof's width
+                    self.get_horizontal_patches(img=img, roof=roof, y_pos=y_pos)
 
                 #get patches from the last row also
                 if (h % settings.PATCH_W>0) and (h > settings.PATCH_H):
                     leftover = h-(vert_patches*settings.PATCH_H)
                     y_pos = y_pos-leftover
-                    self.get_horizontal_patches(img=img, roof=roof, y_pos=y_pos, hor_patches=hor_patches)
+                    self.get_horizontal_patches(img=img, roof=roof, y_pos=y_pos)
 
                 #add an image of entire roof, scaled down so it fits within patch size
                 self.save_patch_scaled(img=img, roof=roof)
@@ -278,6 +287,18 @@ class DataLoader(object):
                     #save patch
                     self.save_patch(img=img, xmin=xmin, ymin=ymin, roof_type=settings.NON_ROOF) 
 
+
+    def patchify(self, img, patch_shape):
+        img = np.ascontiguousarray(img)  # won't make a copy if not needed
+        X, Y = img.shape
+        x = y = settings.PATCH_H
+        shape = ((X-x+1), (Y-y+1), x, y) # number of patches, patch_shape
+        # The right strides can be thought by:
+        # 1) Thinking of `img` as a chunk of memory in C order
+        # 2) Asking how many items through that chunk of memory are needed when indices
+        #    i,j,k,l are incremented by one
+        strides = img.itemsize*np.array([Y, 1, Y, 1])
+        return np.lib.stride_tricks.as_strided(img, shape=shape, strides=strides)
 
 if __name__ == '__main__':
     #Get the filename 
