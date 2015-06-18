@@ -1,3 +1,4 @@
+'''
 from collections import OrderedDict
 from datetime import datetime
 from functools import reduce
@@ -5,7 +6,7 @@ import numpy as np
 import operator
 import sys
 import pdb
-from tabulate import tabulate
+
 
 import lasagne
 sys.path.append('~/roof/Lasagne/lasagne')
@@ -13,32 +14,47 @@ sys.path.append('~/roof/nolearn/nolearn')
 from nolearn.lasagne.handlers import PrintLog, PrintLayerInfo 
 from nolearn.lasagne.util import is_conv2d
 
+
 #my modules
 import load
 from sklearn.metrics import classification_report, confusion_matrix
+'''
 
-#Constants
+#Constants for patch production
+PATCHES_OUT_PATH = '../data/debug/'
+LABELS_PATH = '../data/debug/labels.csv'
+INHABITED_PATH = '../data/inhabited/'
+UNINHABITED_PATH = '../data/uninhabited/'
+DELETE_PATH = '../data/delete/'
+NEGATIVE_PATCHES_NUM = 20
+
+#types of roof
+NON_ROOF = 0
+METAL = 1
+THATCH = 2
+#Constants for image size
+IMG_SIZE = 40
+CROP_SIZE = 32
+PATCH_W = PATCH_H = 40
+
+#Constants for training neural network
 OUT_PATH = "../output/" 
 FTRAIN = '../data/debug/'
 FTRAIN_LABEL = '../data/debug/labels.csv'
 FTEST = '../data/test/'
-IMG_SIZE = 40
-CROP_SIZE = 32
-PATCH_W = PATCH_H = 40
-DEBUG = False
 
-PATCHES_OUT_PATH = '../data/debug/'
-INHABITED_PATH = '../data/inhabited/'
-UNINHABITED_PATH = '../data/uninhabited/'
-LABELS_PATH = '../data/debug/'
-
+#Constants for debugging
 VERBOSITY = 1   #varies from 1 to 3
+DEBUG = True
 
 
-def print_debug(verbosity=0, to_print=''):
+
+def print_debug(to_print, verbosity=0):
+    ''' Print depending on verbosity level
+    '''
     if verbosity>= VERBOSITY:
         print str(to_print)
-
+'''
 
 class Experiment(object):
     def __init__(self, net=None, data_augmentation=True, display_mistakes=False, 
@@ -142,6 +158,6 @@ class SaveLayerInfo(PrintLayerInfo):
         file.write(" \n\n")
 
         file.close()
-
+'''
         
 
