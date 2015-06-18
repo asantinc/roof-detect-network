@@ -24,6 +24,20 @@ FTRAIN_LABEL = '../data/debug/labels.csv'
 FTEST = '../data/test/'
 IMG_SIZE = 40
 CROP_SIZE = 32
+PATCH_W = PATCH_H = 40
+DEBUG = False
+
+PATCHES_OUT_PATH = '../data/debug/'
+INHABITED_PATH = '../data/inhabited/'
+UNINHABITED_PATH = '../data/uninhabited/'
+LABELS_PATH = '../data/debug/'
+
+VERBOSITY = 1   #varies from 1 to 3
+
+
+def print_debug(verbosity=0, to_print=''):
+    if verbosity>= VERBOSITY:
+        print str(to_print)
 
 
 class Experiment(object):
