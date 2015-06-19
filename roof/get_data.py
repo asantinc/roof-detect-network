@@ -1,12 +1,12 @@
-from scipy import misc, ndimage
 import numpy as np
-import matplotlib.pyplot as plt #display images
-import xml.etree.ElementTree as ET #traverse the xml files
 import pdb  
 import os #import the image files
-import random
+import random #get random patches
+import xml.etree.ElementTree as ET #traverse the xml files
 
-import experiment_settings
+from scipy import misc, ndimage #load images
+
+import experiment_settings as settings #getting constants
 
 class Roof(object):
     '''Roof class containing info about its location in an image
@@ -25,186 +25,291 @@ class Roof(object):
         self.ycentroid = self.ymin+((self.ymax - self.ymin) /2)
     
     def get_roof_size(self):
-        return ((self.xmax-self.xmin), (self.ymax-self.ymin))
+        return ((self.ymax-self.ymin), (self.xmax-self.xmin))
 
 
-def get_roof_positions(xml_file):
-    '''Return list of Roofs
+class DataLoader(object):
 
-    Parameters
-    ----------
-    xml_file: string
-        Path to XML file that contains roof locations for current image
-
-    Returns
-    ----------
-    roof_list: list
-        List of roof objects in an image as stated in its xml file
-    max_w, max_h: int
-        The integer value of the maximum width and height of all roofs in the current image
-    '''
-    roof_list = []
-    tree = ET.parse(xml_file)
-    root = tree.getroot()
-    max_w = 0
-    max_h = 0
-
-    for child in root:
-        if child.tag == 'object':
-            roof = Roof()
-            for grandchild in child:
-                #get roof type
-                if grandchild.tag == 'action':
-                    roof.roof_type = grandchild.text
-
-                #get positions of bounding box
-                if grandchild.tag == 'bndbox':
-                    for item in grandchild:
-                        pos = int(float(item.text))
-                        pos = pos if pos >= 0 else 0
-                        if item.tag == 'xmax':
-                            roof.xmax = pos
-                        elif item.tag == 'xmin':
-                            roof.xmin = pos
-                        elif item.tag  == 'ymax':
-                            roof.ymax = pos
-                        elif item.tag  == 'ymin':
-                            roof.ymin = pos
-
-            cur_w = roof.xmax - roof.xmin
-            cur_h = roof.ymax - roof.ymin
-            max_w = cur_w if cur_w>max_w else max_w 
-            max_h = cur_h if cur_h>max_h else max_h 
-            roof.set_centroid()
-            roof_list.append(roof)
-
-    return roof_list, max_w, max_h
-
-def save_patch(num_patch=-1, patch=None, cur_type=-1):
-    '''Save the given image patch to the patches folder 
-    '''
-    assert num_patch > 0
-    assert patch != None
-
-    misc.imsave(settings.PATCHES_OUT_PATH+str(num_patch)+'.jpg', patch)
-    settings.LABELS_PATH.write(str(num_patch)+','+str(cur_type)+'\n')
-    settings.print_debug(verbosity=1, to_print=(img_id,num_patch))
-    return num_patch+1
+    def __init__(self):
+        self.total_patch_no = 0
+        self.step_size = settings.PATCH_W/4
 
 
-def produce_roof_patches(img_loc, img_id, roof, label_file, num_patch=0):
-    '''Given a roofs in an image, produce a patch or set of patches
-    Parameters:
-    ----------------
-    img_loc: string path
-        Path of image from which to obtain patches
-    img_id: int
-        id of the current image
-    roof: Roof type
-    label_file: 
-           
-    Returns:
-    ---------------
-    num_patch: int
-    '''
-    im = misc.imread(img_loc)
-    cur_type = 1 if roof.roof_type=='metal' else 2
+    def get_roof_positions(self, xml_file):
+        '''Return list of Roofs
 
-    if ((roof.ycentroid-(settings.PATCH_H/2) < 0) or \
-            (roof.ycentroid+(settings.PATCH_H/2)>im.shape[1]) or \
-                ((roof.xcentroid-(settings.PATCH_W/2)) < 0) or \
-                    ((roof.xcentroid+(settings.PATCH_W/2))>im.shape[0])):
-        return num_patch
-    w, h = roof.get_roof_size()
+        Parameters
+        ----------
+        xml_file: string
+            Path to XML file that contains roof locations for current image
 
-    #get patch the normal way
-    patch = im[(roof.ycentroid-(PATCH_H/2)):(roof.ycentroid+(PATCH_H/2)),
-                (roof.xcentroid-(PATCH_W/2)):(roof.xcentroid+(PATCH_W/2))]
-    num_patch = save_patch(num_patch=num_patch, patch=patch, cur_type=cur_type)
-    
-    # if roof is too large, get multiple equally sized patches from it
-    # also include different scale portions
-    if w > settings.PATCH_W or h > settings.PATCH_H:
-        full_patch = im[roof.ymin:roof.ymax, roof.xmin:roof.xmax]
+        Returns
+        ----------
+        roof_list: list
+            List of roof objects in an image as stated in its xml file
+        max_w, max_h: int
+            The integer value of the maximum width and height of all roofs in the current image
+        '''
+        roof_list = []
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+        max_w = 0
+        max_h = 0
+
+        for child in root:
+            if child.tag == 'object':
+                roof = Roof()
+                for grandchild in child:
+                    #get roof type
+                    if grandchild.tag == 'action':
+                        roof.roof_type = grandchild.text
+
+                    #get positions of bounding box
+                    if grandchild.tag == 'bndbox':
+                        for item in grandchild:
+                            pos = int(float(item.text))
+                            pos = pos if pos >= 0 else 0
+                            if item.tag == 'xmax':
+                                roof.xmax = pos
+                            elif item.tag == 'xmin':
+                                roof.xmin = pos
+                            elif item.tag  == 'ymax':
+                                roof.ymax = pos
+                            elif item.tag  == 'ymin':
+                                roof.ymin = pos
+
+                cur_w = roof.xmax - roof.xmin
+                cur_h = roof.ymax - roof.ymin
+                max_w = cur_w if cur_w>max_w else max_w 
+                max_h = cur_h if cur_h>max_h else max_h 
+                roof.set_centroid()
+                roof_list.append(roof)
+        return roof_list, max_w, max_h
+
+
+    @staticmethod
+    def get_img_names_from_path(path='', extension='.jpg'):
+        ''' Get list of image files in a given folder path
+        '''
+        img_names = set()
+        for file in os.listdir(path):
+            if file.endswith(extension):
+                img_names.add(file)
+        return img_names
+
+
+    def save_patch(self, img=None, xmin=-1, ymin=-1, roof_type=-1):
+        '''Save a patch located at the xmin, ymin position to the patches folder 
+        '''
+        assert xmin > -1 and ymin > -1
+
+        with open(settings.LABELS_PATH, 'a') as labels_file:
+            try:
+                patch = img[ymin:(ymin+settings.PATCH_H), xmin:(xmin+settings.PATCH_W)]
+                misc.imsave(settings.PATCHES_OUT_PATH+str(self.total_patch_no)+'.jpg', patch)
+                
+                #save an image showing where the patch was taken for debugging
+                if settings.DEBUG:
+                    mask_size = settings.PATCH_H
+                    img_copy = np.array(img, copy=True)
+                    img_copy[ymin:(ymin+settings.PATCH_H), xmin:(xmin+settings.PATCH_W), 0:1] = 255
+                    img_copy[ymin:(ymin+settings.PATCH_H), xmin:(xmin+settings.PATCH_W), 1:3] = 0
+                    misc.imsave(settings.DELETE_PATH+str(self.total_patch_no)+'_DEL.jpg', img_copy)
+
+            except (IndexError, IOError, KeyError, ValueError) as e:
+                print e
+            else:
+                labels_file.write(str(self.total_patch_no)+','+str(roof_type)+'\n')
+                self.total_patch_no = self.total_patch_no+1
+
+
+    def save_patch_scaled(self, roof=None, img=None):
+        '''Save a downscaled image of a roof that is too large as is to fit within the PATCH_SIZE 
+        '''
+        roof_type = settings.METAL if roof.roof_type=='metal' else settings.THATCH
+
+        h, w = roof.get_roof_size()
+        #TODO: this might not be accurate: it doesn't make sense to scale up/down depending on...
+        max_direction = max(w, h)
+        xmin = roof.xcentroid-(max_direction/2)
+        ymin = roof.ycentroid-(max_direction/2)
+        xmax = roof.xcentroid+(max_direction/2)
+        ymax = roof.ycentroid+(max_direction/2)
+
+        with open(settings.LABELS_PATH, 'a') as labels_file:
+            try:
+                patch = img[ymin:ymax, xmin:xmax]
+                patch_scaled = misc.imresize(patch, (settings.PATCH_H, settings.PATCH_W))
+                misc.imsave(settings.PATCHES_OUT_PATH+str(self.total_patch_no)+'.jpg', patch_scaled)
+                
+                #save an image showing where the patch was taken for debugging
+                if settings.DEBUG:
+                    #save a scaled version
+                    mask_size = settings.PATCH_H
+                    img_copy = np.array(img, copy=True)
+                    img_copy[ymin:ymax, xmin:xmax, 0:1] = 255
+                    img_copy[ymin:ymax, xmin:xmax, 1:3] = 0
+                    misc.imsave(settings.DELETE_PATH+str(self.total_patch_no)+'_DEL_scaled.jpg', img_copy)
+
+                    patch = img[ymin:ymax, xmin:xmax]
+                    misc.imsave(settings.DELETE_PATH+str(self.total_patch_no)+'_DEL_NOTscaled.jpg', patch)
+
+            except (IndexError, IOError, KeyError, ValueError) as e:
+                print e
+
+            else:
+                labels_file.write(str(self.total_patch_no)+','+str(roof_type)+'\n')
+                self.total_patch_no = self.total_patch_no+1
+
+
+    def get_horizontal_patches(self, img=None, roof=None, y_pos=-1):
+        '''Get patches along the width of a roof for a given y_pos (i.e. a given height in the image)
+        '''
+        roof_type = settings.METAL if roof.roof_type=='metal' else settings.THATCH
+
+        h, w = roof.get_roof_size()
+        hor_patches = ((w - settings.PATCH_W) // self.step_size) + 1  #hor_patches = w/settings.PATCH_W
+
+
+        for horizontal in range(hor_patches):
+            x_pos = roof.xmin+(horizontal*self.step_size)
+            self.save_patch(img= img, xmin=x_pos, ymin=y_pos, roof_type=roof.roof_type)
+
+
+    def overlap_percent(self, roof_list):
+        '''Return the percent of overlap between the current patch and a roof bounding box
+        Parameters:
+        roof_list: list of Roofs
+            roofs in current image
+        '''
+        raise ValueError
+
+
+    def produce_roof_patches(self, img_path='', img_id=-1, roof=None, label_file=settings.LABELS_PATH,
+                            max_h=-1, max_w=-1):
+        '''Given a roof in an image, produce a patch or set of patches for it
         
-        hor_patches = w/PATCH_W
-        vert_patches = h/PATCH_H
-        x_pos = 0
-        y_pos = 0
+        Parameters:
+        ----------------
+        img_loc: string path
+            Path of image from which to obtain patches
+        img_id: int
+            id of the current image
+        roof: Roof type
+        label_file: 
+               
+        Returns:
+        ---------------
+        total_patch_no: int
+            The number of patches produced so far
+        '''
+        try:
+            img = misc.imread(img_path)
 
-        for y in range(vert_patches):
-            y_pos += y*PATCH_H
-            for x in range(hor_patches):
-                x_pos += x*PATCH_W
-                patch = im[(y_pos):(y_pos+PATCH_H), (x_pos):(x_pos+PATCH_W)]
-                num_patch = save_patch(num_patch=num_patch, patch=patch, cur_type=cur_type)
- 
-            if (w%PATCH_W>0) and (w>PATCH_W):
-                x_pos = (hor_patches*PATCH_W)-(w%PATCH_W) #this is the leftover
-                patch = im[(y_pos):(y_pos+PATCH_H), (x_pos):(x_pos+PATCH_W)]
-                num_patch = save_patch(num_patch=num_patch, patch=patch, cur_type=cur_type)
-    
-    return num_patch
+        except IOError:
+            print 'Cannot open '+img_path
+
+        else:
+            roof_type = settings.METAL if roof.roof_type=='metal' else settings.THATCH
+
+            ybottom = (roof.ycentroid-(settings.PATCH_H/2) < 0)
+            ytop = (roof.ycentroid+(settings.PATCH_H/2)>img.shape[0])
+            xbottom = ((roof.xcentroid-(settings.PATCH_W/2)) < 0) 
+            xtop = ((roof.xcentroid+(settings.PATCH_W/2))>img.shape[1])
+
+            if ybottom or xbottom or ytop or xtop:
+                #could not produce any patches
+                return -1
+
+            h, w = roof.get_roof_size()
+
+            #get a patch at the center
+            self.save_patch(img= img, xmin=(roof.xcentroid-(settings.PATCH_W/2)), ymin=(roof.ycentroid-(settings.PATCH_H/2)), roof_type=roof_type)
+
+            # if roof is too large, get multiple equally sized patches from it, and a scaled down patch also
+            if w > settings.PATCH_W or h > settings.PATCH_H:
+                x_pos = roof.xmin
+                y_pos = roof.ymin
+
+                vert_patches = ((h - settings.PATCH_H) // self.step_size) + 1  #vert_patches = h/settings.PATCH_H
+
+                #get patches along roof height
+                for vertical in range(vert_patches):
+                    y_pos = roof.ymin+(vertical*self.step_size)
+                    #along roof's width
+                    self.get_horizontal_patches(img=img, roof=roof, y_pos=y_pos)
+
+                #get patches from the last row also
+                if (h % settings.PATCH_W>0) and (h > settings.PATCH_H):
+                    leftover = h-(vert_patches*settings.PATCH_H)
+                    y_pos = y_pos-leftover
+                    self.get_horizontal_patches(img=img, roof=roof, y_pos=y_pos)
+
+                #add an image of entire roof, scaled down so it fits within patch size
+                self.save_patch_scaled(img=img, roof=roof)
+                
+
+    def get_negative_patches(self, total_patches, label_file):
+        settings.print_debug('Getting the negative patches....\n')
+        img_names = DataLoader.get_img_names_from_path(path=settings.UNINHABITED_PATH)
+
+        negative_patches = (total_patches)/len(img_names)
+        
+        #Get negative patches
+        for i, img_path in enumerate(img_names):
+            settings.print_debug('Negative image: '+str(i))
+            for p in range(negative_patches):
+                #get random ymin, xmin, but ensure the patch will fall inside of the image
+                try:
+                    img = misc.imread(settings.UNINHABITED_PATH+img_path)
+                except IOError:
+                    print 'Cannot open '+img_path
+                else:
+                    h, w, _ = img.shape
+                    w_max = w - settings.PATCH_W
+                    h_max = h - settings.PATCH_H
+                    xmin = random.randint(0, w_max)
+                    ymin = random.randint(0, h_max)
+
+                    #save patch
+                    self.save_patch(img=img, xmin=xmin, ymin=ymin, roof_type=settings.NON_ROOF) 
 
 
-def get_negative_patches(num_patch, total_patches, label_file):
-    #get patches
-    cur_type = 0   
-    img_names = set()
-    uninhabited_path = settings.UNINHABITED_PATH
-    #Get the filenames
-    for file in os.listdir(uninhabited_path):
-        if file.endswith(".jpg"):
-            img_names.add(file)
-
-    negative_patches = (total_patches)/len(img_names)
-    
-    #Get negative patches
-    for i, img in enumerate(img_names):
-        for p in range(negative_patches):
-            im = misc.imread(uninhabited_path+img)
-            w = im.shape[0]
-            h = im.shape[1]
-            w_max = w - PATCH_W
-            h_max = h - PATCH_H
-            xmin = random.randint(0, w_max)
-            ymin = random.randint(0, h_max)
-            patch = im[xmin:xmin+PATCH_W, ymin:ymin+PATCH_H]
-
-            misc.imsave(OUT_PATH+str(num_patch)+'.jpg', patch)
-            label_file.write(str(num_patch)+','+str(cur_type)+'\n')
-            print i, num_patch
-            num_patch += 1
-    return num_patch
-
+    def patchify(self, img, patch_shape):
+        img = np.ascontiguousarray(img)  # won't make a copy if not needed
+        X, Y = img.shape
+        x = y = settings.PATCH_H
+        shape = ((X-x+1), (Y-y+1), x, y) # number of patches, patch_shape
+        # The right strides can be thought by:
+        # 1) Thinking of `img` as a chunk of memory in C order
+        # 2) Asking how many items through that chunk of memory are needed when indices
+        #    i,j,k,l are incremented by one
+        strides = img.itemsize*np.array([Y, 1, Y, 1])
+        return np.lib.stride_tricks.as_strided(img, shape=shape, strides=strides)
 
 if __name__ == '__main__':
     #Get the filename 
-    img_names = set() 
-    for file in os.listdir(settings.INHABITED_PATH):
-        if file.endswith(".jpg"):
-            img_names.add(file)
+    loader = DataLoader()
+    img_names = DataLoader.get_img_names_from_path(path=settings.INHABITED_PATH)
 
     #Get the roofs defined in the xml, save the corresponding image patches
-    max_w = 0
-    max_h = 0
-    num_patch = 0
-    label_file = open(settings.LABEL_PATH, 'w')
+    with open(settings.LABELS_PATH, 'a') as label_file:
+        max_w = 0
+        max_h = 0
+        for i, img in enumerate(img_names):
+            settings.print_debug('Processing image: '+str(i)+'\n', verbosity=1)
+            img_path = settings.INHABITED_PATH+img
+            xml_path = settings.INHABITED_PATH+img[:-3]+'xml'
 
-    for i, img in enumerate(img_names):
-        img_path = settings.INHABITED_PATH+img
-        xml_path = settings.INHABITED_PATH+img[:-3]+'xml'
+            roof_list, cur_max_w, cur_max_h = loader.get_roof_positions(xml_path)
+            max_h = cur_max_h if (max_h<cur_max_h) else max_h
+            max_w = cur_max_w if (max_w<cur_max_h) else max_h
 
-        roof_list, cur_w, cur_h = get_roof_positions(xml_path)
-        max_h = cur_h if max_h < cur_h
-        max_w = cur_w if max_w < cur_h
-
-        for r, roof in enumerate(roof_list):
-            num_patch = roof_patch(img_path, i+1, roof, label_file, num_patch)
-    
-    neg_patches_wanted = 20*num_patch
-    num_patch = get_negative_patches(num_patch, neg_patches_wanted, label_file)
-    print num_patch
-
-    label_file.close()
+            for r, roof in enumerate(roof_list):
+                settings.print_debug('Processing roof: '+str(r)+'\n', verbosity=1)
+                loader.produce_roof_patches(img_path=img_path, img_id=i+1, 
+                                    roof=roof, label_file=label_file, max_h=max_h, max_w=max_w)
+        neg_patches_wanted = settings.NEGATIVE_PATCHES_NUM*loader.total_patch_no
+        loader.get_negative_patches(neg_patches_wanted, label_file)
+        #settings.print_debug('************* Total patches saved: *****************: '+str(loader.total_patch_no))
 
