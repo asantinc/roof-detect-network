@@ -45,11 +45,11 @@ FTEST = '../data/test/'
 
 #Constants for debugging
 VERBOSITY = 1   #varies from 1 to 3
-DEBUG = True
+DEBUG = False
 
 
 
-def print_debug(to_print, verbosity=0):
+def print_debug(to_print, verbosity=1):
     ''' Print depending on verbosity level
     '''
     if verbosity>= VERBOSITY:

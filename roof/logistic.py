@@ -17,35 +17,6 @@ from nolearn.lasagne import visualize
 from my_net import MyNeuralNet
 from print_log import PrintLogSave, SaveLayerInfo
 
-'''
-net1 = MyNeuralNet(
-    layers=[  # three layers: one hidden layer
-        ('input', layers.InputLayer),
-        ('output', layers.DenseLayer),
-        ],
-    # layer parameters:
-    input_shape=(None, 3*IMG_SIZE*IMG_SIZE), 
-    output_num_units=3,  # 30 target values
-    
-    #printing
-    net_name='logistic',
-    on_epoch_finished=[PrintLogSave()],
-    on_training_started=[SaveLayerInfo()],
-
-    # optimization method:
-    update=nesterov_momentum,
-    update_learning_rate=0.01,
-    update_momentum=0.9,
-
-    output_nonlinearity=lasagne.nonlinearities.softmax,
-    max_epochs=50,  # we want to train this many epochs
-    verbose=1,
-    )
-
-X, y, _ = load.load()
-X = np.reshape(X, (X.shape[0], X.shape[1]*X.shape[2]*X.shape[3]))
-net1.fit(X, y)
-'''
 
 net2 = MyNeuralNet(
     layers=[  # three layers: one hidden layer

@@ -91,12 +91,10 @@ class DataLoader(object):
     def get_img_names_from_path(path='', extension='.jpg'):
         ''' Get list of image files in a given folder path
         '''
-        print 'getting images'
         img_names = set()
         for file in os.listdir(path):
             if file.endswith(extension):
                 img_names.add(file)
-                settings.print_debug(file)
         return img_names
 
 
@@ -175,16 +173,7 @@ class DataLoader(object):
 
         for horizontal in range(hor_patches):
             x_pos = roof.xmin+(horizontal*self.step_size)
-            print 'x_pos', str(x_pos)
-            print 'xmin', str(roof.xmin)
             self.save_patch(img= img, xmin=x_pos, ymin=y_pos, roof_type=roof.roof_type)
-
-        # #grab the patch in the last column but ensure we don't go off the image
-        # if ( w  % settings.PATCH_W > 0) and (w > settings.PATCH_W):
-        #     #subtract from the current x_pos the amount of roof width that we have missed
-        #     leftover = w - (hor_patches*settings.PATCH_W)
-        #     x_pos = x_pos+leftover
-        #     self.save_patch(img=img, xmin=x_pos, ymin=y_pos, roof_type=roof.roof_type)
 
 
     def overlap_percent(self, roof_list):
@@ -236,11 +225,9 @@ class DataLoader(object):
 
             #get a patch at the center
             self.save_patch(img= img, xmin=(roof.xcentroid-(settings.PATCH_W/2)), ymin=(roof.ycentroid-(settings.PATCH_H/2)), roof_type=roof_type)
-            settings.print_debug('Saved the central image patch \n')
 
             # if roof is too large, get multiple equally sized patches from it, and a scaled down patch also
             if w > settings.PATCH_W or h > settings.PATCH_H:
-                settings.print_debug('The roof is large, need to process several patches from it \n')
                 x_pos = roof.xmin
                 y_pos = roof.ymin
 
@@ -270,7 +257,7 @@ class DataLoader(object):
         
         #Get negative patches
         for i, img_path in enumerate(img_names):
-            settings.print_debug('Getting the negative patches....\n')
+            settings.print_debug('Negative image: '+str(i))
             for p in range(negative_patches):
                 #get random ymin, xmin, but ensure the patch will fall inside of the image
                 try:
@@ -306,7 +293,7 @@ if __name__ == '__main__':
     img_names = DataLoader.get_img_names_from_path(path=settings.INHABITED_PATH)
 
     #Get the roofs defined in the xml, save the corresponding image patches
-    with open(settings.LABELS_PATH, 'w') as label_file:
+    with open(settings.LABELS_PATH, 'a') as label_file:
         max_w = 0
         max_h = 0
         for i, img in enumerate(img_names):
@@ -322,8 +309,7 @@ if __name__ == '__main__':
                 settings.print_debug('Processing roof: '+str(r)+'\n', verbosity=1)
                 loader.produce_roof_patches(img_path=img_path, img_id=i+1, 
                                     roof=roof, label_file=label_file, max_h=max_h, max_w=max_w)
-        
         neg_patches_wanted = settings.NEGATIVE_PATCHES_NUM*loader.total_patch_no
-        loader.get_negative_patches(total_patch_no, neg_patches_wanted, label_file)
-        settings.print_debug('************* Total patches saved: *****************: '+str(loader.total_patch_no))
+        loader.get_negative_patches(neg_patches_wanted, label_file)
+        #settings.print_debug('************* Total patches saved: *****************: '+str(loader.total_patch_no))
 
