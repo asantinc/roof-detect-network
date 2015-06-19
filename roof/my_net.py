@@ -123,7 +123,7 @@ class MyNeuralNet(NeuralNet):
             plt.plot(train_loss, label='train loss')
             plt.plot(valid_loss, label='valid loss')
             plt.legend(loc='best')
-            plt.savefig(settings.OUT_PATH+self.net_name+'.png')
+            plt.savefig(settings.OUT_PATH+self.net_name+'_loss.png')
         
 
         @staticmethod
@@ -188,7 +188,27 @@ class MyNeuralNet(NeuralNet):
                     ('output', layers.DenseLayer),
                     ]
             return net_layers 
-
+   
+       def set_layer_params(self, num_layers=1):
+           if num_layers==5:
+                self.set_params(conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2),
+                conv2_num_filters=64, conv2_filter_size=(2, 2), pool2_pool_size=(2, 2),
+                conv3_num_filters=128, conv3_filter_size=(2, 2), pool3_pool_size=(2, 2),
+                hidden4_num_units=500, hidden5_num_units=500)
+           elif num_layers==4:
+                self.set_params(conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2),
+                conv2_num_filters=64, conv2_filter_size=(2, 2), pool2_pool_size=(2, 2),
+                conv3_num_filters=128, conv3_filter_size=(2, 2), pool3_pool_size=(2, 2),
+                hidden4_num_units=500)
+           elif num_layers==3:
+                self.set_params(conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2),
+                conv2_num_filters=64, conv2_filter_size=(2, 2), pool2_pool_size=(2, 2),
+                conv3_num_filters=128, conv3_filter_size=(2, 2), pool3_pool_size=(2, 2))
+           elif num_layers==2:
+                self.set_params(conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2),
+                conv2_num_filters=64, conv2_filter_size=(2, 2), pool2_pool_size=(2, 2))
+           elif num_layers==1:
+                self.set_params(conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2))
 
 
 if __name__ == "__main__":

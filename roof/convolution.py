@@ -12,6 +12,7 @@ from sklearn.preprocessing import StandardScaler
 from my_net import MyNeuralNet
 import FlipBatchIterator as flip
 import load
+import utils
 import experiment_settings as settings
 from experiment_settings import PrintLogSave, SaveLayerInfo, Experiment
 
@@ -82,63 +83,13 @@ def convolution(
         max_epochs=epochs,
         verbose=1,
         ) 
-
-    #more experiment settings dependent on number of layers
-    if num_layers==5:
-        experiment.net.set_params(conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2),
-        conv2_num_filters=64, conv2_filter_size=(2, 2), pool2_pool_size=(2, 2),
-        conv3_num_filters=128, conv3_filter_size=(2, 2), pool3_pool_size=(2, 2),
-        hidden4_num_units=500, hidden5_num_units=500)
-    elif num_layers==4:
-        experiment.net.set_params(conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2),
-        conv2_num_filters=64, conv2_filter_size=(2, 2), pool2_pool_size=(2, 2),
-        conv3_num_filters=128, conv3_filter_size=(2, 2), pool3_pool_size=(2, 2),
-        hidden4_num_units=500)
-    elif num_layers==3:
-        experiment.net.set_params(conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2),
-        conv2_num_filters=64, conv2_filter_size=(2, 2), pool2_pool_size=(2, 2),
-        conv3_num_filters=128, conv3_filter_size=(2, 2), pool3_pool_size=(2, 2))
-    elif num_layers==2:
-        experiment.net.set_params(conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2),
-        conv2_num_filters=64, conv2_filter_size=(2, 2), pool2_pool_size=(2, 2))
-    elif num_layers==1:
-        experiment.net.set_params(conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2))
-
+    experiment.net.set_layer_params(num_layers)
     experiment.run(log=log, plot_loss=plot_loss) 
 
-def command_line_process(opts):
-    test_percent=0.2
-    non_roofs=1
-    preloaded=False
-    num_layers=0 #logistic
-    roofs_only=True
-    plot=True
-    net_name=None
-    epoch=250
-    for opt, arg in opts:
-        if opt == '-t':
-            test_percent=float(arg)
-        elif opt == '-n':
-            non_roofs=int(float(arg))
-        elif opt=='-p':
-            preloaded=bool(arg)
-        elif opt=='-l':
-            num_layers=int(float(arg))
-        elif opt=='-r':
-            roofs_only=True
-        elif opt=='-a':
-            net_name=arg
-        elif opt=='-e':
-            epoch=int(float(arg))
-    return test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epoch
-
 if __name__ == '__main__':
-    try:
-        opts, args = getopt.getopt(sys.argv[1:], "t:n:l:p:r:a:e:")
-    except getopt.GetoptError:
-        print 'Command line error'
-        sys.exit(2)
-    test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epoch = command_line_process(opts) 
-    
-    convolution(epochs=epoch, net_name=net_name, test_percent=test_percent, non_roofs=non_roofs, preloaded=preloaded, num_layers=num_layers, roofs_only=roofs_only, plot_loss=plot)
+   test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epoch = utils.command_line_process()  
+   convolution(epochs=epoch, net_name=net_name, 
+           test_percent=test_percent, non_roofs=non_roofs, 
+           preloaded=preloaded, num_layers=num_layers, 
+           roofs_only=roofs_only, plot_loss=plot)
 

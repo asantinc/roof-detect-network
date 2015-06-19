@@ -1,4 +1,3 @@
-'''
 from collections import OrderedDict
 from datetime import datetime
 from functools import reduce
@@ -7,18 +6,15 @@ import operator
 import sys
 import pdb
 
-
 import lasagne
 sys.path.append('~/roof/Lasagne/lasagne')
 sys.path.append('~/roof/nolearn/nolearn')
 from nolearn.lasagne.handlers import PrintLog, PrintLayerInfo 
 from nolearn.lasagne.util import is_conv2d
 
-
 #my modules
 import load
 from sklearn.metrics import classification_report, confusion_matrix
-'''
 
 #Constants for patch production
 PATCHES_OUT_PATH = '../data/debug/'
@@ -48,13 +44,11 @@ VERBOSITY = 1   #varies from 1 to 3
 DEBUG = False
 
 
-
 def print_debug(to_print, verbosity=1):
     ''' Print depending on verbosity level
     '''
-    if verbosity>= VERBOSITY:
+    if verbosity <= VERBOSITY:
         print str(to_print)
-'''
 
 class Experiment(object):
     def __init__(self, net=None, data_augmentation=True, display_mistakes=False, 
@@ -158,6 +152,5 @@ class SaveLayerInfo(PrintLayerInfo):
         file.write(" \n\n")
 
         file.close()
-'''
         
 
