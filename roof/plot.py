@@ -1,24 +1,25 @@
 import pdb
-import sys
-import os
+import csv
+import experiment_settings as settings
 import matplotlib.pyplot as plt
-import pdb
 
-sys.path.append('~/roof/Lasagne/lasagne')
-sys.path.append('~/roof/nolearn/nolearn')
+def plot_loss(net_name):
+    file_name = settings.OUT_HISTORY+str(net_name)
+    training_loss = list()
+    validation_loss = list()
 
-from nolearn.lasagne.visualize import plot_loss
-import convolution
+    with open(file_name, 'rb') as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter='\t')
+        for row in csv_reader:
+            training_loss.append(float(row[1]))
+            validation_loss.append(float(row[2]))
 
-
-def plot_loss():
-    for file in os.listdir('saved_weights'):
-        if file.endswith(".pickle") and file.startswith('conv'):
-            #get the layer number: assuming string format is conv1*.pickle
-            num_layers = int(float(file[4:5])) 
-            convolution.convolution(preloaded=True, log=False, num_layers=num_layers,plot_loss=True, net_name=file[:-7])             
+    plt.plot(training_loss, label='train loss')
+    plt.plot(validation_loss, label='valid loss')
+    plt.legend(loc='best')
+    plt.savefig(settings.OUT_IMAGES+net_name+'_loss.png')
 
 
 if __name__ == "__main__":
-    plot_loss()
+    plot_loss(net_name='conv1_nonroofs1_test20_roofs')
 

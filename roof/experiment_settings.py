@@ -34,9 +34,11 @@ CROP_SIZE = 32
 PATCH_W = PATCH_H = 40
 
 #Constants for training neural network
-OUT_PATH = "../output/" 
-FTRAIN = '../data/debug/'
-FTRAIN_LABEL = '../data/debug/labels.csv'
+OUT_REPORT = "../output/report/" 
+OUT_HISTORY = "../output/history/"
+OUT_IMAGES = "../output/images/"
+FTRAIN = '../data/training/'
+FTRAIN_LABEL = '../data/training/labels.csv'
 FTEST = '../data/test/'
 
 #Constants for debugging
@@ -91,6 +93,8 @@ class Experiment(object):
         #print evaluation
         self.printer.log_to_file(self.net, confusion_matrix(y_test, predicted), binary=True, title='\n\nConfusion Matrix\n')
         self.printer.log_to_file(self.net, classification_report(y_test, predicted), title='\n\nReport\n')
+        
+        #save a plot of the validation and training losses
         if self.plot_loss:
             self.net.save_loss()
         
@@ -113,7 +117,7 @@ class Experiment(object):
 
 class PrintLogSave(PrintLog):
     def __call__(self, nn, train_history): 
-        file = open(OUT_PATH+nn.net_name, 'a')
+        file = open(OUT_HISTORY+nn.net_name, 'a')
         file.write(self.table(nn, train_history))
         file.close()
 
@@ -123,7 +127,7 @@ class PrintLogSave(PrintLog):
             
     def log_to_file(self, nn, log, overwrite=False, binary=False, title=''):
         write_type = 'w' if overwrite else 'a'
-        file = open(OUT_PATH+nn.net_name, write_type)
+        file = open(OUT_REPORT+nn.net_name, write_type)
         file.write(title)
         if binary:
             print >> file, log
@@ -134,7 +138,7 @@ class PrintLogSave(PrintLog):
 
 class SaveLayerInfo(PrintLayerInfo):
     def __call__(self, nn, train_history):
-        file = open(OUT_PATH+nn.net_name, 'a')
+        file = open(OUT_REPORT+nn.net_name, 'a')
         message = self._get_greeting(nn)
         file.write(message)
         file.write("## Layer information")

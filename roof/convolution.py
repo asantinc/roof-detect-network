@@ -29,26 +29,49 @@ As a result, the validation metrics produced are corrupted, so to measure perfor
 testing metrics.
 '''
 
+def set_parameters():
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "t:n:l:p:r:a:e:")
+    except getopt.GetoptError:
+        print 'Command line error'
+        sys.exit(2) 
+    test_percent=0.2
+    non_roofs=1
+    preloaded=False
+    num_layers=0 #logistic
+    roofs_only=True
+    plot=True
+    net_name=None
+    epochs=250
+    for opt, arg in opts:
+        if opt == '-t':
+            test_percent=float(arg)
+        elif opt == '-n':
+            non_roofs=int(float(arg))
+        elif opt=='-p':
+            preloaded=bool(arg)
+        elif opt=='-l':
+            num_layers=int(float(arg))
+        elif opt=='-r':
+            roofs_only=True
+        elif opt=='-a':
+            net_name=arg
+        elif opt=='-e':
+            epochs=int(float(arg))
+    return test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epochs
 
-def convolution(
-        epochs=250, 
-        log=True, 
-        plot_loss=False, 
-        net_name=None, 
-        test_percent=.20, 
-        non_roofs=1, 
-        preloaded=False, 
-        num_layers=1, 
-        roofs_only=False):    
-    
-    printer = PrintLogSave()
+
+if __name__ == '__main__':
+    test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epochs = set_parameters()  
+    log = True
+    plot_loss = True
     name_percent = str(int(100*test_percent))
     net_name = 'conv'+str(num_layers)+'_nonroofs'+str(non_roofs)+'_test'+name_percent if net_name==None else net_name
     if roofs_only:
         net_name = net_name+'_roofs'
-    
-    layers = MyNeuralNet.produce_layers(num_layers)    
-    
+     
+    layers = MyNeuralNet.produce_layers(num_layers)      
+    printer = PrintLogSave()
     #set up the experiment
     experiment = Experiment(data_augmentation=True,
                     test_percent=test_percent,
@@ -86,10 +109,4 @@ def convolution(
     experiment.net.set_layer_params(num_layers)
     experiment.run(log=log, plot_loss=plot_loss) 
 
-if __name__ == '__main__':
-   test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epoch = utils.command_line_process()  
-   convolution(epochs=epoch, net_name=net_name, 
-           test_percent=test_percent, non_roofs=non_roofs, 
-           preloaded=preloaded, num_layers=num_layers, 
-           roofs_only=roofs_only, plot_loss=plot)
 

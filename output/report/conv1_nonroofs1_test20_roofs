@@ -1,0 +1,52 @@
+printer: <experiment_settings.PrintLogSave instance at 0x7f2e4bb32bd8>
+roofs_only: True
+data_augmentation: True
+scaler: StandardScaler
+display_mistakes: True
+non_roofs: 1
+test_percent: 0.2
+net: MyNeuralNet(X_tensor_type=None,
+      batch_iterator_test=<FlipBatchIterator.CropOnlyBatchIterator object at 0x7f2e4bbaced0>,
+      batch_iterator_train=<FlipBatchIterator.FlipBatchIterator object at 0x7f2e4bbacf10>,
+      custom_score=None, eval_size=0.2, input_shape=(None, 3, 32, 32),
+      layers=[('input', <class 'lasagne.layers.input.InputLayer'>), ('conv1', <class 'lasagne.layers.conv.Conv2DLayer'>), ('pool1', <class 'lasagne.layers.pool.MaxPool2DLayer'>), ('output', <class 'lasagne.layers.dense.DenseLayer'>)],
+      loss=None, max_epochs=5, more_params={},
+      net_name='conv1_nonroofs1_test20_roofs',
+      objective=<class 'lasagne.objectives.Objective'>,
+      objective_loss_function=<function categorical_crossentropy at 0x7f2e666bf8c0>,
+      on_epoch_finished=[<experiment_settings.PrintLogSave instance at 0x7f2e4bb32bd8>, <nolearn.lasagne.handlers.PrintLog instance at 0x7f2e4bb32cb0>],
+      on_training_finished=[],
+      on_training_started=[<experiment_settings.SaveLayerInfo instance at 0x7f2e4bb32c20>, <nolearn.lasagne.handlers.PrintLayerInfo instance at 0x7f2e4bb32cf8>],
+      output_nonlinearity=<function softmax at 0x7f2e55aca938>,
+      output_num_units=3, preproc_scaler=None, regression=False,
+      update=<function nesterov_momentum at 0x7f2e559751b8>,
+      update_learning_rate=0.01, update_momentum=0.9,
+      use_label_encoder=False, verbose=1,
+      y_tensor_type=TensorType(int32, vector))
+plot_loss: True
+preloaded: False
+
+# Neural Network with 22499 learnable parameters
+## Layer information
+
+  #  name    size
+---  ------  --------
+  0  input   3x32x32
+  1  conv1   32x30x30
+  2  pool1   32x15x15
+  3  output  3 
+
+
+
+Confusion Matrix
+[[ 47  11]
+ [ 22 143]]
+
+
+Report
+             precision    recall  f1-score   support
+
+          0       0.68      0.81      0.74        58
+          1       0.93      0.87      0.90       165
+
+avg / total       0.86      0.85      0.86       223
