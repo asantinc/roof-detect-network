@@ -1,0 +1,1 @@
+opencv_traincascade -data classifier -vec thatch_samples.vec -bg bg.txt -numStages 20 -minHitRate 0.999 -numPos 640 -numNeg 640 -w 30 -h 30

@@ -12,7 +12,7 @@ class Roof(object):
     '''Roof class containing info about its location in an image
     '''
     def __init__(self, roof_type=None, xmin=-1, xmax=-1, ymin=-1, ymax=-1, xcentroid=-1, ycentroid=-1):
-        self.type = roof_type
+        self.roof_type = roof_type
         self.xmin = xmin
         self.xmax = xmax
         self.ymin = ymin
@@ -27,6 +27,14 @@ class Roof(object):
     def get_roof_size(self):
         return ((self.ymax-self.ymin), (self.xmax-self.xmin))
 
+    @property 
+    def height(self):
+        return (self.ymax-self.ymin)
+
+    @property 
+    def width(self):
+        return (self.xmax-self.xmin)
+
 
 class DataLoader(object):
 
@@ -35,7 +43,7 @@ class DataLoader(object):
         self.step_size = settings.PATCH_W/4
 
 
-    def get_roof_positions(self, xml_file):
+    def get_roofs(self, xml_file):
         '''Return list of Roofs
 
         Parameters
@@ -173,7 +181,7 @@ class DataLoader(object):
 
         for horizontal in range(hor_patches):
             x_pos = roof.xmin+(horizontal*self.step_size)
-            self.save_patch(img= img, xmin=x_pos, ymin=y_pos, roof_type=roof.roof_type)
+            self.save_patch(img= img, xmin=x_pos, ymin=y_pos, roof_type=roof_type)
 
 
     def overlap_percent(self, roof_list):
@@ -301,7 +309,7 @@ if __name__ == '__main__':
             img_path = settings.INHABITED_PATH+img
             xml_path = settings.INHABITED_PATH+img[:-3]+'xml'
 
-            roof_list, cur_max_w, cur_max_h = loader.get_roof_positions(xml_path)
+            roof_list, cur_max_w, cur_max_h = loader.get_roofs(xml_path)
             max_h = cur_max_h if (max_h<cur_max_h) else max_h
             max_w = cur_max_w if (max_w<cur_max_h) else max_h
 
