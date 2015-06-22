@@ -50,6 +50,7 @@ class RoofLoader(object):
         file_names = list()
         img_to_remove = list()
         labels = list()
+        failures = 0
 
         #for f in glob.glob(settings.FTRAIN+'*.jpg'):
         for f_name, roof_type in labels_tuples:
@@ -57,17 +58,20 @@ class RoofLoader(object):
             f_path = settings.FTRAIN+str(f_number)+'.jpg'                
             x = cv2.imread(f_path)
             x = np.asarray(x, dtype='float32')/255
-            x = x.transpose(2,0,1)
-            x.shape = (1,x.shape[0], x.shape[1], x.shape[2])
-
             try:
+                x = x.transpose(2,0,1)
+                x.shape = (1,x.shape[0], x.shape[1], x.shape[2])
                 X = x if X==None else np.concatenate((X, x), axis=0)
-                file_names.append(f_number)
-                labels.append(roof_type)
-            #some images are not loading properly because they are smaller than expected
             except ValueError, e:
                 print e
-        
+                failures += 1
+                print 'fail:'+ str(failures)
+            else:
+                file_names.append(f_number)
+                labels.append(roof_type)
+        print 'X_shape:'+ str(X.shape)
+        print str(len(labels_tuples))
+        pdb.set_trace()
         X = X.astype(np.float32)
         return X, labels
 
@@ -81,6 +85,8 @@ class RoofLoader(object):
         """
         #get the labels   
         labels_list = np.loadtxt(open(settings.FTRAIN_LABEL,"rb"),delimiter=",")
+        len(labels_list)
+        pdb.set_trace() 
         labels_dict = dict(labels_list)
        
         data_stats = np.bincount(labels_dict.values())

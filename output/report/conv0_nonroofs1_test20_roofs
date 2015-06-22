@@ -1,0 +1,28 @@
+printer: <experiment_settings.PrintLogSave instance at 0x7f0a9412fbd8>
+roofs_only: True
+data_augmentation: True
+scaler: StandardScaler
+display_mistakes: True
+non_roofs: 1
+test_percent: 0.2
+net: MyNeuralNet(X_tensor_type=None,
+      batch_iterator_test=<FlipBatchIterator.CropOnlyBatchIterator object at 0x7f0a941a8e50>,
+      batch_iterator_train=<FlipBatchIterator.FlipBatchIterator object at 0x7f0a941a8e90>,
+      custom_score=None, eval_size=0.2, input_shape=(None, 3, 32, 32),
+      layers=[('input', <class 'lasagne.layers.input.InputLayer'>), ('output', <class 'lasagne.layers.dense.DenseLayer'>)],
+      loss=None, max_epochs=250, more_params={},
+      net_name='conv0_nonroofs1_test20_roofs',
+      objective=<class 'lasagne.objectives.Objective'>,
+      objective_loss_function=<function categorical_crossentropy at 0x7f0aaecbb8c0>,
+      on_epoch_finished=[<experiment_settings.PrintLogSave instance at 0x7f0a9412fbd8>, <nolearn.lasagne.handlers.PrintLog instance at 0x7f0a9412fc68>],
+      on_training_finished=[],
+      on_training_started=[<experiment_settings.SaveLayerInfo instance at 0x7f0a9412fc20>, <nolearn.lasagne.handlers.PrintLayerInfo instance at 0x7f0a9412fcb0>],
+      output_nonlinearity=<function softmax at 0x7f0a9e0c6938>,
+      output_num_units=3, preproc_scaler=None, regression=False,
+      update=<function nesterov_momentum at 0x7f0a9df711b8>,
+      update_learning_rate=0.01, update_momentum=0.9,
+      use_label_encoder=False, verbose=1,
+      y_tensor_type=TensorType(int32, vector))
+plot_loss: True
+preloaded: False
+

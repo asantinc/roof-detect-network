@@ -12,7 +12,6 @@ from sklearn.preprocessing import StandardScaler
 from my_net import MyNeuralNet
 import FlipBatchIterator as flip
 import load
-import utils
 import experiment_settings as settings
 from experiment_settings import PrintLogSave, SaveLayerInfo, Experiment
 
