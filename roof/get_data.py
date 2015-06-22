@@ -35,9 +35,46 @@ class Roof(object):
     def width(self):
         return (self.xmax-self.xmin)
 
+    def check_overlap_total(self, img_rows, img_cols, patches):
+        roof_area = self.width*self.height
+        roof_mask = np.zeros(img_rows, img_cols)
+        roof_mask[self.ymin:self.ymin+self.height, self.xmin:self.xmin+self.width] = 1 
+        for patch in patches:
+            if sum(roof_mask)==0:
+                return 1.0
+            roof_mask[patch.ymin:patch.ymin+patch.height, patch.xmin:patch.xmin+patch.width] = 0
+        percent_found = (roof_area-sum(roof_mask))/roof_area
+        return percent_found
+
+    def sum_mask(self, array):
+        return np.sum(np.sum(array, axis=0), axis=0)
+
+    def max_overlap_single_patch(self, rows=0, cols=0, detections=[]):
+        '''Return maximum percentage overlap between this roof and a single patch in a set of candidate patches from the same image
+        '''
+        roof_area = self.width*self.height
+
+        roof_mask = np.zeros((rows, cols))
+        min_mask = np.zeros((rows, cols))
+        min_mask[self.ymin:self.ymin+self.height, self.xmin:self.xmin+self.width] = 1
+
+        for (x,y,w,h) in detections:                           #for each patch found
+            roof_mask[self.ymin:self.ymin+self.height, self.xmin:self.xmin+self.width] = 1   #the roof
+
+            roof_mask[y:y+h, x:x+w] = 0        #detection
+            if self.sum_mask(roof_mask) == 0:                       #we have found the roof
+                return 1.0
+            elif self.sum_mask(roof_mask) < self.sum_mask(min_mask):               #keep track of best match
+                min_mask = roof_mask
+                x_true, y_true, w_true, h_true = x,y,w,h
+
+        percent_found = (roof_area-self.sum_mask(min_mask))/roof_area
+
+        #print x_true, y_true, w_true, h_true
+        return percent_found
+
 
 class DataLoader(object):
-
     def __init__(self):
         self.total_patch_no = 0
         self.step_size = settings.PATCH_W/4
