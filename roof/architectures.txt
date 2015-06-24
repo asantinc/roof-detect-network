@@ -1,3 +1,6 @@
+*************************
+	NEURAL NETWORK
+*************************
 Number of layers:
 1. SKlearn based logistic regression with graylevel and RGB patches
 2. 1 Conv&Pool, 2 Conv&Pool, 3 Conv&Pool, 3+2 Fully connected with 500 neurons
@@ -12,3 +15,8 @@ Other changes:
 - Try rescaling instead of cutting into patches?
 
 
+*************************
+	 Viola and Jones
+*************************
+Need to experiment with params
+- Also add color features?

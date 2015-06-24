@@ -1,0 +1,31 @@
+TODO:
+2. Try to run it on DICE again
+
+
+
+****************************** TESTING PIPELINE ***************************************
+1. Check how many of the roofs Viola and Jones has missed
+How many false positives -->> We REALLY don't want these!!!
+How many false negatives -->> They are okay... 
+
+
+For each of the known roofs:
+- compare with all of the roof coordinates found
+
+
+- What is the size of a patch
+Check how much of roof is contained within patch
+- But larger roofs may have a smaller percentage
+--> If the roof appears in multiple patches, you add up those percentages!
+
+
+
+A. Is it found? --> Viola
+B. Does it get properly classified? --> Viola patch creation, or Neural Network
+
+
+
+
+
+
+

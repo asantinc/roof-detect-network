@@ -46,32 +46,36 @@ class Roof(object):
         percent_found = (roof_area-sum(roof_mask))/roof_area
         return percent_found
 
+
     def sum_mask(self, array):
+        '''Sum all ones in a binary array
+        '''
         return np.sum(np.sum(array, axis=0), axis=0)
+
 
     def max_overlap_single_patch(self, rows=0, cols=0, detections=[]):
         '''Return maximum percentage overlap between this roof and a single patch in a set of candidate patches from the same image
         '''
         roof_area = self.width*self.height
-
+        best_cascade = -1   #keep track of the 
         roof_mask = np.zeros((rows, cols))
         min_mask = np.zeros((rows, cols))
         min_mask[self.ymin:self.ymin+self.height, self.xmin:self.xmin+self.width] = 1
+        for j, detection in enumerate(detections):
+            for (x,y,w,h) in detection:                           #for each patch found
+                roof_mask[self.ymin:self.ymin+self.height, self.xmin:self.xmin+self.width] = 1   #the roof
+                roof_mask[y:y+h, x:x+w] = 0        #detection
 
-        for (x,y,w,h) in detections:                           #for each patch found
-            roof_mask[self.ymin:self.ymin+self.height, self.xmin:self.xmin+self.width] = 1   #the roof
+                if self.sum_mask(roof_mask) == 0:                       #we have found the roof
+                    return 1.0, best_cascade
+                elif self.sum_mask(roof_mask) < self.sum_mask(min_mask):               #keep track of best match
+                    min_mask = np.copy(roof_mask)                
+                    x_true, y_true, w_true, h_true = x,y,w,h
+                    best_cascade = j
 
-            roof_mask[y:y+h, x:x+w] = 0        #detection
-            if self.sum_mask(roof_mask) == 0:                       #we have found the roof
-                return 1.0
-            elif self.sum_mask(roof_mask) < self.sum_mask(min_mask):               #keep track of best match
-                min_mask = roof_mask
-                x_true, y_true, w_true, h_true = x,y,w,h
-
-        percent_found = (roof_area-self.sum_mask(min_mask))/roof_area
-
-        #print x_true, y_true, w_true, h_true
-        return percent_found
+        percent_found = (roof_area-self.sum_mask(min_mask))*(1.)/roof_area
+        print 'Percent found: '+str(percent_found)+'  Best cascade: '+str(best_cascade)
+        return percent_found, best_cascade
 
 
 class DataLoader(object):

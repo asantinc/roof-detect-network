@@ -1,1 +1,37 @@
-opencv_traincascade -data classifier -vec thatch_samples.vec -bg bg.txt -numStages 20 -minHitRate 0.999 -numPos 640 -numNeg 640 -w 30 -h 30
+-----------------------------
+		Create Samples
+-----------------------------
+opencv_createsamples -info metal.dat -bg bg.txt -vec vec_files/metal_w50_h25.vec -num 400 -w 50 -h 25
+
+
+
+-----------------------------
+	To view the samples:
+-----------------------------
+opencv_createsamples -vec metal_samples.vec
+
+
+
+-----------------------------
+		Training
+-----------------------------
+opencv_traincascade -data w25_h50 -vec vec_files/metal_w25_h50.vec -bg bg.txt -numStages 20 -minHitRate 0.99999 -numPos 393 -numNeg 1500 -w 25 -h 50
+
+
+
+################################
+Parameters:
+################################
+--> metal_samples.vec
+Width: 25
+Height: 25
+
+--> metal_w25_h12.vec
+Width: 25
+Height: 12
+
+--> metal_w12_h25.vec
+Width: 12
+Height: 25
+
+
