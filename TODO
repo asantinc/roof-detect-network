@@ -19,11 +19,14 @@ Check how much of roof is contained within patch
 --> If the roof appears in multiple patches, you add up those percentages!
 
 
-
 A. Is it found? --> Viola
 B. Does it get properly classified? --> Viola patch creation, or Neural Network
 
 
+
+
+IN PROGRESS:
+- Use bigger patches
 
 
 

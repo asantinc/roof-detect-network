@@ -20,3 +20,39 @@ Other changes:
 *************************
 Need to experiment with params
 - Also add color features?
+
+NEXT:
+1. Separate a couple of images for testing...
+
+PARAMETERS:
+1. Increase number of negatives (IN PROGRESS)
+2. Increase the angle of rotation --> maybe build separate classifiers where the max direction is always the same?
+3. What about the scale factor??? It seems like you're picking up only some roofs. You're ignoring smaller ones?
+
+
+
+**************************
+Questions
+**************************
+Using a test set with viola and jones: a little tricky... with neural network I had more patches for training and testing??? Maybe
+Currently tr
+aining on all, seeing if it captures
+
+**************************
+STACK OVERFLOW
+**************************
+I am trying to detect roofs in aerial images using [Viola and Jones implementation provided by OpenCV.][1] I have 'successfully' trained classifier with the following parameters:
+
+opencv_traincascade -vec roof_samples.vec -bg bg.txt -numStages 20 -minHitRate 0.99999 -numPos 393 -numNeg 700
+
+My questions:
+
+ 1. There is considerable variation in the size and orientation and  of the roofs I want to detect. Will doing data augmentation help? Or is it better to build separate cascades to deal with such variation if it's extreme?
+
+ 2. I'm seeing tons of false positives which slow the process down. It's unlikely, but is there a way to incorporate knowledge about RGB into the cascade? It seems like the classifier only works in grayscale but there is definitely valuable information in the colors.
+
+  [1]: http://docs.opencv.org/doc/user_guide/ug_traincascade.html
+
+
+
+

@@ -3,12 +3,14 @@
 -----------------------------
 opencv_createsamples -info metal.dat -bg bg.txt -vec vec_files/metal_w50_h25.vec -num 400 -w 50 -h 25
 
+opencv_createsamples -info metal_pad5.dat -bg bg.txt -vec vec_files/metal_w24_h24_pad5.vec -num 400 -w 24 -h 24
+
 
 
 -----------------------------
 	To view the samples:
 -----------------------------
-opencv_createsamples -vec metal_samples.vec
+opencv_createsamples -vec vec_files/metal_w24_h24_pad5.vec
 
 
 

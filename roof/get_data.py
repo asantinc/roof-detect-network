@@ -67,15 +67,14 @@ class Roof(object):
                 roof_mask[y:y+h, x:x+w] = 0        #detection
 
                 if self.sum_mask(roof_mask) == 0:                       #we have found the roof
-                    return 1.0, best_cascade
+                    return 1.0
                 elif self.sum_mask(roof_mask) < self.sum_mask(min_mask):               #keep track of best match
                     min_mask = np.copy(roof_mask)                
                     x_true, y_true, w_true, h_true = x,y,w,h
-                    best_cascade = j
 
         percent_found = (roof_area-self.sum_mask(min_mask))*(1.)/roof_area
         print 'Percent found: '+str(percent_found)+'  Best cascade: '+str(best_cascade)
-        return percent_found, best_cascade
+        return percent_found
 
 
 class DataLoader(object):
