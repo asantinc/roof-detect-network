@@ -35,15 +35,14 @@ class Roof(object):
     def width(self):
         return (self.xmax-self.xmin)
 
-    def check_overlap_total(self, img_rows, img_cols, patches):
+
+    def check_overlap_total(self, patch_mask, patch_sum, img_rows, img_cols):
         roof_area = self.width*self.height
-        roof_mask = np.zeros(img_rows, img_cols)
-        roof_mask[self.ymin:self.ymin+self.height, self.xmin:self.xmin+self.width] = 1 
-        for patch in patches:
-            if sum(roof_mask)==0:
-                return 1.0
-            roof_mask[patch.ymin:patch.ymin+patch.height, patch.xmin:patch.xmin+patch.width] = 0
-        percent_found = (roof_area-sum(roof_mask))/roof_area
+        curr_roof = np.zeros((img_rows, img_cols))
+        curr_roof[self.ymin:self.ymin+self.height, self.xmin:self.xmin+self.width] = 1 
+        curr_roof[patch_mask] = 0 
+        roof_area_found = roof_area-self.sum_mask(curr_roof)
+        percent_found = (roof_area - roof_area_found)/roof_area
         return percent_found
 
 
@@ -71,7 +70,7 @@ class Roof(object):
                 elif self.sum_mask(roof_mask) < self.sum_mask(min_mask):               #keep track of best match
                     min_mask = np.copy(roof_mask)                
                     x_true, y_true, w_true, h_true = x,y,w,h
-
+                    best_cascade = j
         percent_found = (roof_area-self.sum_mask(min_mask))*(1.)/roof_area
         print 'Percent found: '+str(percent_found)+'  Best cascade: '+str(best_cascade)
         return percent_found

@@ -214,13 +214,23 @@ class ViolaDetector(object):
         self.print_report(final_stats=True)
 
 
+    def get_patch_mask(self, img_name, rows=1200, cols=2000):
+        patch_mask = np.zeros((rows, cols), dtype=bool)
+        patch_area = 0
+        for i, cascade in enumerate(self.roofs_detected[img_name]):
+            for (x,y,w,h) in cascade:
+                patch_mask[y:y+h, x:x+w] = True
+                patch_area += w*h
+        return patch_mask, patch_area
+
     def match_roofs_to_detection(self, img_name, roof_list, rows=1200, cols=2000):
     #Compare detections to ground truth
         self.overlap_dict[img_name] = list()
+        patch_mask, patch_area = self.get_patch_mask(img_name)
         for roof in roof_list:
             if roof.roof_type == self.roof_type:
-                self.overlap_dict[img_name].append(roof.max_overlap_single_patch(rows=rows, cols=cols, 
-                            detections=self.roofs_detected[img_name]))
+                #self.overlap_dict[img_name].append(roof.max_overlap_single_patch(rows=rows, cols=cols,detections=self.roofs_detected[img_name]))
+                self.overlap_dict[img_name].append(roof.check_overlap_total(patch_mask, patch_area, rows, cols))
 
 
     def save_detection_img(self, img_path, img_name, roof_list):
@@ -349,9 +359,9 @@ def detect_metal():
     detectors = ['../viola_jones/cascade_w12_h25_pos393_neg700.xml', 
                 '../viola_jones/cascade_w25_h12_pos393_neg700.xml', 
                 '../viola_jones/cascade_simple_1500.xml']
-    output_folder = '../viola_jones/output_test_time/'
+    output_folder = '../viola_jones/output_patch_total/'
 
-    viola = Viola(num_pos, num_neg, roof_type, detector_paths=detectors, output_folder=output_folder, save_imgs=False)
+    viola = ViolaDetector(num_pos, num_neg, roof_type, detector_paths=detectors, output_folder=output_folder, save_imgs=False)
     viola.test_viola(reject_levels=0.5, level_weights=2, scale=1.05)
 
 
@@ -381,9 +391,9 @@ def test_single():
 
 
 if __name__ == '__main__':
-    #cProfile.run(detect_metal())
+    cProfile.run(detect_metal())
     #test_single()
-    ViolaDataSetup.setup_positive_samples(padding=15)
+    #ViolaDataSetup.setup_positive_samples(padding=15)
 
 
 
