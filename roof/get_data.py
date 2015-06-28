@@ -39,10 +39,15 @@ class Roof(object):
     def check_overlap_total(self, patch_mask, patch_sum, img_rows, img_cols):
         roof_area = self.width*self.height
         curr_roof = np.zeros((img_rows, img_cols))
-        curr_roof[self.ymin:self.ymin+self.height, self.xmin:self.xmin+self.width] = 1 
+        curr_roof[self.ymin:self.ymin+self.height, self.xmin:self.xmin+self.width] = 1
+        # misc.imsave('../viola_jones/1.jpg', curr_roof)
         curr_roof[patch_mask] = 0 
+        # misc.imsave('../viola_jones/2.jpg', curr_roof)
+        
         roof_area_found = roof_area-self.sum_mask(curr_roof)
-        percent_found = (roof_area - roof_area_found)/roof_area
+        percent_found = ((roof_area_found)/roof_area)
+        
+        print percent_found
         return percent_found
 
 
@@ -74,6 +79,73 @@ class Roof(object):
         percent_found = (roof_area-self.sum_mask(min_mask))*(1.)/roof_area
         print 'Percent found: '+str(percent_found)+'  Best cascade: '+str(best_cascade)
         return percent_found
+
+
+class DataAugmentation(object):
+    def transform(self, Xb):
+        self.Xb = Xb
+        self.random_flip()
+        self.random_rotation(10.)
+        self.random_crop()
+        return self.Xb
+
+    def random_rotation(self, ang, fill_mode="nearest", cval=0.):
+        angle = np.random.uniform(-ang, ang)
+        self.Xb = scipy.ndimage.interpolation.rotate(self.Xb, angle, axes=(1,2), reshape=False, mode=fill_mode, cval=cval)
+
+    def random_crop(self):
+        #Extract 32 by 32 patches from 40 by 40 patches, rotate them randomly
+        temp_Xb = np.zeros((self.Xb.shape[0],self.Xb.shape[1], CROP_SIZE, CROP_SIZE))
+        margin = IMG_SIZE-CROP_SIZE
+        for img in range(self.Xb.shape[0]):
+            xmin = np.random.randint(0, margin)
+            ymin = np.random.randint(0, margin)
+            temp_Xb[img, :,:,:] = self.Xb[img, :, xmin:(xmin+CROP_SIZE), ymin:(ymin+CROP_SIZE)]
+        self.Xb = temp_Xb
+
+
+    @staticmethod
+    def flip_save(img, img_path):
+        img1 = cv2.flip(img,flipCode=0)
+        cv2.imwrite('{0}_flip1.jpg'.format(img_path), img1)
+        img2 = cv2.flip(img,flipCode=1)
+        cv2.imwrite('{0}_flip2.jpg'.format(img_path), img2)
+        img3 = cv2.flip(img,flipCode=-1)
+        cv2.imwrite('{0}_flip3.jpg'.format(img_path), img3)
+
+
+    @staticmethod
+    def rotateImage(img, clockwise=True):
+        #timg = np.zeros(img.shape[1],img.shape[0]) # transposed image
+        if clockwise:
+            # rotate counter-clockwise
+            timg = cv2.transpose(img)
+            cv2.flip(timg,flipCode=0)
+            return timg
+        else:
+            # rotate clockwise
+            timg = cv2.transpose(img)
+            cv2.flip(timg,flipCode=1)
+            return timg
+
+
+    @staticmethod
+    def add_padding(roof, padding, img_path):        
+        try:
+            img = misc.imread(img_path)
+        except IOError:
+            print 'Cannot open '+img_path
+        else:
+            img_height, img_width, _ = img.shape
+            if roof.xmin-padding > 0:
+                roof.xmin -= padding
+            if roof.ymin-padding > 0:
+                roof.ymin -= padding
+            if roof.xmin+roof.width+padding < img_width:
+                roof.xmax += padding
+            if roof.ymin+roof.height+padding < img_height:
+                roof.ymax += padding
+        return roof
 
 
 class DataLoader(object):

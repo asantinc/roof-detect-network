@@ -1,0 +1,131 @@
+
+def get_max_metal():
+    ''' Get size of largest metal house
+    '''
+    loader = get_data.DataLoader()
+    img_names = get_data.DataLoader.get_img_names_from_path(path=settings.INHABITED_PATH)
+
+    for i, img_name in enumerate(list(img_names)):
+        img_path = settings.INHABITED_PATH+img_name
+        try:
+            image = misc.imread(img_path)
+        except IOError:
+            print 'Cannot open '+img_path
+        xml_path = settings.INHABITED_PATH+img_name[:-3]+'xml'
+        roof_list, _, _ = loader.get_roofs(xml_path)
+        max_h = -1
+        max_w = -1
+        for roof in roof_list:
+            if roof.height > max_h:
+                max_h = roof.height
+            if roof.width > max_w:
+                max_w = roof.width
+    print max_h, max_w
+
+def test_group_rectangles():
+    img = np.zeros((500, 500, 3))
+    rect_2 = (50,50,100,100)
+    rect_1 = (100,100,200,200)
+    cv2.rectangle(img,(50,50),(100,100),(255,255,255),2)
+    cv2.rectangle(img,(100,100),(200,200),(0,255,0),2)
+    cv2.imwrite('test.jpg', img)
+
+
+def frange(start, end=None, inc=None):
+    "A range function, that does accept float increments."
+
+    if end == None:
+        end = start + 0.0
+        start = 0.0
+
+    if inc == None:
+        inc = 1.0
+
+    L = []
+    while 1:
+        next = start + len(L) * inc
+        if inc > 0 and next >= end:
+            break
+        elif inc < 0 and next <= end:
+            break
+        L.append(next)
+        
+    return L
+
+
+
+ def test_single():
+    num_pos = 209
+    num_neg = 1500
+
+    roof_type = 'metal'
+    detectors_2 = ['../viola_jones/cascade_w24_h24_pad5.xml']
+    output_folder = '../viola_jones/output_w24_h24_ONLY_pad5'
+
+    img_name = '0001.jpg'
+    img_path = settings.INHABITED_PATH
+    xml_path = settings.INHABITED_PATH+img_name[:-3]+'xml'
+
+    roof_loader = get_data.DataLoader()
+    roof_list, _, _ = roof_loader.get_roofs(xml_path)
+
+    viola = ViolaDetector(num_pos, num_neg, roof_type, detector_paths=detectors_2, output_folder=output_folder)
+    img = cv2.imread(img_name, flags=cv2.IMREAD_COLOR)
+        
+    viola.detect_roofs(img_name=img_name, img_path=img_path, reject_levels=0.5, level_weights=2, scale=1.05)
+    viola.match_roofs_to_detection(img_name, roof_list)
+    viola.print_report(img_name)
+
+
+def getEdges():
+    ####ATTEMPT AT FINDING EDGES
+    cv2.imshow('roof', rotated_roof)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows() 
+
+
+    aspect_ratio = float(roof.width)/(roof.height)
+
+    if (aspect_ratio > 1.5):    
+    elif aspect_ratio >= 0.75 and ratio <= 1.5:
+
+    elif aspect_ratio < 0.75:                 
+    roof_img = gray[roof.ymin:roof.ymin+roof.height,roof.xmin:roof.xmin+roof.width]
+    # cv2.imshow ('roof', roof_img)
+    # cv2.waitKey (0)
+    # cv2.destroyAllWindows () 
+
+    roof_img = cv2.blur(roof_img,(5,5))
+    # cv2.imshow ('roof', roof_img)
+    # cv2.waitKey (0)
+    # cv2.destroyAllWindows () 
+
+    hist,bins = np.histogram(roof_img.flatten(),256,[0,256])
+    cdf = hist.cumsum()
+    cdf_m = np.ma.masked_equal(cdf,0)
+    cdf_m = (cdf_m - cdf_m.min())*255/(cdf_m.max()-cdf_m.min())
+    cdf = np.ma.filled(cdf_m,0).astype('uint8')
+    roof_img = cdf[roof_img]
+    # cv2.imshow ('roof', roof_img)
+    # cv2.waitKey (0)
+    # cv2.destroyAllWindows () 
+
+    (mu, sigma) = cv2.meanStdDev(roof_img)
+    edges = cv2.Canny(roof_img, mu - sigma, mu + sigma)
+    # cv2.imshow ('edges', edges)
+    # cv2.waitKey (0)
+    # cv2.destroyAllWindows () 
+
+    lines = np.squeeze(cv2.HoughLinesP(edges, 10, np.pi/180, 50, 10))
+    # cv2.imshow ('lines', lines)
+    # cv2.waitKey (0)
+    # cv2.destroyAllWindows () 
+    # pdb.set_trace()
+
+    for line in lines:
+        print line
+        cv2.line(roof_img,(line[0],line[1]),(line[2],line[3]),(255,255,255),1)
+    cv2.imshow ('Edges', roof_img)
+    cv2.waitKey (0)
+    cv2.destroyAllWindows () 
+    pdb.set_trace()

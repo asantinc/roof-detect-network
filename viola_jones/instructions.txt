@@ -1,25 +1,31 @@
 -----------------------------
 		Create Samples
 -----------------------------
-opencv_createsamples -info metal.dat -bg bg.txt -vec vec_files/metal_w50_h25.vec -num 400 -w 50 -h 25
+opencv_createsamples -info simple_diag_rect.dat -bg bg.txt -vec vec_files/simple_diag_rect.vec -num 100 -w 24 -h 24 
 
-opencv_createsamples -info metal_pad5.dat -bg bg.txt -vec vec_files/metal_w24_h24_pad5.vec -num 400 -w 24 -h 24
+opencv_createsamples -info simple_vert_rect.dat -bg bg.txt -vec vec_files/simple_vert_rect.vec -num 100 -w 12 -h 24
 
+opencv_createsamples -info metal_5_wide_augment.dat -bg bg.txt -vec vec_files/metal_wide_w24_h12_pad5_augment.vec -num 2184 -w 24 -h 12
+
+opencv_createsamples -info metal_5_tall_augment.dat -bg bg.txt -vec vec_files/metal_tall_w12_h24_pad5_augment.vec -num 1608 -w 12 -h 24
 
 
 -----------------------------
 	To view the samples:
 -----------------------------
-opencv_createsamples -vec vec_files/metal_w24_h24_pad5.vec
-
+opencv_createsamples -vec ../viola_jones/vec_files/thatch_5_augment.vec -w 24 -h 24
+opencv_createsamples -vec vec_files/metal_wide_w24_h12_pad5_augment.vec -w 24 -h 12
+opencv_createsamples -vec vec_files/metal_tall_w12_h24_pad5_augment.vec -w 12 -h 24
 
 
 -----------------------------
 		Training
 -----------------------------
-opencv_traincascade -data w25_h50 -vec vec_files/metal_w25_h50.vec -bg bg.txt -numStages 20 -minHitRate 0.99999 -numPos 393 -numNeg 1500 -w 25 -h 50
+opencv_traincascade -data cascade_square -vec vec_files/metal_square_w24_h24_pad5_augment.vec -bg bg.txt -numStages 20 -minHitRate 0.99999 -numPos 100 -numNeg 400 -w 24 -h 24
 
+opencv_traincascade -data cascade_wide -vec vec_files/metal_wide_w24_h12_pad5_augment.vec -bg bg.txt -numStages 20 -minHitRate 0.99999 -numPos 1600 -numNeg 2500 -w 24 -h 12
 
+opencv_traincascade -data cascade_tall -vec vec_files/metal_tall_w12_h24_pad5_augment.vec -bg bg.txt -numStages 20 -minHitRate 0.99999 -numPos 1200 -numNeg 2000 -w 12 -h 24
 
 ################################
 Parameters:
