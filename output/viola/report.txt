@@ -1,0 +1,4 @@
+****************** DETECTORS USED ******************
+../viola_jones/cascade_square/cascade.xml
+Image 0018.jpg: 7/7
+Image 0032.jpg: 14/17

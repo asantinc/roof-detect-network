@@ -1,0 +1,39 @@
+****************** DETECTORS USED ******************
+../viola_jones/cascade_tall/cascade.xml
+../viola_jones/cascade_wide/cascade.xml
+Image 0018.jpg: 7/7
+Image 0032.jpg: 17/17
+Image 0034.jpg: 13/13
+Image 0001.jpg: 17/17
+Image 0007.jpg: 1/1
+Image 0020.jpg: 31/32
+Image 0017.jpg: 4/4
+Image 0023.jpg: 7/7
+Image 0031.jpg: 33/35
+Image 0013.jpg: 1/1
+Image 0009.jpg: 2/3
+Image 0029.jpg: 24/24
+Image 0003.jpg: 9/9
+Image 0016.jpg: 0/0
+Image 0019.jpg: 15/16
+Image 0027.jpg: 26/27
+Image 0011.jpg: 6/6
+Image 0033.jpg: 16/17
+Image 0021.jpg: 22/23
+Image 0012.jpg: 0/0
+Image 0014.jpg: 0/0
+Image 0015.jpg: 0/0
+Image 0004.jpg: 1/1
+Image 0008.jpg: 0/1
+Image 0026.jpg: 10/14
+Image 0030.jpg: 12/14
+Image 0036.jpg: 22/24
+Image 0006.jpg: 8/8
+Image 0010.jpg: 12/12
+Image 0028.jpg: 15/17
+Image 0035.jpg: 23/24
+Image 0005.jpg: 0/0
+Image 0024.jpg: 0/0
+Image 0025.jpg: 0/0
+Image 0022.jpg: 9/10
+Image 0002.jpg: 8/9
