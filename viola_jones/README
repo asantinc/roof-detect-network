@@ -1,7 +1,7 @@
 -----------------------------
 		Create Samples
 -----------------------------
-opencv_createsamples -info simple_diag_rect.dat -bg bg.txt -vec vec_files/simple_diag_rect.vec -num 100 -w 24 -h 24 
+opencv_createsamples -info simple_diag_rect.dat -bg bg.txt -vec SEE_HOW_GOES.vec -num 100 -w 24 -h 24 
 
 opencv_createsamples -info simple_vert_rect.dat -bg bg.txt -vec vec_files/simple_vert_rect.vec -num 100 -w 12 -h 24
 
@@ -17,15 +17,19 @@ opencv_createsamples -vec ../viola_jones/vec_files/thatch_5_augment.vec -w 24 -h
 opencv_createsamples -vec vec_files/metal_wide_w24_h12_pad5_augment.vec -w 24 -h 12
 opencv_createsamples -vec vec_files/metal_tall_w12_h24_pad5_augment.vec -w 12 -h 24
 
+opencv_createsamples -vec vec_files/simple_square.vec -w 12 -h 12
 
 -----------------------------
 		Training
 -----------------------------
-opencv_traincascade -data cascade_square -vec vec_files/metal_square_w24_h24_pad5_augment.vec -bg bg.txt -numStages 20 -minHitRate 0.99999 -numPos 100 -numNeg 400 -w 24 -h 24
+opencv_traincascade -data cascade -vec vec_files/thatch_samples.vec -bg bg.txt -numStages 20 -minHitRate 0.99999 -numPos 100 -numNeg 100 -w 24 -h 24
 
-opencv_traincascade -data cascade_wide -vec vec_files/metal_wide_w24_h12_pad5_augment.vec -bg bg.txt -numStages 20 -minHitRate 0.99999 -numPos 1600 -numNeg 2500 -w 24 -h 12
+opencv_traincascade -data testing_delete -vec vec_files/thatch_samples.vec -bg bg.txt -numStages 20 -minHitRate 0.99999 -numPos 100 -numNeg 200 -w 12 -h 12
 
-opencv_traincascade -data cascade_tall -vec vec_files/metal_tall_w12_h24_pad5_augment.vec -bg bg.txt -numStages 20 -minHitRate 0.99999 -numPos 1200 -numNeg 2000 -w 12 -h 24
+opencv_traincascade -data delete -vec vec_files/metal_tall_w12_h24_pad5_augment.vec -bg bg.txt -numStages 20 -minHitRate 0.99999 -numPos 1200 -numNeg 2000 -w 12 -h 24
+
+
+/usr/bin/opencv_traincascade -data delete -vec SEE_HOW_GOES.vec -bg bg.txt -numStages 20 -minHitRate 0.99999 -numPos 1200 -numNeg 2000 
 
 ################################
 Parameters:

@@ -144,6 +144,7 @@ class ViolaDetector(object):
         #write to file
         bounding_path = self.output_folder+img_name+'_bound.jpg'
         cv2.imwrite(bounding_path, output_bounds)
+        return contours
 
         
     def match_roofs_to_detection(self, img_name, roof_list, rows=1200, cols=2000):
@@ -206,11 +207,11 @@ class ViolaDetector(object):
         '''
         for i, cascade in enumerate(self.roofs_detected[img_name]):
             for (x,y,w,h) in cascade:
-                if i==0:
+                if i%3==0:
                     color=(255,0,0)
-                elif i==1:
+                elif i%3==1:
                     color=(0,0,255)
-                elif i==2:
+                elif i%3==2:
                     color=(255,255,255)
                 cv2.rectangle(img,(x,y),(x+w,y+h), color, 2)
         return img

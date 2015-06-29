@@ -229,7 +229,6 @@ class DataLoader(object):
                 
                 #save an image showing where the patch was taken for debugging
                 if settings.DEBUG:
-                    mask_size = settings.PATCH_H
                     img_copy = np.array(img, copy=True)
                     img_copy[ymin:(ymin+settings.PATCH_H), xmin:(xmin+settings.PATCH_W), 0:1] = 255
                     img_copy[ymin:(ymin+settings.PATCH_H), xmin:(xmin+settings.PATCH_W), 1:3] = 0

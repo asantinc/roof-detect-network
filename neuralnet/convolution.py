@@ -1,4 +1,3 @@
-import pdb
 import sys
 import getopt
 
@@ -59,8 +58,7 @@ def set_parameters():
             epochs=int(float(arg))
     return test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epochs
 
-
-if __name__ == '__main__':
+def network_setup():
     test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epochs = set_parameters()  
     log = True
     plot_loss = True
@@ -105,7 +103,13 @@ if __name__ == '__main__':
         max_epochs=epochs,
         verbose=1,
         ) 
+    return experiment, num_layers, log, plot_loss
+
+def train_conv_net(experiment, num_layers):
     experiment.net.set_layer_params(num_layers)
     experiment.run(log=log, plot_loss=plot_loss) 
 
+
+def load_conv_net(experiment, num_layers, file_to_load):
+    return ValueError("Need to implement")
 

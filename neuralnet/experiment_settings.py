@@ -60,7 +60,7 @@ def print_debug(to_print, verbosity=1):
     if verbosity <= VERBOSITY:
         print str(to_print)
 
-
+'''
 class Experiment(object):
     def __init__(self, net=None, data_augmentation=True, display_mistakes=False, 
                 test_percent=.10, scaler=True, preloaded=True, printer=None, non_roofs=2, roofs_only=False):
@@ -165,4 +165,4 @@ class SaveLayerInfo(PrintLayerInfo):
         file.write(" \n\n")
 
         file.close()
-
+'''
