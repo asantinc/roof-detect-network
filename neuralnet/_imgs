@@ -139,21 +139,29 @@ class ViolaDetector(object):
 
         contours, hierarchy = cv2.findContours(im_bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        #find and save contours of detections
-        output_contours = np.zeros((im_bw.shape[0],im_bw.shape[1]))
-        cv2.drawContours(output_contours, contours, -1, (255,255,255), 3)
-        bounding_path = self.output_folder+img_name+'_contour.jpg'
-        cv2.imwrite(bounding_path, output_contours)
+        #find and save contours of detections 
+        if self.save_imgs:
+            output_contours = np.zeros((im_bw.shape[0],im_bw.shape[1]))
+            cv2.drawContours(output_contours, contours, -1, (255,255,255), 3)
+            contour_path = self.output_folder+img_name+'_contour.jpg'
+            cv2.imwrite(contour_path, output_contours)
 
-        #find and save bouding rectangles of contours
-        output_bounds = np.zeros((im_bw.shape[0],im_bw.shape[1]))
-        for cont in contours:
-            bounding_rect = cv2.boundingRect(cont)
-            cv2.rectangle(output_bounds, (bounding_rect[0],bounding_rect[1]),(bounding_rect[0]+bounding_rect[2],bounding_rect[1]+bounding_rect[3]), (255,255,255),5)
-        #write to file
-        bounding_path = self.output_folder+img_name+'_bound.jpg'
-        cv2.imwrite(bounding_path, output_bounds)
         return contours
+
+
+    def get_bounding_rects(self, contours, img_name, rows, cols):
+        #find and save bouding rectangles of contours
+        bounding_rects = list()
+        output_bounds = np.zeros((rows, cols))
+        for cont in contours:
+            bounding_rect.append(cv2.boundingRect(cont)
+            cv2.rectangle(output_bounds, (bounding_rect[0],bounding_rect[1]),(bounding_rect[0]+bounding_rect[2],bounding_rect[1]+bounding_rect[3]), (255,255,255),5)
+        
+        #write to file
+        if self.save_imgs:
+            bounding_path = self.output_folder+img_name+'_bound.jpg'
+            cv2.imwrite(bounding_path, output_bounds)
+        return bounding_rects
 
         
     def match_roofs_to_detection(self, img_name, roof_list, rows=1200, cols=2000):
@@ -236,7 +244,7 @@ class ViolaDetector(object):
     def mark_roofs_on_img(self, img, img_name, roof_list):
         for roof in roof_list:
             if roof.roof_type == self.roof_type:
-                cv2.rectangle(img,(roof.xmin,roof.ymin),(roof.xmin+roof.width,roof.ymin+roof.height),(0,255,0),2)
+                cv2.rectangle(img,(roof.xmin,roof.ymin),(roof.xmin+roof.width,roof.ymin+roof.height),(0,255,0),2) 
         return img
 
 

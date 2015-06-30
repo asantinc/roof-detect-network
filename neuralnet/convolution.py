@@ -1,3 +1,4 @@
+'''
 import sys
 import getopt
 
@@ -13,7 +14,7 @@ import FlipBatchIterator as flip
 import load
 import experiment_settings as settings
 from experiment_settings import PrintLogSave, SaveLayerInfo, Experiment
-
+'''
 
 '''Convolutional neural network with data augmentation
 
@@ -26,7 +27,7 @@ network. The validation set is extracted automatically by the network from this 
 As a result, the validation metrics produced are corrupted, so to measure performance we can only rely on the
 testing metrics.
 '''
-
+'''
 def set_parameters():
     try:
         opts, args = getopt.getopt(sys.argv[1:], "t:n:l:p:r:a:e:")
@@ -58,7 +59,12 @@ def set_parameters():
             epochs=int(float(arg))
     return test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epochs
 
-def network_setup():
+def network_setup(test_percent=None, non_roofs=):
+    '''
+    Parameters:
+    non_roofs: proportions of non_roofs to use relative to roofs (only relevant for training phase)
+
+    '''
     test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epochs = set_parameters()  
     log = True
     plot_loss = True
@@ -112,4 +118,4 @@ def train_conv_net(experiment, num_layers):
 
 def load_conv_net(experiment, num_layers, file_to_load):
     return ValueError("Need to implement")
-
+'''
