@@ -17,7 +17,7 @@ class ViolaDetector(object):
     def __init__(self, num_pos=None, num_neg=None, 
             detector_paths=None, 
             output_folder=None,
-            save_imgs=False
+            save_imgs=False,
             scale=1.05
             ):
         self.num_pos = num_pos if num_pos is not None else 0
@@ -42,7 +42,7 @@ class ViolaDetector(object):
         #file name beginning
         self.file_name_default = ''
         if num_pos != 0 and num_neg != 0:
-            self.file_name_default = '''numPos{0}_numNeg{1}_scale{2}_{3}'''.format(num_pos, num_neg, self.scale)
+            self.file_name_default = '''numPos{0}_numNeg{1}_scale{2}'''.format(num_pos, num_neg, self.scale)
         
         #open report file
         assert output_folder is not None

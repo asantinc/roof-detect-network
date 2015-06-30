@@ -5,7 +5,7 @@ import numpy as np
 import operator
 import sys
 import pdb
-'''
+
 import lasagne
 sys.path.append('~/roof/Lasagne/lasagne')
 sys.path.append('~/roof/nolearn/nolearn')
@@ -15,7 +15,7 @@ from nolearn.lasagne.util import is_conv2d
 #my modules
 import load
 from sklearn.metrics import classification_report, confusion_matrix
-'''
+
 #Constants for patch production
 PATCHES_OUT_PATH = '../data/debug/'
 LABELS_PATH = '../data/debug/labels.csv'
@@ -53,6 +53,7 @@ BG_FILE = '../viola_jones/bg.txt'
 DAT_PATH = '../viola_jones/all_dat/'
 VEC_PATH = '../viola_jones/vec_files/'
 VIOLA_AUGM_DATA = '../viola_jones/data/'
+CASCADE_PATH = '../viola_jones/cascades/'
 
 def print_debug(to_print, verbosity=1):
     #Print depending on verbosity level
@@ -60,7 +61,7 @@ def print_debug(to_print, verbosity=1):
     if verbosity <= VERBOSITY:
         print str(to_print)
 
-'''
+
 class Experiment(object):
     def __init__(self, net=None, data_augmentation=True, display_mistakes=False, 
                 test_percent=.10, scaler=True, preloaded=True, printer=None, non_roofs=2, roofs_only=False):
@@ -165,4 +166,3 @@ class SaveLayerInfo(PrintLayerInfo):
         file.write(" \n\n")
 
         file.close()
-'''

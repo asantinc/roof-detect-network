@@ -3,6 +3,8 @@ import getopt
 import os
 import subprocess
 
+from scipy import misc
+
 import convolution
 import experiment_settings as settings
 from get_data import DataLoader, Roof
@@ -13,34 +15,40 @@ from viola_detector import ViolaDetector
 STEP_SIZE = settings.PATCH_H/4
 
 class Pipeline(object):
-	def __init__(test_files=None):
+	def __init__(self, test_files=None):
 		#image_files
+                print test_files
 		if test_files is None:
 			self.test_fnames = DataLoader.get_img_names_from_path(path = settings.TEST_PATH)
+			print 'hi'
+			print self.test_fnames
 		else:
 			self.test_fnames = test_files
+                assert self.test_fnames is not None
+	        print self.test_fnames
 
 	   	#OUTPUT FOLDER: create it if it doesn't exist
 		out_name = raw_input('Name of output folder: ')
-		assert out_folder != ''
-		self.out_path = '../output/pipeline/{0}/'.format(out_folder)
-		if not os.path.isdir(out_folder):
+		assert out_name != ''
+		self.out_path = '../output/pipeline/{0}'.format(out_name)
+		if not os.path.isdir(out_name):
 			subprocess.check_call('mkdir {0}'.format(self.out_path), shell=True)
-		print 'Will output files to: '.format(self.out_path)
+		print 'Will output files to: {0}'.format(self.out_path)
 
 		#DETECTORS
 		self.detector_paths = list()
 		while True:
-			detector = settings.CASCADE_PATH+raw_input('Cascade file to use: ' )+'.xml'
-			if cascade_name == '':
+	                cascade_name = raw_input('Cascade file to use: ' )
+        	        detector = settings.CASCADE_PATH+cascade_name+'.xml'
+            	        if cascade_name == '':
 				break
 			self.detector_paths.append(detector)
-		print 'Using detectors: '+'\t'.join(detector_paths)
+		print 'Using detectors: '+'\t'.join(self.detector_paths)
 
 		#create report file
 		self.report_path = self.out_path+'report.txt'
 		with open(self.report_path, 'w') as report:
-			report.write('\t'.join(detector_paths))
+			report.write('\t'.join(self.detector_paths))
 
 		self.viola = ViolaDetector(detector_paths=self.detector_paths, output_folder=self.out_path, save_imgs=True)
 		#the output should be a picture with the windows marked!
@@ -59,7 +67,7 @@ class Pipeline(object):
 		self.all_contours = dict()
 		
 		for img_name in self.test_fnames:
-			print 'Pre-processing image: {0}'.join(img_name)
+			print 'Pre-processing image: {0}'.format(img_name)
 			try:
 				image = misc.imread(settings.TEST_PATH+img_name)
 			except IOError:
@@ -127,7 +135,7 @@ class Pipeline(object):
 	        #do network detection
 
 
-if __name__ == '__main___':
+if __name__ == '__main__':
 	#to detect a single image pass it in as a parameter
 	#else, pipeline will use the files in settings.TEST_PATH folder
 	try:
@@ -138,10 +146,12 @@ if __name__ == '__main___':
 	test_file = None
 	for opt, arg in opts:
 		if opt == '-f':
-			test_file = arg
-
-	pipe = Pipeline(test_files=[test_file])
+            test_file = arg
+            test_files = list()
+            test_files.append(test_file)
+	pipe = Pipeline(test_files=test_files)
 	#dictionaries accessed by file_name
 	metal_detections, thatch_detections = pipe.run()
+
 
 
