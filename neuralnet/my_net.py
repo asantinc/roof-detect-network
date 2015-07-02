@@ -26,16 +26,17 @@ class MyNeuralNet(NeuralNet):
 	def __init__(
 	        self,
 	        layers,
+            num_layers=0,
 	        update=nesterov_momentum,
 	        loss=None,
-            objective=Objective,
-            objective_loss_function=None,
+            	objective=Objective,
+            	objective_loss_function=None,
 	        batch_iterator_train=BatchIterator(batch_size=128),
 	        batch_iterator_test=BatchIterator(batch_size=128),
 	        regression=False,
 	        max_epochs=100,
 	        eval_size=0.2,
-            custom_score=None,
+            	custom_score=None,
 	        X_tensor_type=None,
 	        y_tensor_type=None,
 	        use_label_encoder=False,
@@ -45,7 +46,7 @@ class MyNeuralNet(NeuralNet):
 	        preproc_scaler=None,
 	        more_params=None,
 	        verbose=0,
-            net_name='no_name',
+           	net_name='no_name',
 	        **kwargs):
 		NeuralNet.__init__(
 			self,
@@ -72,8 +73,10 @@ class MyNeuralNet(NeuralNet):
 		self.net_name = net_name
 		self.regression = regression
 		self.batch_iterator_test = batch_iterator_test
-		self.preproc_scaler = preproc_scaler
-      
+        	self.preproc_scaler = preproc_scaler
+                self.num_layers=num_layers
+        	self.set_layer_params(num_layers=self.num_layers)
+
 	def train_test_split(self, X, y, eval_size):
 	    if eval_size:
 	        if self.regression:
@@ -100,12 +103,13 @@ class MyNeuralNet(NeuralNet):
 
 	    return X_train, X_valid, y_train, y_valid
     
-        
+        ''' 
         def set_params(self, **kwargs):
             for key in kwargs.keys():
                 assert not hasattr(self, key)
             vars(self).update(kwargs)
             self._kwargs_keys = list(kwargs.keys())
+        '''
 
         def save_weights(self):
             ''' Saves weigts of model so they can be loaded back later:

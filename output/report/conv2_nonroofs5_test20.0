@@ -1,0 +1,29 @@
+non_roofs: 5
+printer: <__main__.PrintLogSave instance at 0x7f8748ecbc68>
+roofs_only: 0
+log: 1
+epochs: 20
+net_name: conv2_nonroofs5_test20.0
+test_percent: 0.2
+num_layers: 2
+net: MyNeuralNet(X_tensor_type=None,
+      batch_iterator_test=<FlipBatchIterator.CropOnlyBatchIterator object at 0x7f874d6b6e50>,
+      batch_iterator_train=<FlipBatchIterator.FlipBatchIterator object at 0x7f874d6b6e90>,
+      custom_score=None, eval_size=0.2, input_shape=(None, 3, 32, 32),
+      layers=[('input', <class 'lasagne.layers.input.InputLayer'>), ('conv1', <class 'lasagne.layers.conv.Conv2DLayer'>), ('pool1', <class 'lasagne.layers.pool.MaxPool2DLayer'>), ('conv2', <class 'lasagne.layers.conv.Conv2DLayer'>), ('pool2', <class 'lasagne.layers.pool.MaxPool2DLayer'>), ('output', <class 'lasagne.layers.dense.DenseLayer'>)],
+      loss=None, max_epochs=20, more_params={},
+      net_name='conv2_nonroofs5_test20.0',
+      objective=<class 'lasagne.objectives.Objective'>,
+      objective_loss_function=<function categorical_crossentropy at 0x7f8755614848>,
+      on_epoch_finished=[<__main__.PrintLogSave instance at 0x7f8748ecbc68>, <nolearn.lasagne.handlers.PrintLog instance at 0x7f8748edb680>],
+      on_training_finished=[],
+      on_training_started=[<__main__.SaveLayerInfo instance at 0x7f8748edb200>, <nolearn.lasagne.handlers.PrintLayerInfo instance at 0x7f8748edb4d0>],
+      output_nonlinearity=<function softmax at 0x7f8752bae8c0>,
+      output_num_units=3, preproc_scaler=None, regression=False,
+      update=<function nesterov_momentum at 0x7f8752138398>,
+      update_learning_rate=0.01, update_momentum=0.9,
+      use_label_encoder=False, verbose=1,
+      y_tensor_type=TensorType(int32, vector))
+plot_loss: True
+preloaded: 1
+

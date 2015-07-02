@@ -5,24 +5,30 @@ import numpy as np
 import operator
 import sys
 import pdb
+import csv
 
 import lasagne
 sys.path.append('~/roof/Lasagne/lasagne')
 sys.path.append('~/roof/nolearn/nolearn')
 from nolearn.lasagne.handlers import PrintLog, PrintLayerInfo 
 from nolearn.lasagne.util import is_conv2d
+from sklearn.metrics import classification_report, confusion_matrix
+from scipy.stats import uniform as sp_rand
+from sklearn.grid_search import RandomizedSearchCV
+from sklearn.preprocessing import StandardScaler
 
 #my modules
 import load
-from sklearn.metrics import classification_report, confusion_matrix
+import my_net
+import FlipBatchIterator as flip
 
 #Constants for patch production
-PATCHES_OUT_PATH = '../data/debug/'
-LABELS_PATH = '../data/debug/labels.csv'
+PATCHES_OUT_PATH = '../data/training/'
+LABELS_PATH = '../data/training/labels.csv'
 INHABITED_PATH = '../data/inhabited/'
 UNINHABITED_PATH = '../data/uninhabited/'
 DELETE_PATH = '../data/delete/'
-NEGATIVE_PATCHES_NUM = 20
+NEGATIVE_PATCHES_NUM = 5
 
 #types of roof
 NON_ROOF = 0
@@ -37,6 +43,7 @@ PATCH_W = PATCH_H = 40
 CASCADE_PATH = '../viola_jones/cascades/'
 
 #Constants for training neural network
+NET_PARAMS_PATH = "../data/net_params/"
 OUT_REPORT = "../output/report/" 
 OUT_HISTORY = "../output/history/"
 OUT_IMAGES = "../output/images/"
@@ -63,12 +70,56 @@ def print_debug(to_print, verbosity=1):
 
 
 class Experiment(object):
-    def __init__(self, net=None, test_percent=.10, printer=None, non_roofs=2, roofs_only=False):
-        self.net=net
-        self.test_percent=test_percent
-        self.printer=printer
-        self.non_roofs=non_roofs    #the proportion of non_roofs relative to roofs to be used in data
-        self.roofs_only=roofs_only
+    def __init__(self, preloaded=False, test_percent=.20, non_roofs=None, 
+                    roofs_only=False,log=True, plot_loss=True, plot=True, epochs=-1, net_name=None, num_layers=None, max_roofs=None):
+        self.num_layers = num_layers
+        self.net_name = net_name
+        self.epochs = epochs
+        self.preloaded = preloaded
+        self.test_percent = test_percent
+        self.non_roofs = non_roofs    #the proportion of non_roofs relative to roofs to be used in data
+        self.roofs_only = roofs_only
+        self.log = log
+        self.plot_loss = True
+        self.printer = PrintLogSave()
+
+        print 'Setting up the Neural Net \n'
+        self.setup_net()
+       
+        print 'Loading data \n'
+        self.roof_loader = load.RoofLoader()
+        self.X_train, self.X_test, self.y_train, self.y_test = self.roof_loader.load(test_percent=self.test_percent, 
+                                                non_roofs=self.non_roofs, roofs_only=self.roofs_only, max_roofs=max_roofs)
+        print 'Data is loaded \n'
+
+    def setup_net(self):
+        layers = my_net.MyNeuralNet.produce_layers(self.num_layers)      
+        self.net = my_net.MyNeuralNet(
+            layers=layers,
+            num_layers=self.num_layers,
+            input_shape=(None, 3, CROP_SIZE, CROP_SIZE),
+            output_num_units=3,
+            
+            output_nonlinearity=lasagne.nonlinearities.softmax,
+            preproc_scaler = None, 
+            
+            #learning rates
+            update_learning_rate=0.01,
+            update_momentum=0.9,
+            
+            #printing
+            net_name=self.net_name,
+            on_epoch_finished=[self.printer],
+            on_training_started=[SaveLayerInfo()],
+
+            #data augmentation
+            batch_iterator_test=flip.CropOnlyBatchIterator(batch_size=128),
+            batch_iterator_train=flip.FlipBatchIterator(batch_size=128),
+            
+            max_epochs=self.epochs,
+            verbose=1,
+            )
+
 
     def train_test(self):
         '''
@@ -77,38 +128,29 @@ class Experiment(object):
         #save settings to file
         self.printer.log_to_file(self.net, self.__str__(), overwrite=True)
         
-        #load data
-        self.roof_loader = load.RoofLoader()
-        X_train, X_test, y_train, y_test = self.roof_loader.load(test_percent=self.test_percent, non_roofs=self.non_roofs, roofs_only=self.roofs_only)
-        
         #rescale X_train and X_test
-        self.scaler = load.DataScaler()
-        X_train = self.scaler.fit_transform(X_train)
-        X_test = self.scaler.transform2(X_test)
+        self.scaler = DataScaler()
+        X_train = self.scaler.fit_transform(self.X_train)
+        X_test = self.scaler.transform2(self.X_test)
     
         #fit the network to X_train
-        self.net.fit(X_train, y_train)
+        self.net.fit(X_train, self.y_train)
         self.net.save_weights()
 
         #find predictions for test set
         predicted = self.net.predict(X_test)
-        self.evaluation(predicted, X_train, X_test, y_train, y_test)
+        self.evaluation(predicted, X_train, X_test, self.y_train, self.y_test)
 
 
     def test_preloaded_single(self, test_case):
         if self.scaler is None:
             self.net.load_params_from('saved_weights/'+self.net.net_name+'.pickle')
-            
-            #we need to get the training set so we can get the right scaling for the test set
-            self.roof_loader = load.RoofLoader()
-            X_train, X_test, y_train, y_test = self.roof_loader.load(test_percent=self.test_percent, 
-                    non_roofs=self.non_roofs, roofs_only=self.roofs_only)
-            
+             
         #rescale X_train and X_test, using information from the training set only
-        self.scaler = load.DataScaler()
-        self.scaler.fit_transform(X_train)
+        self.scaler = DataScaler()
+        self.scaler.fit_transform(self.X_train)
         test_case = self.scaler.trasform(test_case)
-        return self.net.predict(X_test)
+        return self.net.predict(self.X_test)
 
 
     def test_preloaded(self, plot_loss=True, test_case=None):  
@@ -120,21 +162,15 @@ class Experiment(object):
         self.printer.log_to_file(self.net, self.__str__(), overwrite=True)
         self.roof_loader = load.RoofLoader()
         
-        #we need to get the training set so we can get the right scaling for the test set
-        X_train, X_test, y_train, y_test = self.roof_loader.load(test_percent=self.test_percent, 
-                non_roofs=self.non_roofs, roofs_only=self.roofs_only)
-        X_test = test_case if test_case is not None else X_test
-
         #rescale X_train and X_test, using information from the training set only
-        if self.scaler:
-            scaler = load.DataScaler()
-            X_train = scaler.fit_transform(X_train)
-            X_test = scaler.transform2(X_test)
+        self.scaler = DataScaler()
+        X_train = scaler.fit_transform(self.X_train)
+        X_test = scaler.transform2(self.X_test)
 
         #find predictions for test set
         self.net.load_params_from('saved_weights/'+self.net.net_name+'.pickle')
         predicted = self.net.predict(X_test)
-        self.evaluation(predicted, X_train, X_test, y_train, y_test)
+        self.evaluation(predicted, X_train, X_test, self.y_train, self.y_test)
 
 
     def evaluation(self, predicted, X_train, X_test, y_train, y_test):
@@ -154,6 +190,26 @@ class Experiment(object):
             roof_loader.display_images(mistaken_imgs, labels=y_test[mistakes], indeces=range(len(mistaken_imgs)))
 
 
+    @staticmethod
+    def report_grid(self, grid_scores, n_top=3):
+        top_scores = sorted(grid_scores, key=itemgetter(1), reverse=True)[:n_top]
+        for i , score in enumerate(top_scores):
+            print "Model with rank: {0}".format(i+1)
+            print "Mean validation score: {0:.3f} (std: {1:.3f})".format(
+                    score.mean_validation_score,
+                    np.std(score.cv_validation_scores))
+            print "Parameters: {0}".format(score.parameters)
+            print ""
+
+    def optimize_params(self):
+        params_grid = {"update_learning_rate": sp_rand(0.001,0.01)}
+        rsearch = RandomizedSearchCV(estimator=self.net, param_distributions=params_grid, n_iter=1, n_jobs=1)
+        X, _, y, _ = self.roof_loader.load(max_roofs=100, test_percent=0, non_roofs=self.non_roofs, roofs_only=self.roofs_only)
+        pdb.set_trace()
+        rsearch.fit(X,y)
+        #Experiment.report_grid(rsearch.grid_scores_)
+
+
     def __str__(self):
         out_list = list()
         for key, value in self.__dict__.items():
@@ -161,6 +217,27 @@ class Experiment(object):
         out_list.append('\n')
         return '\n'.join(out_list)          
 
+
+class DataScaler(StandardScaler):
+    #Subclass of sklearn.StandardScaler that reshapes data as needed and then calls super to do scaling
+    #
+    def fit_transform(self, X):
+        X_shape = X.shape
+        X = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
+        X = super(DataScaler, self).fit_transform(X)
+        return X.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
+
+    def transform2(self, X):
+        X_shape = X.shape
+        X = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
+        X = super(DataScaler, self).transform(X)
+        return X.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
+
+    def inverse_transform(self, X): 
+        X_shape = X.shape
+        X = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
+        X = super(DataScaler, self).inverse_transform(X)
+        return X.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
 
 
 class PrintLogSave(PrintLog):
@@ -224,13 +301,7 @@ def set_parameters():
         if opt == '-t':
             test_percent=float(arg)
         elif opt == '-n':
-            non_roofs=int(float(arg))
-        elif opt=='-p':
-            preloaded=bool(arg)
-        elif opt=='-l':
-            num_layers=int(float(arg))
-        elif opt=='-r':
-            roofs_only=True
+            num_layers = int(float(arg))
         elif opt=='-a':
             net_name=arg
         elif opt=='-e':
@@ -238,51 +309,30 @@ def set_parameters():
     return test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epochs
 
 
-if __name__ == '__main__':
-    test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epochs = set_parameters()  
-    log = True
-    plot_loss = True
-    name_percent = str(int(100*test_percent))
-    net_name = 'conv'+str(num_layers)+'_nonroofs'+str(non_roofs)+'_test'+name_percent if net_name==None else net_name
-    if roofs_only:
-        net_name = net_name+'_roofs'
-     
-    layers = MyNeuralNet.produce_layers(num_layers)      
-    printer = PrintLogSave()
-    #set up the experiment
-    experiment = Experiment(data_augmentation=True,
-                    test_percent=test_percent,
-                    scaler='StandardScaler',
-                    preloaded=preloaded,
-                    printer=printer,
-                    display_mistakes=True,
-                    non_roofs=non_roofs,
-                    roofs_only=roofs_only
-                    )
-    experiment.net = MyNeuralNet(
-        layers=layers,
-        input_shape=(None, 3, settings.CROP_SIZE, settings.CROP_SIZE),
-        output_num_units=3,
-        
-        output_nonlinearity=lasagne.nonlinearities.softmax,
-        preproc_scaler = None, 
-        
-        #learning rates
-        update_learning_rate=0.01,
-        update_momentum=0.9,
-        
-        #printing
-        net_name=net_name,
-        on_epoch_finished=[printer],
-        on_training_started=[SaveLayerInfo()],
+def get_params_from_file(file_name):
+    parameters = dict()
+    with open(file_name, 'r') as f:
+        reader = csv.reader(f, delimiter=',')
+        for par in reader:
+            if len(par) == 2: 
+                if par[0].strip() == 'test_percent':
+                    parameters[par[0].strip()] = (float(par[1].strip()))
+                else:
+                    parameters[par[0].strip()] = int(float(par[1].strip()))
+    return parameters
 
-        #data augmentation
-        batch_iterator_test=flip.CropOnlyBatchIterator(batch_size=128),
-        batch_iterator_train=flip.FlipBatchIterator(batch_size=128),
-        
-        max_epochs=epochs,
-        verbose=1,
-        ) 
-    experiment.net.set_layer_params(num_layers)
-    experiment.run(log=log, plot_loss=plot_loss) 
+if __name__ == '__main__':
+    #test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epochs = set_parameters()  
+    params = get_params_from_file(NET_PARAMS_PATH+raw_input('Parameter file NAME: '))
+    
+    if params['net_name'] == 0:
+        params['net_name'] = 'conv{0}_nonroofs{1}_test{2}'.format(params['num_layers'], params['non_roofs'], 100*params['test_percent']) 
+    if params['roofs_only']:
+        params['net_name'] = params['net_name']+'_roofs'
+    print 'Network name is: {0}'.format(params['net_name'])
+
+    #set up the experiment
+    experiment = Experiment(**params) 
+    experiment.optimize_params()
+    #experiment.train_test() 
 
