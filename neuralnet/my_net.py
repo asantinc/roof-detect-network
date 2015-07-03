@@ -1,9 +1,9 @@
 import load
 import sys
-import pdb
 import numpy as np
 import matplotlib.pyplot as plt
 import cPickle as pickle
+import pdb
 
 import lasagne
 from lasagne import layers
@@ -26,16 +26,17 @@ class MyNeuralNet(NeuralNet):
 	def __init__(
 	        self,
 	        layers,
+            num_layers=0,
 	        update=nesterov_momentum,
 	        loss=None,
-            objective=Objective,
-            objective_loss_function=None,
+            	objective=Objective,
+            	objective_loss_function=None,
 	        batch_iterator_train=BatchIterator(batch_size=128),
 	        batch_iterator_test=BatchIterator(batch_size=128),
 	        regression=False,
 	        max_epochs=100,
 	        eval_size=0.2,
-            custom_score=None,
+            	custom_score=None,
 	        X_tensor_type=None,
 	        y_tensor_type=None,
 	        use_label_encoder=False,
@@ -45,7 +46,7 @@ class MyNeuralNet(NeuralNet):
 	        preproc_scaler=None,
 	        more_params=None,
 	        verbose=0,
-            net_name='no_name',
+           	net_name='no_name',
 	        **kwargs):
 		NeuralNet.__init__(
 			self,
@@ -72,8 +73,10 @@ class MyNeuralNet(NeuralNet):
 		self.net_name = net_name
 		self.regression = regression
 		self.batch_iterator_test = batch_iterator_test
-		self.preproc_scaler = preproc_scaler
-      
+        	self.preproc_scaler = preproc_scaler
+                self.num_layers=num_layers
+        	#self.set_layer_params(num_layers=self.num_layers)
+
 	def train_test_split(self, X, y, eval_size):
 	    if eval_size:
 	        if self.regression:
@@ -100,12 +103,13 @@ class MyNeuralNet(NeuralNet):
 
 	    return X_train, X_valid, y_train, y_valid
     
-        
+        ''' 
         def set_params(self, **kwargs):
             for key in kwargs.keys():
                 assert not hasattr(self, key)
             vars(self).update(kwargs)
             self._kwargs_keys = list(kwargs.keys())
+        '''
 
         def save_weights(self):
             ''' Saves weigts of model so they can be loaded back later:
@@ -134,6 +138,8 @@ class MyNeuralNet(NeuralNet):
                     ('input', layers.InputLayer),
                     ('output', layers.DenseLayer),
                     ]
+                params_dict = {'conv1_num_filters':32, 'conv1_filter_size':(3, 3), 'pool1_pool_size':(2, 2)}
+
             elif num_layers==1:
                 net_layers=[
                     ('input', layers.InputLayer),
@@ -141,6 +147,9 @@ class MyNeuralNet(NeuralNet):
                     ('pool1', layers.MaxPool2DLayer),
                     ('output', layers.DenseLayer),
                     ]
+                params_dict = {'conv1_num_filters':32, 'conv1_filter_size':(3, 3), 'pool1_pool_size':(2, 2),
+                        'conv2_num_filters':64, 'conv2_filter_size':(2, 2), 'pool2_pool_size':(2, 2)}
+
             elif num_layers==2:
                 net_layers=[
                     ('input', layers.InputLayer),
@@ -150,6 +159,9 @@ class MyNeuralNet(NeuralNet):
                     ('pool2', layers.MaxPool2DLayer),
                     ('output', layers.DenseLayer),
                     ]
+                params_dict = {'conv1_num_filters':32, 'conv1_filter_size':(3, 3), 'pool1_pool_size':(2, 2),
+                        'conv2_num_filters':64, 'conv2_filter_size':(2, 2), 'pool2_pool_size':(2, 2)}
+
             elif num_layers==3:
                 net_layers=[
                     ('input', layers.InputLayer),
@@ -161,6 +173,9 @@ class MyNeuralNet(NeuralNet):
                     ('pool3', layers.MaxPool2DLayer),
                     ('output', layers.DenseLayer),
                     ]
+                params_dict = {'conv1_num_filters':32, 'conv1_filter_size':(3, 3), 'pool1_pool_size':(2, 2),
+                        'conv2_num_filters':64, 'conv2_filter_size':(2, 2), 'pool2_pool_size':(2, 2),
+                        'conv3_num_filters':128, 'conv3_filter_size':(2, 2), 'pool3_pool_size':(2, 2)}
             elif num_layers==4:
                 net_layers=[
                     ('input', layers.InputLayer),
@@ -173,6 +188,10 @@ class MyNeuralNet(NeuralNet):
                     ('hidden4', layers.DenseLayer),
                     ('output', layers.DenseLayer),
                     ]
+                params_dict = {'conv1_num_filters':32, 'conv1_filter_size':(3, 3), 'pool1_pool_size':(2, 2),
+                        'conv2_num_filters':64, 'conv2_filter_size':(2, 2), 'pool2_pool_size':(2, 2),
+                        'conv3_num_filters':128, 'conv3_filter_size':(2, 2), 'pool3_pool_size':(2, 2),
+                        'hidden4_num_units':500}
             elif num_layers==5:
                 net_layers=[
                     ('input', layers.InputLayer),
@@ -186,8 +205,13 @@ class MyNeuralNet(NeuralNet):
                     ('hidden5', layers.DenseLayer),
                     ('output', layers.DenseLayer),
                     ]
-            return net_layers 
-   
+                params_dict = {'conv1_num_filters':32, 'conv1_filter_size':(3, 3), 'pool1_pool_size':(2, 2),
+                        'conv2_num_filters':64, 'conv2_filter_size':(2, 2), 'pool2_pool_size':(2, 2),
+                        'conv3_num_filters':128, 'conv3_filter_size':(2, 2), 'pool3_pool_size':(2, 2),
+                        'hidden4_num_units':500, 'hidden5_num_units':500}
+            return net_layers, params_dict 
+
+        '''
         def set_layer_params(self, num_layers=1):
             if num_layers==5:
                 self.set_params(conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2),
@@ -208,7 +232,7 @@ class MyNeuralNet(NeuralNet):
                 conv2_num_filters=64, conv2_filter_size=(2, 2), pool2_pool_size=(2, 2))
             elif num_layers==1:
                 self.set_params(conv1_num_filters=32, conv1_filter_size=(3, 3), pool1_pool_size=(2, 2))
-
+        '''
 
 if __name__ == "__main__":
     net = MyNeuralNet()

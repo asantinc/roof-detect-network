@@ -1,0 +1,5 @@
+Created .dat files using the:
+- Augmented metal and thatch roofs
+- The metal roofs are divided between tall, wide and square. There is also a single learner that combines all 3 types of roofs rather than dividing them
+- They have different paddings: 0,5,10,15 to find out which padding results in better performance
+

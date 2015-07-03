@@ -5,12 +5,11 @@ import cv2
 import pdb
 import numpy as np
 
-'''
 import matplotlib.pyplot as plt
 import sklearn.utils
 from sklearn import cross_validation
 from sklearn.preprocessing import StandardScaler
-'''
+
 import experiment_settings as settings
 
 class RoofLoader(object):
@@ -21,6 +20,7 @@ class RoofLoader(object):
             return 'Thatch'
         elif y == 0:
             return 'No roof'
+
 
     def display_images(self, X, labels=[], indeces=[0], file_names=[]):
         '''
@@ -40,10 +40,12 @@ class RoofLoader(object):
             plt.imshow(x)
             plt.show()
 
+
     def display_single(self, other_info=""):
         print other_info+'\n'
         plt.imshow(img)
         plt.show()
+
 
     def load_images(self, labels_tuples):
         '''
@@ -56,7 +58,9 @@ class RoofLoader(object):
         failures = 0
 
         #for f in glob.glob(settings.FTRAIN+'*.jpg'):
-        for f_name, roof_type in labels_tuples:
+        for i, (f_name, roof_type) in enumerate(labels_tuples):
+            if i%1000 == 0:
+                print 'Loading image {0}'.format(i)
             f_number = int(f_name)
             f_path = settings.FTRAIN+str(f_number)+'.jpg'                
             x = cv2.imread(f_path)
@@ -72,14 +76,11 @@ class RoofLoader(object):
             else:
                 file_names.append(f_number)
                 labels.append(roof_type)
-        print 'X_shape:'+ str(X.shape)
-        print str(len(labels_tuples))
-        pdb.set_trace()
         X = X.astype(np.float32)
         return X, labels
 
 
-    def load(self, roofs_only=False, test_percent=0.10, non_roofs=1):
+    def load(self, max_roofs=None, roofs_only=False, test_percent=0.10, non_roofs=1):
         """Load the data to a numpy array, return dataset divided into training and testing sets
 
         Parameters:
@@ -88,17 +89,17 @@ class RoofLoader(object):
         """
         #get the labels   
         labels_list = np.loadtxt(open(settings.FTRAIN_LABEL,"rb"),delimiter=",")
-        len(labels_list)
-        pdb.set_trace() 
         labels_dict = dict(labels_list)
-       
+        
         data_stats = np.bincount(labels_dict.values())
         total_roofs = data_stats[1]+data_stats[2]
-        
+         
         #the non_roofs always come after, we take the roof labels and the proportion of non-roofs we want
         labels_list = labels_list[:(total_roofs+(non_roofs*total_roofs))]
+        if max_roofs is None:
+            max_roofs = len(labels_list)
 
-        X, labels = self.load_images(labels_list)
+        X, labels = self.load_images(labels_list[:max_roofs])
         labels = np.array(labels, dtype=np.int32)
         
         X, labels = sklearn.utils.shuffle(X, labels, random_state=42)  # shuffle train data    
@@ -119,7 +120,6 @@ class RoofLoader(object):
         labels_list = labels_list[:130000]
 
         for f_name, roof_type in labels_list:
-            print f_name
             f_number = int(f_name)
             f_path = settings.FTRAIN+str(f_number)+'.jpg'                
             shutil.copyfile(f_path, '../data/reduced_training/'+str(f_number)+'.jpg' )

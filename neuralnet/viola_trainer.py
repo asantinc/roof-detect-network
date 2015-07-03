@@ -15,33 +15,47 @@ import experiment_settings as settings
 
 class ViolaTrainer(object):
     @staticmethod
-    def train_cascade(vec_info=None, stages=20, minHitRate=0.99999):
+    def train_cascade(vec_files=None, stages=20, minHitRate=0.99999, roof_type=None, padding=-1):
         cascades = list()
-        for (vec_file, sample_num, w, h) in vec_info:
-            print 'Training with vec file: {0}'.format(vec_file)
-            cascade_folder = '../viola_jones/cascade_{0}/'.format(vec_file[:-4])
-            cascades.append(cascade_folder+'cascade.xml')
-            mkdir_cmd = 'mkdir {0}'.format(cascade_folder)
-            try:
-                subprocess.check_call(mkdir_cmd, shell=True)
-            except Exception as e:
-                print e
-            cmd = list()
-            cmd.append('opencv_traincascade')
-            cmd.append('-data {0}'.format(cascade_folder))
-            cmd.append('-vec ../viola_jones/vec_files/{0}'.format(vec_file))
-            cmd.append('-bg ../viola_jones/bg.txt')
-            cmd.append('-numStages {0}'.format(stages)) 
-            cmd.append('-minHitRate {0}'.format(minHitRate))
-            numPos = int(float(sample_num)*.8)
-            cmd.append('-numPos {0} -numNeg {1}'.format(numPos, numPos*2))
-            cmd.append('-w {0} -h {1}'.format(w, h))
-            train_cmd = ' '.join(cmd)
-            try:
-                print train_cmd
-                subprocess.check_call(train_cmd, shell=True)
-            except Exception as e:
-                print e
+        roof_type = roof_type
+        if vec_files is None:    
+            vec_files = get_data.DataLoader().get_img_names_from_path(path=settings.VEC_PATH, extension='.vec') 
+        for vec_file in vec_files:
+            vec_type = vec_file[:5] if roof_type == 'metal' else vec_file[:6]
+            if (roof_type is None or vec_type  == roof_type):
+                #get cascade parameters from file name
+                w = vec_file[-10:-8]
+                h = vec_file[-6:-4]
+                index = vec_file.find('num') 
+                assert index != -1
+                sample_num = vec_file[index+3:-12]
+                assert int(float(sample_num)) > 0
+
+                print 'Training with vec file: {0}'.format(vec_file)
+                cascade_folder = '../viola_jones/cascade_{0}/'.format(vec_file[:-4])
+                cascades.append(cascade_folder+'cascade.xml')
+                mkdir_cmd = 'mkdir {0}'.format(cascade_folder)
+                try:
+                    subprocess.check_call(mkdir_cmd, shell=True)
+                except Exception as e:
+                    print e
+
+                cmd = list()
+                cmd.append('/usr/bin/opencv_traincascade')
+                cmd.append('-data {0}'.format(cascade_folder))
+                cmd.append('-vec ../viola_jones/vec_files/{0}'.format(vec_file))
+                cmd.append('-bg ../viola_jones/bg.txt')
+                cmd.append('-numStages {0}'.format(stages)) 
+                cmd.append('-minHitRate {0}'.format(minHitRate))
+                numPos = int(float(sample_num)*.8)
+                cmd.append('-numPos {0} -numNeg {1}'.format(numPos, numPos*2))
+                cmd.append('-w {0} -h {1}'.format(w, h))
+                train_cmd = ' '.join(cmd)
+                try:
+                    print train_cmd
+                    subprocess.check_call(train_cmd, shell=True)
+                except Exception as e:
+                    print e
         return cascades
 
 
@@ -98,7 +112,7 @@ class ViolaDataSetup(object):
 
 
     @staticmethod
-    def setup_positive_samples_full_image(padding=5):
+    def setup_positive_samples_full_image(padding=5, size_divide=True):
         '''Save .dat files containing location of training images
 
         Each of the training images contains a single roof
@@ -106,19 +120,32 @@ class ViolaDataSetup(object):
         It processes four .dat files: three for metal roofs of different weight/height ratios, 
         and one for thatched roofs
         '''
-        metal = [list() for i in range(3)]
-        metal[0] = '{0}metal_{1}_tall_augment.dat'.format(settings.DAT_PATH, padding)
-        metal[1] = '{0}metal_{1}_square_augment.dat'.format(settings.DAT_PATH, padding)
-        metal[2] = '{0}metal_{1}_wide_augment.dat'.format(settings.DAT_PATH, padding)
+        if size_divide:
+            metal = [list() for i in range(3)]
+            metal[0] = '{0}metal_{1}_tall.dat'.format(settings.DAT_PATH, padding)
+            metal[1] = '{0}metal_{1}_square.dat'.format(settings.DAT_PATH, padding)
+            metal[2] = '{0}metal_{1}_wide.dat'.format(settings.DAT_PATH, padding)
+        else:
+            metal_n =  '{0}metal_{1}.dat'.format(settings.DAT_PATH, padding) 
+        thatch_n = '{0}thatch_{1}.dat'.format(settings.DAT_PATH, padding)
 
-        thatch_n = '{0}thatch_{1}_augment.dat'.format(settings.DAT_PATH, padding)
-
-        with open(metal[0], 'w') as metal_f_tall, open(metal[1], 'w') as metal_f_square, open(metal[2], 'w') as metal_f_wide, open(thatch_n, 'w') as thatch_f:
+        try:
+            if size_divide:
+                metal_f_tall = open(metal[0], 'w')
+                metal_f_square = open(metal[1], 'w')
+                metal_f_wide = open(metal[2], 'w')
+            else:
+                metal_f = open(metal_n, 'w')
+            thatch_f = open(thatch_n, 'w')
+        except IOError as e:
+            print e
+            sys.exit(-1)
+        else:
             for roof_type in ['metal', 'thatch']:
                 img_names_list = get_data.DataLoader().get_img_names_from_path(path=settings.VIOLA_AUGM_DATA+roof_type)
                 for img_name in img_names_list:
-                    img_path = settings.VIOLA_AUGM_DATA+roof_type+img_name
-                    try:        
+                    img_path = settings.VIOLA_AUGM_DATA+roof_type+'/'+img_name
+                    try:
                         img = cv2.imread(img_path, flags=cv2.IMREAD_COLOR)
                     except IOError:
                         print 'Cannot open '+img_path
@@ -131,44 +158,67 @@ class ViolaDataSetup(object):
 
                         #add to .dat file depending on roof time and on ratio (if metal)
                         ratio = float(width)/height
-                        if roof_type == 'metal':
+                        if roof_type == 'metal' and size_divide:
                             if ratio > 1.15:
                                 metal_f_wide.write(log_to_file)
                             elif ratio < 0.80:
                                 metal_f_tall.write(log_to_file)
                             else:
                                 metal_f_square.write(log_to_file)
+                        elif roof_type == 'metal':
+                            metal_f.write(log_to_file)
                         else:
-                             thatch_f.write(log_to_file)
-                return {'thatch':[thatch_n], 'metal': metal}
-        
+                            thatch_f.write(log_to_file)
+
+        finally:
+            if size_divide:
+                metal_f_tall.close()
+                metal_f_square.close()
+                metal_f_wide.close()
+            else:
+                metal_f.close()
+            thatch_f.close() 
+
+
 
     @staticmethod
-    def setup_positive_samples(padding=0, path=settings.INHABITED_PATH):
+    def setup_positive_samples(padding=0, path=settings.INHABITED_PATH, size_divide=True):
         '''
         Return .dat files containing positions and sizes of roofs in training images
         This uses the info about the Inhabited roofs but adds padding also and produces .Dat
         file with samples embedded in the full images
         '''
-        metal = [list() for i in range(3)]
-        metal[0] = '{0}metal_{1}_tall.dat'.format(settings.DAT_PATH, padding)
-        metal[1] = '{0}metal_{1}_square.dat'.format(settings.DAT_PATH, padding)
-        metal[2] = '{0}metal_{1}_wide.dat'.format(settings.DAT_PATH, padding)
+        if size_divide:
+            metal = [list() for i in range(3)]
+            metal[0] = '{0}metal_{1}_tall.dat'.format(settings.DAT_PATH, padding)
+            metal[1] = '{0}metal_{1}_square.dat'.format(settings.DAT_PATH, padding)
+            metal[2] = '{0}metal_{1}_wide.dat'.format(settings.DAT_PATH, padding)
+        else:
+            metal_n =  '{0}metal_{1}.dat'.format(settings.DAT_PATH, padding) 
+        thatch_n = '{0}thatch_{1}.dat'.format(settings.DAT_PATH, padding)
 
-        thatch_n = '{0}thatch_{1}_augment.dat'.format(settings.DAT_PATH, padding)
-
-        with open(metal[0], 'w') as metal_f_tall, open(metal[1], 'w') as metal_f_square, open(metal[2], 'w') as metal_f_wide, open(thatch_n, 'w') as thatch_f:
+        try:
+            if size_divide:
+                metal_f_tall = open(metal[0], 'w')
+                metal_f_square = open(metal[1], 'w')
+                metal_f_wide = open(metal[2], 'w')
+            else:
+                metal_f = open(metal_n, 'w')
+            thatch_f = open(thatch_n, 'w')
+        except IOError as e:
+            print e
+            sys.exit(-1)
+        else:
             img_names_list = get_data.DataLoader().get_img_names_from_path(path=path)
             roof_loader = get_data.DataLoader()
 
             for img_name in img_names_list:
-                metal = [list() for i in range(3)]
                 print 'Processing image: {0}'.format(img_name)
                 xml_path = settings.INHABITED_PATH+img_name[:-3]+'xml'
                 img_path = settings.INHABITED_PATH+img_name
         
                 roofs, _, _ = roof_loader.get_roofs(xml_path)
-                metal_log = [list() for i in range(3)]
+                metal_log = [list() for i in range(3)] if size_divide else list()
                 thatch_log = list()
 
                 for roof in roofs:
@@ -177,22 +227,34 @@ class ViolaDataSetup(object):
                         roof = DataAugmentation.add_padding(roof, img_path)
 
                     if roof.roof_type == 'metal':
-                        ViolaDataSetup.get_roof_dat(metal_log, roof)
+                        ViolaDataSetup.get_roof_dat(metal_log, roof, size_divide=size_divide)
                     elif roof.roof_type == 'thatch':
                         ViolaDataSetup.get_roof_dat(thatch_log, roof)
 
-                if len(metal_log[0]) > 0:
-                    metal_f_tall.write(ViolaDataSetup.get_dat_string(metal_log[0], img_path))
-                if len(metal_log[1]) > 0:
-                    metal_f_square.write(ViolaDataSetup.get_dat_string(metal_log[1], img_path))
-                if len(metal_log[2]) > 0:
-                    metal_f_wide.write(ViolaDataSetup.get_dat_string(metal_log[2], img_path))
+                if size_divide:
+                    if len(metal_log[0]) > 0:
+                        metal_f_tall.write(ViolaDataSetup.get_dat_string(metal_log[0], img_path))
+                    if len(metal_log[1]) > 0:
+                        metal_f_square.write(ViolaDataSetup.get_dat_string(metal_log[1], img_path))
+                    if len(metal_log[2]) > 0:
+                        metal_f_wide.write(ViolaDataSetup.get_dat_string(metal_log[2], img_path))
+                else:
+                    metal_f.write(ViolaDataSetup.get_dat_string(metal_log, img_path))
+
                 if len(thatch_log) > 0:
                     thatch_f.write(ViolaDataSetup.get_dat_string(thatch_log, img_path))
 
+        finally:
+            if size_divide:
+                metal_f_tall.close()
+                metal_f_square.close()
+                metal_f_wide.close()
+            else:
+                metal_f.close()
+            thatch_f.close() 
 
     @staticmethod
-    def get_roof_dat(roof_lists, roof):
+    def get_roof_dat(roof_lists, roof, size_divide=False):
         '''Return string with roof position and size for .dat file
 
         Roof is added to list depending on width/height ratio
@@ -200,7 +262,7 @@ class ViolaDataSetup(object):
         string_to_add = '{0} {1} {2} {3}'.format(roof.xmin, roof.ymin, roof.width, roof.height)
         #if we care about roof size, add the roofs to the right list depending on their height/width ratio
         ratio = 0
-        if roof.roof_type == 'metal':
+        if roof.roof_type == 'metal' and size_divide:
             aspect_ratio = float(roof.width)/(roof.height)
             if (aspect_ratio > 1.5):                       #TALL ROOF
                 roof_lists[2].append(string_to_add)
@@ -208,7 +270,7 @@ class ViolaDataSetup(object):
                 roof_lists[1].append(string_to_add)
             elif aspect_ratio < 0.75:                      #WIDE ROOF
                 roof_lists[0].append(string_to_add)
-        else:
+        else:#either it's a thatches roof or it's metal but we don't care about the width/height ratio
             roof_lists.append(string_to_add)
 
 
@@ -227,20 +289,24 @@ class ViolaDataSetup(object):
 
         for file_name in os.listdir(settings.DAT_PATH):
             if file_name.endswith('.dat'):
-                vec_file_name = file_name[:-3]+'vec'
-                vec_file = settings.VEC_PATH+vec_file_name
-                sample_num = raw_input('Sample nums for {0}: '.format(file_name))
+                # number of lines tells us number of samples
+                sample_num = 0
+                with open(settings.DAT_PATH+file_name) as f:
+                    sample_num = sum(1 for _ in f)
+                
                 w = raw_input('Width of {0}: '.format(file_name))
                 h = raw_input('Height of {0}: '.format(file_name))
-
+                
+                vec_file_name = '{0}_num{1}_w{2}_h{3}.vec'.format(file_name[:-4], sample_num, w, h)
+                vec_file = settings.VEC_PATH+vec_file_name
                 vec_info.append( (vec_file_name, int(float(sample_num)), int(float(w)), int(float(h))) )
 
                 dat_file = settings.DAT_PATH+file_name
-                sample_cmd ='opencv_createsamples -info {0} -bg {1} -vec {2} -num {3} -w {4} -h {5}'.format(dat_file, settings.BG_FILE, vec_file, sample_num, w, h)
+                sample_cmd ='/usr/bin/opencv_createsamples -info {0} -bg {1} -vec {2} -num {3} -w {4} -h {5}'.format(dat_file, settings.BG_FILE, vec_file, sample_num, w, h)
                 try:
                     subprocess.check_call(sample_cmd, shell=True)
-                    move_cmd = 'mv {0} ../viola_jones/all_dat/'.format(dat_file)
-                    subprocess.check_call(move_cmd, shell=True)
+                    #move_cmd = 'mv {0} ../viola_jones/all_dat/'.format(dat_file)
+                    #subprocess.check_call(move_cmd, shell=True)
                 except Exception as e:
                     print e
         return vec_info
@@ -257,7 +323,7 @@ class ViolaDataSetup(object):
         w = raw_input('Width of {0}: '.format(dat_file[:-4]))
         h = raw_input('Height of {0}: '.format(dat_file[:-4]))
 
-        vec_cmd ='opencv_createsamples -info {0} -bg {1} -vec {2} -num {3} -w {4} -h {5}'.format(dat_file, settings.BG_FILE, vec_path, sample_num, w, h)
+        vec_cmd ='/usr/bin/opencv_createsamples -info {0} -bg {1} -vec {2} -num {3} -w {4} -h {5}'.format(dat_file, settings.BG_FILE, vec_path, sample_num, w, h)
         try:
             subprocess.check_call(vec_cmd, shell=True)
         except Exception as e:
@@ -321,4 +387,20 @@ class ViolaBasicTrainer(object):
                     log_to_file = '{0}\t{1}\t{2}\n'.format('../../'+img_path, 1, position_string)
                     out_file.write(log_to_file)
 
+if __name__ == '__main__':
+   #ViolaDataSetup.setup_positive_samples_full_image(padding=5)
+   #ViolaDataSetup.setup_positive_samples_full_image(padding=10)
+   #ViolaDataSetup.setup_positive_samples_full_image(padding=15)
+   #ViolaDataSetup.setup_positive_samples_full_image(padding=10)
+   #ViolaDataSetup.setup_positive_samples_full_image(padding=0)
+
+#   ViolaDataSetup.setup_positive_samples_full_image(padding=5, size_divide=False)
+#   ViolaDataSetup.setup_positive_samples_full_image(padding=10, size_divide=False)
+#   ViolaDataSetup.setup_positive_samples_full_image(padding=15,size_divide=False)
+#   ViolaDataSetup.setup_positive_samples_full_image(padding=10, size_divide=False)
+#   ViolaDataSetup.setup_positive_samples_full_image(padding=0, size_divide=False)
+#    ViolaDataSetup.vec_file_samples()
+    v = raw_input('Enter vec file: ')
+    vecs = [v]
+    ViolaTrainer.train_cascade(vec_files=vecs, roof_type='thatch')
 

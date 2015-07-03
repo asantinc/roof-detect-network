@@ -1,4 +1,3 @@
-viola_hones/*/*
 viola_jones/all_output/
 data/*
 Lasagne/
@@ -10,4 +9,4 @@ nolearn/
 old/
 delete/
 viola_jones/output*
-viola_hones/data/
+viola_jones/data/

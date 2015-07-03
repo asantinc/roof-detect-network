@@ -228,16 +228,17 @@ class DataLoader(object):
                 misc.imsave(settings.PATCHES_OUT_PATH+str(self.total_patch_no)+'.jpg', patch)
                 
                 #save an image showing where the patch was taken for debugging
-                if settings.DEBUG:
+                '''if settings.DEBUG:
                     img_copy = np.array(img, copy=True)
                     img_copy[ymin:(ymin+settings.PATCH_H), xmin:(xmin+settings.PATCH_W), 0:1] = 255
                     img_copy[ymin:(ymin+settings.PATCH_H), xmin:(xmin+settings.PATCH_W), 1:3] = 0
                     misc.imsave(settings.DELETE_PATH+str(self.total_patch_no)+'_DEL.jpg', img_copy)
-
+                '''
             except (IndexError, IOError, KeyError, ValueError) as e:
                 print e
             else:
                 labels_file.write(str(self.total_patch_no)+','+str(roof_type)+'\n')
+                print 'Saved patch: '+str(self.total_patch_no)+'\n'
                 self.total_patch_no = self.total_patch_no+1
 
 
@@ -411,11 +412,15 @@ if __name__ == '__main__':
     img_names = DataLoader.get_img_names_from_path(path=settings.INHABITED_PATH)
 
     #Get the roofs defined in the xml, save the corresponding image patches
-    with open(settings.LABELS_PATH, 'a') as label_file:
+    f = open(settings.LABELS_PATH, 'w')
+    f.close()
+    os.chmod(settings.LABELS_PATH, 0o777)
+
+    with open(settings.LABELS_PATH, 'w') as label_file:
         max_w = 0
         max_h = 0
         for i, img in enumerate(img_names):
-            settings.print_debug('Processing image: '+str(i)+'\n', verbosity=1)
+#            print 'Processing image: '+str(i)+'\n'
             img_path = settings.INHABITED_PATH+img
             xml_path = settings.INHABITED_PATH+img[:-3]+'xml'
 
@@ -424,7 +429,7 @@ if __name__ == '__main__':
             max_w = cur_max_w if (max_w<cur_max_h) else max_h
 
             for r, roof in enumerate(roof_list):
-                settings.print_debug('Processing roof: '+str(r)+'\n', verbosity=1)
+#                print 'Processing roof: '+str(r)+'\n'
                 loader.produce_roof_patches(img_path=img_path, img_id=i+1, 
                                     roof=roof, label_file=label_file, max_h=max_h, max_w=max_w)
         neg_patches_wanted = settings.NEGATIVE_PATCHES_NUM*loader.total_patch_no
