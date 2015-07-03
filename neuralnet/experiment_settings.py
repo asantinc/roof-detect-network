@@ -6,6 +6,7 @@ import operator
 import sys
 import pdb
 import csv
+from operator import itemgetter
 
 import lasagne
 sys.path.append('~/roof/Lasagne/lasagne')
@@ -70,7 +71,7 @@ def print_debug(to_print, verbosity=1):
 
 
 class Experiment(object):
-    def __init__(self, preloaded=False, test_percent=.20, non_roofs=None, 
+    def __init__(self, print_out=True, preloaded=False, test_percent=.20, non_roofs=None, 
                     roofs_only=False,log=True, plot_loss=True, plot=True, epochs=-1, net_name=None, num_layers=None, max_roofs=None):
         self.num_layers = num_layers
         self.net_name = net_name
@@ -84,7 +85,7 @@ class Experiment(object):
         self.printer = PrintLogSave()
 
         print 'Setting up the Neural Net \n'
-        self.setup_net()
+        self.setup_net(print_out=print_out)
        
         print 'Loading data \n'
         self.roof_loader = load.RoofLoader()
@@ -92,8 +93,15 @@ class Experiment(object):
                                                 non_roofs=self.non_roofs, roofs_only=self.roofs_only, max_roofs=max_roofs)
         print 'Data is loaded \n'
 
-    def setup_net(self):
-        layers = my_net.MyNeuralNet.produce_layers(self.num_layers)      
+    def setup_net(self, print_out=True):
+        if print_out:
+            on_epoch_finished = [self.printer]
+            on_training_started = [SaveLayerInfo()]
+        else:
+            on_epoch_finished = []
+            on_training_started = []
+
+        layers, layer_params = my_net.MyNeuralNet.produce_layers(self.num_layers)      
         self.net = my_net.MyNeuralNet(
             layers=layers,
             num_layers=self.num_layers,
@@ -109,8 +117,8 @@ class Experiment(object):
             
             #printing
             net_name=self.net_name,
-            on_epoch_finished=[self.printer],
-            on_training_started=[SaveLayerInfo()],
+            on_epoch_finished=on_epoch_finished,
+            on_training_started=on_training_started,
 
             #data augmentation
             batch_iterator_test=flip.CropOnlyBatchIterator(batch_size=128),
@@ -118,6 +126,7 @@ class Experiment(object):
             
             max_epochs=self.epochs,
             verbose=1,
+            **layer_params
             )
 
 
@@ -191,7 +200,7 @@ class Experiment(object):
 
 
     @staticmethod
-    def report_grid(self, grid_scores, n_top=3):
+    def report_grid(grid_scores, n_top=3):
         top_scores = sorted(grid_scores, key=itemgetter(1), reverse=True)[:n_top]
         for i , score in enumerate(top_scores):
             print "Model with rank: {0}".format(i+1)
@@ -203,11 +212,10 @@ class Experiment(object):
 
     def optimize_params(self):
         params_grid = {"update_learning_rate": sp_rand(0.001,0.01)}
-        rsearch = RandomizedSearchCV(estimator=self.net, param_distributions=params_grid, n_iter=1, n_jobs=1)
+        rsearch = RandomizedSearchCV(estimator=self.net, param_distributions=params_grid, n_iter=15, n_jobs=1)
         X, _, y, _ = self.roof_loader.load(max_roofs=100, test_percent=0, non_roofs=self.non_roofs, roofs_only=self.roofs_only)
-        pdb.set_trace()
         rsearch.fit(X,y)
-        #Experiment.report_grid(rsearch.grid_scores_)
+        Experiment.report_grid(rsearch.grid_scores_)
 
 
     def __str__(self):
@@ -332,7 +340,7 @@ if __name__ == '__main__':
     print 'Network name is: {0}'.format(params['net_name'])
 
     #set up the experiment
-    experiment = Experiment(**params) 
+    experiment = Experiment(print_out= False, **params) 
     experiment.optimize_params()
     #experiment.train_test() 
 

@@ -76,8 +76,6 @@ class RoofLoader(object):
             else:
                 file_names.append(f_number)
                 labels.append(roof_type)
-        print 'X_shape:'+ str(X.shape)
-        print str(len(labels_tuples))
         X = X.astype(np.float32)
         return X, labels
 
@@ -122,7 +120,6 @@ class RoofLoader(object):
         labels_list = labels_list[:130000]
 
         for f_name, roof_type in labels_list:
-            print f_name
             f_number = int(f_name)
             f_path = settings.FTRAIN+str(f_number)+'.jpg'                
             shutil.copyfile(f_path, '../data/reduced_training/'+str(f_number)+'.jpg' )
