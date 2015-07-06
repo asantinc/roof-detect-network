@@ -24,7 +24,8 @@ import my_net
 import FlipBatchIterator as flip
 
 #Constants for patch production
-PATCHES_OUT_PATH = '../data/training/'
+PATCHES_OUT_PATH = '/afs/inf.ed.ac.uk/user/s08/s0839470/roof/data/training/'
+#LABELS_PATH = '/afs/inf.ed.ac.uk/user/s08/s0839470/roof/data/training_delete/labels.csv'
 LABELS_PATH = '../data/training/labels.csv'
 INHABITED_PATH = '../data/inhabited/'
 UNINHABITED_PATH = '../data/uninhabited/'

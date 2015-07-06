@@ -2,6 +2,8 @@ import os
 import subprocess
 import pdb
 import math
+import getopt
+import sys
 
 import numpy as np
 import cv2
@@ -400,7 +402,23 @@ if __name__ == '__main__':
 #   ViolaDataSetup.setup_positive_samples_full_image(padding=10, size_divide=False)
 #   ViolaDataSetup.setup_positive_samples_full_image(padding=0, size_divide=False)
 #    ViolaDataSetup.vec_file_samples()
-    v = raw_input('Enter vec file: ')
+    no_details = True
+    
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "f:t:")
+    except getopt.GetoptError:
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-f':
+            v = arg
+            no_details = False
+        elif opt == '-t':
+            t = arg
+        
+    if no_details:
+        v = raw_input('Enter vec file: ')
+        t = raw_input('Type of roof: ' )
+        roof_type = 'metal' if t=='m' else 'thatch'
     vecs = [v]
     ViolaTrainer.train_cascade(vec_files=vecs, roof_type='thatch')
 

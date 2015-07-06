@@ -411,11 +411,6 @@ if __name__ == '__main__':
     loader = DataLoader()
     img_names = DataLoader.get_img_names_from_path(path=settings.INHABITED_PATH)
 
-    #Get the roofs defined in the xml, save the corresponding image patches
-    f = open(settings.LABELS_PATH, 'w')
-    f.close()
-    os.chmod(settings.LABELS_PATH, 0o777)
-
     with open(settings.LABELS_PATH, 'w') as label_file:
         max_w = 0
         max_h = 0
