@@ -15,6 +15,6 @@ opencv_createsamples -vec ../viola_jones/vec_files/thatch_5_augment.vec -w 24 -h
 -----------------------------
 4. Training
 -----------------------------
-/usr/bin/opencv_traincascade -data delete -vec vec_files/simple_square.vec -bg bg.txt -numStages 20 -minHitRate 0.99999 -numPos 80 -numNeg 200 -w 24 -h 24
+/usr/bin/opencv_traincascade -data de -vec ../viola_jones/vec_files/metal_0_square_augment_num3088_w24_h24.vec-bg -bg bg.txt -numStages 20 -minHitRate 0.99999 -numPos 80 -numNeg 200 -w 24 -h 24
 
 
