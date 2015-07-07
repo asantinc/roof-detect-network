@@ -11,6 +11,7 @@ from sklearn import cross_validation
 from sklearn.preprocessing import StandardScaler
 
 import experiment_settings as settings
+from timer import do_cprofile
 
 class RoofLoader(object):
     def roof_type(self, y):
@@ -46,18 +47,18 @@ class RoofLoader(object):
         plt.imshow(img)
         plt.show()
 
-
-    def load_images(self, labels_tuples):
+    
+    def load_images(self, labels_tuples, max_roofs):
         '''
         Load the images into a numpy array X.
         '''
-        X = None
+        X = np.empty((max_roofs,3,settings.PATCH_W, settings.PATCH_H))
         file_names = list()
         img_to_remove = list()
         labels = list()
         failures = 0
 
-        #for f in glob.glob(settings.FTRAIN+'*.jpg'):
+        index = 0
         for i, (f_name, roof_type) in enumerate(labels_tuples):
             if i%1000 == 0:
                 print 'Loading image {0}'.format(i)
@@ -68,17 +69,18 @@ class RoofLoader(object):
             try:
                 x = x.transpose(2,0,1)
                 x.shape = (1,x.shape[0], x.shape[1], x.shape[2])
-                X = x if X==None else np.concatenate((X, x), axis=0)
+                #X = x if X==None else np.concatenate((X, x), axis=0)
+                X[index, :, :, :] = x
             except ValueError, e:
                 print e
                 failures += 1
                 print 'fail:'+ str(failures)
             else:
+                index += 1
                 file_names.append(f_number)
                 labels.append(roof_type)
         X = X.astype(np.float32)
-        return X, labels
-
+        return X[:index, :,:,:], labels
 
     def load(self, max_roofs=None, roofs_only=False, test_percent=0.10, non_roofs=1):
         """Load the data to a numpy array, return dataset divided into training and testing sets
@@ -93,13 +95,16 @@ class RoofLoader(object):
         
         data_stats = np.bincount(labels_dict.values())
         total_roofs = data_stats[1]+data_stats[2]
-         
+        print 'DATA STATS:' 
+        print data_stats
+        
+
         #the non_roofs always come after, we take the roof labels and the proportion of non-roofs we want
         labels_list = labels_list[:(total_roofs+(non_roofs*total_roofs))]
-        if max_roofs is None:
+        if max_roofs is 0:
             max_roofs = len(labels_list)
 
-        X, labels = self.load_images(labels_list[:max_roofs])
+        X, labels = self.load_images(labels_list[:max_roofs], max_roofs)
         labels = np.array(labels, dtype=np.int32)
         
         X, labels = sklearn.utils.shuffle(X, labels, random_state=42)  # shuffle train data    
@@ -149,4 +154,5 @@ class DataScaler(StandardScaler):
 
 if __name__ == "__main__":
     loader = RoofLoader()
-    loader.reduce_label_numbers()
+    loader.load(max_roofs=5000)
+

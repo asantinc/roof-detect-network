@@ -7,6 +7,7 @@ import sys
 import pdb
 import csv
 from operator import itemgetter
+import cv2
 
 import lasagne
 sys.path.append('~/roof/Lasagne/lasagne')
@@ -15,8 +16,10 @@ from nolearn.lasagne.handlers import PrintLog, PrintLayerInfo
 from nolearn.lasagne.util import is_conv2d
 from sklearn.metrics import classification_report, confusion_matrix
 from scipy.stats import uniform as sp_rand
+from scipy.stats import randint
 from sklearn.grid_search import RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
+import skimage
 
 #my modules
 import load
@@ -25,8 +28,7 @@ import FlipBatchIterator as flip
 
 #Constants for patch production
 PATCHES_OUT_PATH = '/afs/inf.ed.ac.uk/user/s08/s0839470/roof/data/training/'
-#LABELS_PATH = '/afs/inf.ed.ac.uk/user/s08/s0839470/roof/data/training_delete/labels.csv'
-LABELS_PATH = '../data/training/labels.csv'
+LABELS_PATH = '/afs/inf.ed.ac.uk/user/s08/s0839470/roof/data/training/labels.csv'
 INHABITED_PATH = '../data/inhabited/'
 UNINHABITED_PATH = '../data/uninhabited/'
 DELETE_PATH = '../data/delete/'
@@ -91,8 +93,15 @@ class Experiment(object):
         print 'Loading data \n'
         self.roof_loader = load.RoofLoader()
         self.X_train, self.X_test, self.y_train, self.y_test = self.roof_loader.load(test_percent=self.test_percent, 
-                                                non_roofs=self.non_roofs, roofs_only=self.roofs_only, max_roofs=max_roofs)
+                                                non_roofs=self.non_roofs, roofs_only=self.roofs_only, max_roofs=max_roofs) 
         print 'Data is loaded \n'
+
+        #set up the data scaler
+        self.scaler = DataScaler()
+        print self.X_train.shape
+        self.scaler.fit_transform(self.X_train)
+
+
 
     def setup_net(self, print_out=True):
         if print_out:
@@ -139,8 +148,6 @@ class Experiment(object):
         self.printer.log_to_file(self.net, self.__str__(), overwrite=True)
         
         #rescale X_train and X_test
-        self.scaler = DataScaler()
-        X_train = self.scaler.fit_transform(self.X_train)
         X_test = self.scaler.transform2(self.X_test)
     
         #fit the network to X_train
@@ -152,16 +159,21 @@ class Experiment(object):
         self.evaluation(predicted, X_train, X_test, self.y_train, self.y_test)
 
 
-    def test_preloaded_single(self, test_case):
-        if self.scaler is None:
-            self.net.load_params_from('saved_weights/'+self.net.net_name+'.pickle')
-             
-        #rescale X_train and X_test, using information from the training set only
-        self.scaler = DataScaler()
-        self.scaler.fit_transform(self.X_train)
-        test_case = self.scaler.trasform(test_case)
-        return self.net.predict(self.X_test)
 
+    def test_image(self, img):
+        self.net.load_params_from('saved_weights/conv5_nonroofs1_test20_roofs.pickle')
+        img = img.transpose(2,0,1)
+        #img = img[None, :]
+        patches = skimage.util.view_as_windows(img, (3,PATCH_W, PATCH_H), step=PATCH_W/2)
+        print len(patches)
+        pdb.set_trace() 
+        for patch in patches:
+            print patch.shape
+            patch =  self.scaler.transform2(patch)
+            klass = self.net.predict(patch)
+            print klass
+            pdb.set_trace()
+        
 
     def test_preloaded(self, plot_loss=True, test_case=None):  
         '''Preload weights, classify roofs and write evaluation
@@ -173,8 +185,6 @@ class Experiment(object):
         self.roof_loader = load.RoofLoader()
         
         #rescale X_train and X_test, using information from the training set only
-        self.scaler = DataScaler()
-        X_train = scaler.fit_transform(self.X_train)
         X_test = scaler.transform2(self.X_test)
 
         #find predictions for test set
@@ -212,7 +222,7 @@ class Experiment(object):
             print ""
 
     def optimize_params(self):
-        params_grid = {"update_learning_rate": sp_rand(0.001,0.01)}
+        params_grid = {"update_learning_rate": sp_rand(0.001,0.01), "momentum":sp_rand(0.9,2.0), "epochs":randint(50,300)}
         rsearch = RandomizedSearchCV(estimator=self.net, param_distributions=params_grid, n_iter=15, n_jobs=1)
         X, _, y, _ = self.roof_loader.load(max_roofs=100, test_percent=0, non_roofs=self.non_roofs, roofs_only=self.roofs_only)
         rsearch.fit(X,y)
@@ -339,9 +349,14 @@ if __name__ == '__main__':
     if params['roofs_only']:
         params['net_name'] = params['net_name']+'_roofs'
     print 'Network name is: {0}'.format(params['net_name'])
-
+    
+    to_do = raw_input('o to optimize, t to train: ')
     #set up the experiment
-    experiment = Experiment(print_out= False, **params) 
-    experiment.optimize_params()
-    #experiment.train_test() 
-
+    experiment = Experiment(print_out=True, **params)
+    if to_do == 'o':
+        experiment.optimize_params()
+    elif to_do == 't':
+        experiment.train_test() 
+    else:
+        img = cv2.imread("../data/inhabited/0001.jpg")
+        experiment.test_image(img)

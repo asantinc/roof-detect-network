@@ -151,7 +151,7 @@ class DataAugmentation(object):
 class DataLoader(object):
     def __init__(self):
         self.total_patch_no = 0
-        self.step_size = settings.PATCH_W/4
+        self.step_size = settings.PATCH_W/2
 
 
     def get_roofs(self, xml_file):
@@ -369,7 +369,7 @@ class DataLoader(object):
                 
 
     def get_negative_patches(self, total_patches, label_file):
-        settings.print_debug('Getting the negative patches....\n')
+        print 'Getting the negative patches....\n'
         img_names = DataLoader.get_img_names_from_path(path=settings.UNINHABITED_PATH)
 
         negative_patches = (total_patches)/len(img_names)
@@ -420,8 +420,8 @@ if __name__ == '__main__':
             xml_path = settings.INHABITED_PATH+img[:-3]+'xml'
 
             roof_list, cur_max_w, cur_max_h = loader.get_roofs(xml_path)
-            max_h = cur_max_h if (max_h<cur_max_h) else max_h
-            max_w = cur_max_w if (max_w<cur_max_h) else max_h
+           # max_h = cur_max_h if (max_h<cur_max_h) else max_h
+           # max_w = cur_max_w if (max_w<cur_max_h) else max_h
 
             for r, roof in enumerate(roof_list):
 #                print 'Processing roof: '+str(r)+'\n'
