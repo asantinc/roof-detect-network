@@ -2,9 +2,11 @@ import sys
 import getopt
 import os
 import subprocess
+import pdb
 
 import numpy as np
 from scipy import misc
+import cv2 
 
 sys.path.append('~/roof/Lasagne/lasagne')
 sys.path.append('~/roof/nolearn/nolearn')
@@ -20,14 +22,14 @@ from viola_detector import ViolaDetector
 from my_net import MyNeuralNet
 
 # TODO: depending on resolution step_size will be affected...
-STEP_SIZE = settings.PATCH_H / 4
+STEP_SIZE = settings.PATCH_H
 OUTPUT_PATH = 'output'
-#TODO: fill out detectors
-DETECTORS = [settings.CASCADE_PATH++'.xml', '']
+
 
 class Pipeline(object):
-    def __init__(self, step_size=None, test_files=None, test_folder=None):
+    def __init__(self, step_size=None, test_files=None, test_folder=None, viola_process=True):
         self.step_size = step_size if step_size is not None else STEP_SIZE
+        self.viola_process = viola_process
 
         #image_files
         if test_files is None:
@@ -44,32 +46,32 @@ class Pipeline(object):
         out_name = OUTPUT_PATH
         assert out_name != ''
         self.out_path = '../output/pipeline/{0}/'.format(out_name)
-        if not os.path.isdir(out_name):
+        if not os.path.isdir(self.out_path):
             subprocess.check_call('mkdir {0}'.format(self.out_path[:-1]), shell=True)
         print 'Will output files to: {0}'.format(self.out_path)
 
         #DETECTORS
-        self.detector_paths = list()
-        '''
-        while True:
-            cascade_name = raw_input('Cascade file to use: ' )
-            detector = settings.CASCADE_PATH+cascade_name+'.xml'
-            if cascade_name == '':
-                break
-            self.detector_paths.append(detector)
-        '''
-        self.detector_path = DETECTORS
-        print 'Using detectors: '+'\t'.join(self.detector_paths)
+        if self.viola_process:
+            self.detector_paths = list()
+            '''
+            while True:
+                cascade_name = raw_input('Cascade file to use: ' )
+                detector = settings.CASCADE_PATH+cascade_name+'.xml'
+                if cascade_name == '':
+                    break
+                self.detector_paths.append(detector)
+            '''
+            self.detector_path = DETECTORS
+            print 'Using detectors: '+'\t'.join(self.detector_paths)
 
-        #create report file
-        self.report_path = self.out_path+'report.txt'
-        with open(self.report_path, 'w') as report:
-            report.write('\t'.join(self.detector_paths))
+            #create report file
+            self.report_path = self.out_path+'report.txt'
+            with open(self.report_path, 'w') as report:
+                report.write('\t'.join(self.detector_paths))
 
-        self.viola = ViolaDetector(detector_paths=self.detector_paths, output_folder=self.out_path, save_imgs=True)
-        #the output should be a picture with the windows marked!
-        self.neural_net = self.setup_neural_net(net_name='conv5_nonroofs1_test20_roofs', num_layers=5)
-
+            self.viola = ViolaDetector(detector_paths=self.detector_paths, output_folder=self.out_path, save_imgs=True)
+            #the output should be a picture with the windows marked!
+        self.experiment = Experiment(preloaded=True, preloaded_path='conv5_nonroofs2_test20.0', flip=False, net_name='My_test_net', num_layers=5)
 
     def run(self):
         '''
@@ -82,113 +84,109 @@ class Pipeline(object):
         self.roof_coords = dict()
         self.all_contours = dict()
         
-        for img_name in self.test_fnames:
+        for img_name in list(self.test_fnames):
             print 'Pre-processing image: {0}'.format(img_name)
             try:
-                image = misc.imread(self.test_img_path+img_name)
+                self.image = cv2.imread(self.test_img_path+img_name)
+                self.image = np.asarray(self.image, dtype='float32')/255
+                self.image_detections = cv2.imread(self.test_img_path+img_name)
+
             except IOError:
                 print 'Cannot open '+self.test_img_path+img_name
                 sys.exit(-1)
-            rows, cols, _ = image.shape
+
+            self.image = np.transpose(self.image, (2,0,1))
+            self.img_name = img_name
+
+            if self.viola_process:
+                rows, cols, _ = image.shape
+                thatch_mask = np.zeros((rows, cols), dtype=bool)
+                self.process_viola(rows, cols, verbose=True)
+
+            self.sliding_convolution()
             
-            thatch_mask = np.zeros((rows, cols), dtype=bool)
+            cv2.imwrite(self.out_path+self.img_name+'test.jpg', self.image_detections)     
 
-            self.process_viola(img_name, image, rows, cols, verbose=True, img_path=self.test_img_path)
-
-            metal_coords, thatch_coords = self.sliding_convolution(image, img_name)
-            roofs_detected[img_name] = (metal_coords, thatch_coords)
-
-
-    def process_viola(self, img_name, image, rows, cols, img_path=None, verbose=False):
-        '''
-        Find candidate roof contours using Viola for all types of roof
-        '''
+    
+    def process_viola(self, rows, cols, img_path=None, verbose=False):
+        #Find candidate roof contours using Viola for all types of roof
         #returns list with as many lists of detections as the detectors we have passed
-        self.viola.detect_roofs(img_name=img_name, img_path=self.test_img_path+img_name)
-        print 'Detected {0} candidate roofs'.format(len(self.viola.roofs_detected[img_name]))
-        path = img_path if img_path is not None else settings.TEST_PATH+img_name
+        self.viola.detect_roofs(img_name=self.img_name, img_path=self.test_img_path+self.img_name)
+        print 'Detected {0} candidate roofs'.format(len(self.viola.roofs_detected[self.img_name]))
         if verbose:
-            self.viola.mark_detections_on_img(img=image, img_name=img_name)
+            self.viola.mark_detections_on_img(img=self.image, img_name=self.img_name)
 
         #get the mask and the contours for the detections
-        detection_mask, _ = self.viola.get_patch_mask(img_name=img_name, rows=rows, cols=cols)
-        patch_location = self.out_path+img_name+'_mask.jpg'
+        detection_mask, _ = self.viola.get_patch_mask(img_name=self.img_name, rows=rows, cols=cols)
+        patch_location = self.out_path+self.img_name+'_mask.jpg'
         misc.imsave(patch_location, detection_mask)
 
-        self.all_contours[img_name] = self.viola.get_detection_contours(patch_location, img_name)
+        self.all_contours[self.img_name] = self.viola.get_detection_contours(patch_location, self.img_name)
+    
 
+    def sliding_convolution(self):
+        '''
+        Classify patches of an image using neural network. If viola is True, the patches are fed from ViolaJones 
+        algorithm. Otherwise, the entire image is processed
+        '''
+        print '********* PREDICTION STARTED *********\n'
+        bound_rects = list()
+        if self.viola_process:
+            #for each contour, do a sliding window detection
+            contours = self.all_contours[self.img_name]
+            for cont in contours:
+                bound_rects.append(cv2.boundingRect(cont))
+        else:
+            c, rows, cols = self.image.shape
+            bound_rects.append((0,0,cols,rows))
 
-    def sliding_convolution(self, img, img_name):
-        #for each contour, do a sliding window detection
-        contours = self.all_contours[img_name]
-        for cont in contours:
-            x,y,w,h = cv2.boundingRect(cont)
+        for x,y,w,h in bound_rects:
             vert_patches = ((h - settings.PATCH_H) // self.step_size) + 1  #vert_patches = h/settings.PATCH_H
 
             #get patches along roof height
             for vertical in range(vert_patches):
-                y_pos = roof.ymin+(vertical*self.step_size)
+                y_pos = y+(vertical*self.step_size)
                 #along roof's width
-                self.classify_horizontal_patches((x,y,w,h), img=img, y_pos=y_pos)
+                self.classify_horizontal_patches((x,y,w,h), y_pos=y_pos)
 
             #get patches from the last row also
-            if (h % settings.PATCH_W>0) and (h > settings.PATCH_H):
+            if (h % settings.PATCH_H>0) and (h > settings.PATCH_H):
                 leftover = h-(vert_patches*settings.PATCH_H)
                 y_pos = y_pos-leftover
-                self.classify_horizontal_patches((x,y,w,h), img=img, y_pos=y_pos)
-
-        return metal_coords, thatch_coords
+                self.classify_horizontal_patches((x,y,w,h), y_pos=y_pos)
 
 
-    def classify_horizontal_patches(self, patch=None, img=None, roof=None, y_pos=-1):
+
+    def classify_horizontal_patches(self, patch=None, y_pos=-1):
         '''Get patches along the width of a patch for a given y_pos (i.e. a given height in the image)
         '''
-        roof_type = settings.METAL if roof.roof_type=='metal' else settings.THATCH
+        #roof_type = settings.METAL if roof.roof_type=='metal' else settings.THATCH
 
-        h, w = roof.get_roof_size()
+        x,y,w,h = patch
         hor_patches = ((w - settings.PATCH_W) // self.step_size) + 1  #hor_patches = w/settings.PATCH_W
 
         for horizontal in range(hor_patches):
-            x_pos = roof.xmin+(horizontal*self.step_size)
-            candidate = img[x_pos:x_pos+settings.PATCH_W, y_pos:y_pos+settings.PATCH_H]
-            #do network detection
-            prediction = self.experiment.test_preloaded_single(candidate)
-            pdb.set_trace()
-    
-    
-    def setup_neural_net(self, net_name='', num_layers=0):
-        '''
-        Parameters:
-        net_name: name of network
-        '''
-        #TODO: the net name should have info about number of layers
-        layers = MyNeuralNet.produce_layers(num_layers)      
-        printer = PrintLogSave()
-        net = MyNeuralNet(
-            layers=layers,
-            input_shape=(None, 3, settings.CROP_SIZE, settings.CROP_SIZE),
-            output_num_units=3,
             
-            output_nonlinearity=lasagne.nonlinearities.softmax,
-            preproc_scaler = None, 
-            
-            #learning rates
-            update_learning_rate=0.01,
-            update_momentum=0.9,
-            
-            #printing
-            net_name=net_name,
-            on_epoch_finished=[printer],
-            on_training_started=[SaveLayerInfo()],
+            #get cropped patch
+            x_pos = x+(horizontal*self.step_size)
+            full_patch = self.image[:, y_pos:y_pos+settings.PATCH_H, x_pos:x_pos+settings.PATCH_W]
+            full_patch = self.experiment.scaler.transform2(full_patch)
 
-            #data augmentation
-            batch_iterator_test=flip.CropOnlyBatchIterator(batch_size=128),
-            batch_iterator_train=flip.FlipBatchIterator(batch_size=128),
-            
-            max_epochs=-1,
-            verbose=1,
-            )  
-        self.experiment = Experiment(net=net, printer=printer)
+            diff = (settings.PATCH_W-settings.CROP_SIZE)/2
+            candidate = full_patch[:, diff:diff+settings.CROP_SIZE, diff:diff+settings.CROP_SIZE]
+           
+            if candidate.shape != (3,32,32):
+                print 'ERROR: patch too small, cannot do detection\n'
+                continue
+            #do network detection, add additional singleton dimension
+            prediction = self.experiment.net.predict(candidate[None, :,:,:])
+            if prediction[0] != settings.NON_ROOF:
+                if prediction[0] == settings.METAL:
+                    color = (255,255,255)
+                elif prediction[0] == settings.THATCH:
+                    color = (0,0,255)
+                cv2.rectangle(self.image_detections, (x_pos+4, y_pos+4), (x_pos+settings.PATCH_H-4, y_pos+settings.PATCH_H-4), color, 1)
+
 
 if __name__ == '__main__':
     #to detect a single image pass it in as a parameter
@@ -197,10 +195,8 @@ if __name__ == '__main__':
         opts, args = getopt.getopt(sys.argv[1:], "f:l:")
     except getopt.GetoptError:
         print 'Command line error'
-        sys.exit(2) 
+        sys.exit(2)  
     
-    test_files = None
-    test_folder = None
     for opt, arg in opts:
         if opt == '-f':
             test_file = arg
@@ -208,10 +204,9 @@ if __name__ == '__main__':
             test_files.append(test_file)
         if opt == '-l':
             test_folder = arg
-    
-    pipe = Pipeline(test_files=test_files, test_folder=test_folder)
+
+    pipe = Pipeline(test_files=None, test_folder=None, viola_process=False)
     #dictionaries accessed by file_name
-    metal_detections, thatch_detections = pipe.run()
-
-
+    #pipe.experiment.test_preloaded()
+    pipe.run()
 

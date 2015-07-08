@@ -230,12 +230,11 @@ class DataLoader(object):
         max_w, max_h: int
             The integer value of the maximum width and height of all roofs in the current image
         '''
-        roof_list = []
         tree = ET.parse(xml_file)
         root = tree.getroot()
-        max_w = 0
-        max_h = 0
-
+        metal_list = list()
+        thatch_list = list()
+        
         for child in root:
             if child.tag == 'object':
                 roof = Roof()
@@ -258,13 +257,15 @@ class DataLoader(object):
                             elif item.tag  == 'ymin':
                                 roof.ymin = pos
 
-                cur_w = roof.xmax - roof.xmin
-                cur_h = roof.ymax - roof.ymin
-                max_w = cur_w if cur_w>max_w else max_w 
-                max_h = cur_h if cur_h>max_h else max_h 
                 roof.set_centroid()
-                roof_list.append(roof)
-        return roof_list, max_w, max_h
+                if roof.roof_type == 'thatch':
+                    thatch_list.append(roof)
+                elif roof.roof_type == 'metal':
+                    metal_list.append(roof)
+                else:
+                    raise TypeError('Unknown roof type {0} found'.format(roof.roof_type))
+
+    return thatch_list, metal_list
 
 
     @staticmethod
@@ -458,18 +459,6 @@ class DataLoader(object):
                     self.save_patch(img=img, xmin=xmin, ymin=ymin, roof_type=settings.NON_ROOF) 
 
 
-    # def patchify(self, img, patch_shape):
-    #     img = np.ascontiguousarray(img)  # won't make a copy if not needed
-    #     X, Y = img.shape
-    #     x = y = settings.PATCH_H
-    #     shape = ((X-x+1), (Y-y+1), x, y) # number of patches, patch_shape
-    #     # The right strides can be thought by:
-    #     # 1) Thinking of `img` as a chunk of memory in C order
-    #     # 2) Asking how many items through that chunk of memory are needed when indices
-    #     #    i,j,k,l are incremented by one
-    #     strides = img.itemsize*np.array([Y, 1, Y, 1])
-    #     return np.lib.stride_tricks.as_strided(img, shape=shape, strides=strides)
-
     def produce_xml_roofs(self):
         #Get the filename 
         img_names = DataLoader.get_img_names_from_path(path=settings.INHABITED_PATH)
@@ -477,24 +466,29 @@ class DataLoader(object):
         #Get the roofs defined in the xml, save the corresponding image patches
         f = open(settings.LABELS_PATH, 'w')
         f.close()
-        os.chmod(settings.LABELS_PATH, 0o777)
-
+        
+        metal_all = dict()
+        thatch_all = dict()
         with open(settings.LABELS_PATH, 'w') as label_file:
-            max_w = 0
-            max_h = 0
             for i, img in enumerate(img_names):
-    #            print 'Processing image: '+str(i)+'\n'
                 img_path = settings.INHABITED_PATH+img
                 xml_path = settings.INHABITED_PATH+img[:-3]+'xml'
 
-                roof_list, cur_max_w, cur_max_h = loader.get_roofs(xml_path)
-                max_h = cur_max_h if (max_h<cur_max_h) else max_h
-                max_w = cur_max_w if (max_w<cur_max_h) else max_h
-
-                for r, roof in enumerate(roof_list):
-    #                print 'Processing roof: '+str(r)+'\n'
+                thatch_roofs, metal_roofs = loader.get_roofs(xml_path)
+                metal_roofs = [(m, img) for m in metal_roofs]
+                thatch_roofs = [(m, img) for m in thatch_roofs]
+                metal_all.extend(metal_roofs)
+                thatch_all.extend(metal_roofs)
+        
+                
+        thatch_train_index = np.random.choice(len(thatch_all), int(.80*len(thatch_all), replace=False)
+        metal_train_index = np.random.choice(len(metal_all), int(.80*len(metal_all), replace=False)
+        thatch_train = 
+        
+            #for i, img in enumerate(img_names_train):
+                for r, roof in enumerate(metal_list):
                     loader.produce_roof_patches(img_path=img_path, img_id=i+1, 
-                                        roof=roof, label_file=label_file, max_h=max_h, max_w=max_w)
+                                        roof=roof, label_file=label_file)
             neg_patches_wanted = settings.NEGATIVE_PATCHES_NUM*loader.total_patch_no
             self.get_negative_patches(neg_patches_wanted, label_file)
             #settings.print_debug('************* Total patches saved: *****************: '+str(loader.total_patch_no))

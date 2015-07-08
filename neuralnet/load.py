@@ -52,6 +52,7 @@ class RoofLoader(object):
         '''
         Load the images into a numpy array X.
         '''
+
         X = np.empty((max_roofs,3,settings.PATCH_W, settings.PATCH_H))
         file_names = list()
         img_to_remove = list()
@@ -101,7 +102,7 @@ class RoofLoader(object):
 
         #the non_roofs always come after, we take the roof labels and the proportion of non-roofs we want
         labels_list = labels_list[:(total_roofs+(non_roofs*total_roofs))]
-        if max_roofs is 0:
+        if max_roofs is None:
             max_roofs = len(labels_list)
 
         X, labels = self.load_images(labels_list[:max_roofs], max_roofs)

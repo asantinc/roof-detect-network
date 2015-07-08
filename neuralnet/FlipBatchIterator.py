@@ -7,6 +7,15 @@ import scipy.ndimage.interpolation
 CROP_SIZE = 32
 IMG_SIZE = 40
 
+'''
+class BasicBatchIterator(BatchIterator):
+    def transform(self, Xb, yb):
+        temp_Xb = np.zeros((Xb.shape[0], Xb.shape[1], CROP_SIZE, CROP_SIZE))
+        xmin = ymin = (IMG_SIZE-CROP_SIZE)/2
+        temp_Xb[:,:,:,:] = Xb[:, :, xmin:(xmin+CROP_SIZE), ymin:(ymin+CROP_SIZE)]
+        return temp_Xb, yb
+'''
+
 
 class CropOnlyBatchIterator(BatchIterator):
     def transform(self, Xb, yb):

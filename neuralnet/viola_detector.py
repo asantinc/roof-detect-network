@@ -68,7 +68,7 @@ class ViolaDetector(object):
         img = cv2.imread(img_path, flags=cv2.IMREAD_COLOR)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        self.scale = scale if scale is not None
+        self.scale = scale if scale is not None else self.scale
 
         #get detections in the image
         roof_detections = dict()
@@ -209,10 +209,10 @@ class ViolaDetector(object):
                 log = ('******************************* RESULTS ********************************* \n'
                     +'METAL: \n'+
                     +'Precision: \t'+str(self.tp_metal)+'/'+str(self.metal_candidates)+
-                    '\n'+'Recall: \t'+str(self.tp_metal)+'/'+str(self.all_true_metal)+'\n')+
+                    +'\n'+'Recall: \t'+str(self.tp_metal)+'/'+str(self.all_true_metal)+'\n'+
                     +'THATCH: \n'+
                     +'Precision: \t'+str(self.tp_thatch)+'/'+str(self.thatch_candidates)+
-                    '\n'+'Recall: \t'+str(self.tp_thatch)+'/'+str(self.all_true_thatch)+'\n')+
+                    +'\n'+'Recall: \t'+str(self.tp_thatch)+'/'+str(self.all_true_thatch)+'\n')
 
                 print log
                 report.write(log)

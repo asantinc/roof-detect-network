@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from collections import OrderedDict
 from datetime import datetime
 from functools import reduce
@@ -21,6 +20,7 @@ from scipy.stats import randint
 from sklearn.grid_search import RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
 import skimage
+import datetime
 
 #my modules
 import load
@@ -69,6 +69,13 @@ VEC_PATH = '../viola_jones/vec_files/'
 VIOLA_AUGM_DATA = '../viola_jones/data/'
 CASCADE_PATH = '../viola_jones/cascades/'
 
+
+
+def time_stamped(fname, fmt='%Y-%m-%d-%H-%M-%S_{fname}'):
+    return datetime.datetime.now().strftime(fmt).format(fname=fname)
+#with open(timeStamped('myfile.txt'),'w') as outf:
+
+
 def print_debug(to_print, verbosity=1):
     #Print depending on verbosity level
     
@@ -77,8 +84,8 @@ def print_debug(to_print, verbosity=1):
 
 
 class Experiment(object):
-    def __init__(self, print_out=True, preloaded=False, test_percent=.20, non_roofs=None, 
-                    roofs_only=False,log=True, plot_loss=True, plot=True, epochs=-1, net_name=None, num_layers=None, max_roofs=None):
+    def __init__(self, flip=True, preloaded_path=None, print_out=True, preloaded=False, test_percent=.20, non_roofs=2, 
+                    roofs_only=False,log=True, plot_loss=True, plot=True, epochs=50, net_name=None, num_layers=None, max_roofs=None):
         self.num_layers = num_layers
         self.net_name = net_name
         self.epochs = epochs
@@ -89,11 +96,11 @@ class Experiment(object):
         self.log = log
         self.plot_loss = True
         self.printer = PrintLogSave()
+        self.flip = flip
 
         print 'Setting up the Neural Net \n'
         self.setup_net(print_out=print_out)
        
-<<<<<<< HEAD
         print 'Loading data \n'
         self.roof_loader = load.RoofLoader()
         self.X_train, self.X_test, self.y_train, self.y_test = self.roof_loader.load(test_percent=self.test_percent, 
@@ -103,8 +110,11 @@ class Experiment(object):
         #set up the data scaler
         self.scaler = DataScaler()
         print self.X_train.shape
-        self.scaler.fit_transform(self.X_train)
+        self.X_train = self.scaler.fit_transform(self.X_train)
+        self.X_test =  self.scaler.transform2(self.X_test)
 
+        if self.preloaded:
+            self.net.load_params_from('saved_weights/'+preloaded_path+'.pickle')      
 
 
     def setup_net(self, print_out=True):
@@ -135,8 +145,9 @@ class Experiment(object):
             on_training_started=on_training_started,
 
             #data augmentation
-            batch_iterator_test=flip.CropOnlyBatchIterator(batch_size=128),
+            batch_iterator_test= flip.CropOnlyBatchIterator(batch_size=128),
             batch_iterator_train=flip.FlipBatchIterator(batch_size=128),
+
             
             max_epochs=self.epochs,
             verbose=1,
@@ -151,32 +162,17 @@ class Experiment(object):
         #save settings to file
         self.printer.log_to_file(self.net, self.__str__(), overwrite=True)
         
-        #rescale X_train and X_test
-        X_test = self.scaler.transform2(self.X_test)
-
         #fit the network to X_train
-        self.net.fit(X_train, self.y_train)
+        pdb.set_trace()
+        self.net.fit(self.X_train, self.y_train)
         self.net.save_weights()
 
         #find predictions for test set
-        predicted = self.net.predict(X_test)
-        self.evaluation(predicted, X_train, X_test, self.y_train, self.y_test)
-
-
-    def test_image(self, img):
-        self.net.load_params_from('saved_weights/conv5_nonroofs1_test20_roofs.pickle')
-        img = img.transpose(2,0,1)
-        #img = img[None, :]
-        patches = skimage.util.view_as_windows(img, (3,PATCH_W, PATCH_H), step=PATCH_W/2)
-        print len(patches)
-        pdb.set_trace() 
-        for patch in patches:
-            print patch.shape
-            patch =  self.scaler.transform2(patch)
-            klass = self.net.predict(patch)
-            print klass
-            pdb.set_trace()
         
+        raise ValueError('Does this prediction do it with 40x40 crops of 32x32 crops?') 
+        predicted = self.net.predict(self.X_test)
+        self.evaluation(predicted, self.X_train, self.X_test, self.y_train, self.y_test)
+
 
     def test_preloaded(self, plot_loss=True, test_case=None):  
         '''Preload weights, classify roofs and write evaluation
@@ -185,14 +181,15 @@ class Experiment(object):
         '''
         #save settings to file
         self.printer.log_to_file(self.net, self.__str__(), overwrite=True)
-        self.roof_loader = load.RoofLoader()
         
-        #rescale X_train and X_test, using information from the training set only
-        X_test = scaler.transform2(self.X_test)
         #find predictions for test set
-        self.net.load_params_from('saved_weights/'+self.net.net_name+'.pickle')
-        predicted = self.net.predict(X_test)
-        self.evaluation(predicted, X_train, X_test, self.y_train, self.y_test)
+        #need to reduce it from 40 pixels down to 32 pixels
+        min = (PATCH_H - CROP_SIZE)/2
+        print self.X_test.shape
+        self.X_test = self.X_test[:, :, min:min+CROP_SIZE, min:min+CROP_SIZE]
+        print self.X_test.shape
+        predicted = self.net.predict(self.X_test)
+        self.evaluation(predicted, self.X_train, self.X_test, self.y_train, self.y_test)
 
 
     def evaluation(self, predicted, X_train, X_test, y_train, y_test):
@@ -208,7 +205,7 @@ class Experiment(object):
         if self.display_mistakes: 
             mistakes = np.array([True if y_test[i]-predicted[i] != 0 else False for i in range(len(y_test))])
             mistaken_imgs = X_test[mistakes]
-            mistaken_imgs = scaler.inverse_transform(mistaken_imgs)
+            mistaken_imgs = self.scaler.inverse_transform(mistaken_imgs)
             roof_loader.display_images(mistaken_imgs, labels=y_test[mistakes], indeces=range(len(mistaken_imgs)))
 
 
@@ -250,9 +247,23 @@ class DataScaler(StandardScaler):
 
     def transform2(self, X):
         X_shape = X.shape
-        X = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
+        single_image = False
+
+        #reshape for transformation
+        if len(X.shape) == 3:
+            single_image = True
+            X = X[None, :,:,:] 
+            X = X.reshape(1, X_shape[0]*X_shape[1]*X_shape[2])
+        else:
+            X = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
+        
         X = super(DataScaler, self).transform(X)
-        return X.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
+        
+        if single_image:
+            X = np.squeeze(X)
+            return X.reshape(X_shape[0], X_shape[1], X_shape[2])
+        else:
+            return X.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
 
     def inverse_transform(self, X): 
         X_shape = X.shape
@@ -273,7 +284,7 @@ class PrintLogSave(PrintLog):
             
     def log_to_file(self, nn, log, overwrite=False, binary=False, title=''):
         write_type = 'w' if overwrite else 'a'
-        file = open(OUT_REPORT+nn.net_name, write_type)
+        file = open(OUT_REPORT+time_stamped(nn.net_name), write_type)
         file.write(title)
         if binary:
             print >> file, log
@@ -344,7 +355,8 @@ def get_params_from_file(file_name):
 
 if __name__ == '__main__':
     #test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epochs = set_parameters()  
-    params = get_params_from_file(NET_PARAMS_PATH+raw_input('Parameter file NAME: '))
+    #params = get_params_from_file(NET_PARAMS_PATH+raw_input('Parameter file NAME: '))
+    params = get_params_from_file(NET_PARAMS_PATH+'params2.csv') 
     
     if params['net_name'] == 0:
         params['net_name'] = 'conv{0}_nonroofs{1}_test{2}'.format(params['num_layers'], params['non_roofs'], 100*params['test_percent']) 
@@ -352,7 +364,8 @@ if __name__ == '__main__':
         params['net_name'] = params['net_name']+'_roofs'
     print 'Network name is: {0}'.format(params['net_name'])
     
-    to_do = raw_input('o to optimize, t to train: ')
+    to_do = 't'
+    #to_do = raw_input('o to optimize, t to train: ')
     #set up the experiment
     experiment = Experiment(print_out=True, **params)
     if to_do == 'o':
