@@ -29,6 +29,7 @@ import FlipBatchIterator as flip
 
 
 #Constants for patch production
+TRAIN_PROPORTION = 0.80
 PATCHES_OUT_PATH = '/afs/inf.ed.ac.uk/user/s08/s0839470/roof/data/training/'
 LABELS_PATH = '/afs/inf.ed.ac.uk/user/s08/s0839470/roof/data/training/labels.csv'
 INHABITED_PATH = '../data/inhabited/'
@@ -71,7 +72,7 @@ CASCADE_PATH = '../viola_jones/cascades/'
 
 
 
-def time_stamped(fname, fmt='%Y-%m-%d-%H-%M-%S_{fname}'):
+def time_stamped(fname, fmt='%m-%d-%H-%M_{fname}'):
     return datetime.datetime.now().strftime(fmt).format(fname=fname)
 #with open(timeStamped('myfile.txt'),'w') as outf:
 
@@ -84,7 +85,8 @@ def print_debug(to_print, verbosity=1):
 
 
 class Experiment(object):
-    def __init__(self, flip=True, preloaded_path=None, print_out=True, preloaded=False, test_percent=.20, non_roofs=2, 
+    def __init__(self, test_path=None, train_path=None, flip=True, preloaded_path=None, 
+                    print_out=True, preloaded=False, test_percent=.20, non_roofs=2, 
                     roofs_only=False,log=True, plot_loss=True, plot=True, epochs=50, net_name=None, num_layers=None, max_roofs=None):
         self.num_layers = num_layers
         self.net_name = net_name
@@ -97,14 +99,20 @@ class Experiment(object):
         self.plot_loss = True
         self.printer = PrintLogSave()
         self.flip = flip
+        self.test_path = test_path
+        self.train_path = train_path
 
         print 'Setting up the Neural Net \n'
         self.setup_net(print_out=print_out)
        
         print 'Loading data \n'
         self.roof_loader = load.RoofLoader()
-        self.X_train, self.X_test, self.y_train, self.y_test = self.roof_loader.load(test_percent=self.test_percent, 
+        if self.test_path is None and self.train_path is None:
+            self.X_train, self.X_test, self.y_train, self.y_test = self.roof_loader.load(test_percent=self.test_percent, 
                                                 non_roofs=self.non_roofs, roofs_only=self.roofs_only, max_roofs=max_roofs) 
+        else:
+            self.X_train, self.X_test, self.y_train, self.y_test = self.roof_loader.load_from_separate_folders() 
+            self.non_roofs = 20 #the way the nonroofs are set up now we cannot choose how many non-roofs we load
         print 'Data is loaded \n'
 
         #set up the data scaler
@@ -113,6 +121,7 @@ class Experiment(object):
         self.X_train = self.scaler.fit_transform(self.X_train)
         self.X_test =  self.scaler.transform2(self.X_test)
 
+        #preload weights
         if self.preloaded:
             self.net.load_params_from('saved_weights/'+preloaded_path+'.pickle')      
 
@@ -163,13 +172,12 @@ class Experiment(object):
         self.printer.log_to_file(self.net, self.__str__(), overwrite=True)
         
         #fit the network to X_train
-        pdb.set_trace()
         self.net.fit(self.X_train, self.y_train)
         self.net.save_weights()
 
         #find predictions for test set
         
-        raise ValueError('Does this prediction do it with 40x40 crops of 32x32 crops?') 
+        #raise ValueError('Does this prediction do it with 40x40 crops of 32x32 crops?') 
         predicted = self.net.predict(self.X_test)
         self.evaluation(predicted, self.X_train, self.X_test, self.y_train, self.y_test)
 
@@ -349,6 +357,8 @@ def get_params_from_file(file_name):
             if len(par) == 2: 
                 if par[0].strip() == 'test_percent':
                     parameters[par[0].strip()] = (float(par[1].strip()))
+                elif par[0].strip() == 'test_path' or par[0].strip() == 'train_path':
+                    parameters[par[0].strip()] = par[1].strip()
                 else:
                     parameters[par[0].strip()] = int(float(par[1].strip()))
     return parameters
@@ -362,6 +372,9 @@ if __name__ == '__main__':
         params['net_name'] = 'conv{0}_nonroofs{1}_test{2}'.format(params['num_layers'], params['non_roofs'], 100*params['test_percent']) 
     if params['roofs_only']:
         params['net_name'] = params['net_name']+'_roofs'
+    
+    #add date to net_name
+    params['net_name'] = time_stamped(params['net_name'])
     print 'Network name is: {0}'.format(params['net_name'])
     
     to_do = 't'

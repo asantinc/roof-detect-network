@@ -49,6 +49,7 @@ class ViolaTrainer(object):
                 cmd.append('-bg ../viola_jones/bg.txt')
                 cmd.append('-numStages {0}'.format(stages)) 
                 cmd.append('-minHitRate {0}'.format(minHitRate))
+                cmd.append('-precalcValBufSize 1024 -precalcIdxBufSize 1024')
                 numPos = int(float(sample_num)*.8)
                 cmd.append('-numPos {0} -numNeg {1}'.format(numPos, numPos*2))
                 cmd.append('-w {0} -h {1}'.format(w, h))
@@ -402,23 +403,25 @@ if __name__ == '__main__':
 #   ViolaDataSetup.setup_positive_samples_full_image(padding=10, size_divide=False)
 #   ViolaDataSetup.setup_positive_samples_full_image(padding=0, size_divide=False)
 #    ViolaDataSetup.vec_file_samples()
+    #pass in a vec file without the extension
     no_details = True
-    
+    roof_type = ''  
     try:
         opts, args = getopt.getopt(sys.argv[1:], "f:t:")
     except getopt.GetoptError:
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-f':
-            v = arg
+            v = arg+'.vec'
             no_details = False
         elif opt == '-t':
-            t = arg
-        
+            roof_type = arg
+    roof_type = 'metal' if v[:1]=='m' else 'thatch'
+
     if no_details:
         v = raw_input('Enter vec file: ')
         t = raw_input('Type of roof: ' )
         roof_type = 'metal' if t=='m' else 'thatch'
     vecs = [v]
-    ViolaTrainer.train_cascade(vec_files=vecs, roof_type='thatch')
+    ViolaTrainer.train_cascade(vec_files=vecs, roof_type=roof_type)
 

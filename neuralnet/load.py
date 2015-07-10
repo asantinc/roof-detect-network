@@ -52,7 +52,6 @@ class RoofLoader(object):
         '''
         Load the images into a numpy array X.
         '''
-
         X = np.empty((max_roofs,3,settings.PATCH_W, settings.PATCH_H))
         file_names = list()
         img_to_remove = list()
@@ -83,6 +82,58 @@ class RoofLoader(object):
         X = X.astype(np.float32)
         return X[:index, :,:,:], labels
 
+
+    def load_from_separate_folders(self,max_roofs=None, non_roofs=None):
+        test_path = '../data/roof_test/'
+        train_path = '../data/roof_train/'
+        test_labels = np.loadtxt(open(test_path+'labels.csv',"rb"),delimiter=",")
+        train_labels =  np.loadtxt(open(train_path+'labels.csv',"rb"),delimiter=",")
+
+        print 'Loading training data...'
+        X_train, y_train = self.get_images_separate_folders(train_path, train_labels)
+        print 'Loading testing data...'
+        X_test, y_test = self.get_images_separate_folders(test_path, test_labels)
+        print X_train.shape
+        print X_test.shape
+        return X_train, X_test, y_train, y_test
+
+
+    def get_images_separate_folders(self, path, label_tuples):
+        X = np.empty((len(label_tuples), 3, settings.PATCH_W, settings.PATCH_H))
+        labels = list()
+        failures = 0
+        index = 0
+
+        for i, (f_name, roof_type) in enumerate(label_tuples):
+            if i%1000 == 0:
+                print 'Loading image {0}'.format(i)
+            f_number = int(f_name)
+            f_path = path+str(f_number)+'.jpg'                
+            
+            x = cv2.imread(f_path)
+            x = np.asarray(x, dtype='float32')/255
+            try:
+                x = x.transpose(2,0,1)
+                x.shape = (1,x.shape[0], x.shape[1], x.shape[2])
+                X[index, :, :, :] = x
+            except ValueError, e:
+                print e
+                failures += 1
+                print 'fail:'+ str(failures)
+            else:
+                index += 1
+                labels.append(roof_type)
+  
+        #remove any failed images
+        if failures > 0:
+            X = X[:-failures, :,:,:] 
+               
+        #return the right type
+        X = X.astype(np.float32)
+        labels = np.array(labels).astype(np.int32)
+        return X, labels
+        
+
     def load(self, max_roofs=None, roofs_only=False, test_percent=0.10, non_roofs=1):
         """Load the data to a numpy array, return dataset divided into training and testing sets
 
@@ -99,7 +150,6 @@ class RoofLoader(object):
         print 'DATA STATS:' 
         print data_stats
         
-
         #the non_roofs always come after, we take the roof labels and the proportion of non-roofs we want
         labels_list = labels_list[:(total_roofs+(non_roofs*total_roofs))]
         if max_roofs is None:
@@ -110,6 +160,7 @@ class RoofLoader(object):
         
         X, labels = sklearn.utils.shuffle(X, labels, random_state=42)  # shuffle train data    
 
+        #remove the non_roofs
         if roofs_only:
             roof = (labels[:]>0)
             labels = labels[roof]

@@ -4,15 +4,18 @@ import os #import the image files
 import random #get random patches
 import xml.etree.ElementTree as ET #traverse the xml files
 from collections import defaultdict
+import pickle
 
 from scipy import misc, ndimage #load images
 import cv2
+from sklearn import cross_validation
 
 import experiment_settings as settings #getting constants
 import json
 from pprint import pprint
 
 EXTENSION = '.png'
+TEST = 0.20
 
 class Roof(object):
     '''Roof class containing info about its location in an image
@@ -25,6 +28,11 @@ class Roof(object):
         self.ymax = ymax
         # self.xcentroid = xcentroid
         # self.ycentroid = ycentroid
+
+
+    def __comp__(self, other):
+        return self.__dict__ == other.__dict__
+
 
     def set_centroid(self):
         self.xcentroid = self.xmin+((self.xmax - self.xmin) /2)
@@ -215,13 +223,15 @@ class DataLoader(object):
 
 
 
-    def get_roofs(self, xml_file):
+    def get_roofs(self, xml_file, img_name):
         '''Return list of Roofs
 
         Parameters
         ----------
         xml_file: string
             Path to XML file that contains roof locations for current image
+        img_name: string
+            Name of the current image, so roof knows which image it comes from
 
         Returns
         ----------
@@ -232,17 +242,17 @@ class DataLoader(object):
         '''
         tree = ET.parse(xml_file)
         root = tree.getroot()
-        metal_list = list()
-        thatch_list = list()
+        roof_list = list()
         
         for child in root:
             if child.tag == 'object':
                 roof = Roof()
+                roof.img_name = settings.INHABITED_PATH+img_name
                 for grandchild in child:
                     #get roof type
                     if grandchild.tag == 'action':
                         roof.roof_type = grandchild.text
-
+                    
                     #get positions of bounding box
                     if grandchild.tag == 'bndbox':
                         for item in grandchild:
@@ -256,17 +266,21 @@ class DataLoader(object):
                                 roof.ymax = pos
                             elif item.tag  == 'ymin':
                                 roof.ymin = pos
-
+                    
                 roof.set_centroid()
-                if roof.roof_type == 'thatch':
-                    thatch_list.append(roof)
-                elif roof.roof_type == 'metal':
-                    metal_list.append(roof)
-                else:
-                    raise TypeError('Unknown roof type {0} found'.format(roof.roof_type))
+                roof_list.append(roof)
+        return roof_list
 
-    return thatch_list, metal_list
 
+    def get_roof_imgs(self, roof_list, img_path, padding):
+        try:
+            img = cv2.imread(img_path)
+        except Exception, e:
+            print e
+        else:
+            for roof in roof_list:
+                roof_patch = img[roof.ymin-pad:roof.ymin+roof.height+pad, roof.xmin-pad:roof.xmin+roof.width+pad]         
+                
 
     @staticmethod
     def get_img_names_from_path(path='', extension='.jpg'):
@@ -457,9 +471,83 @@ class DataLoader(object):
 
                     #save patch
                     self.save_patch(img=img, xmin=xmin, ymin=ymin, roof_type=settings.NON_ROOF) 
+        
+        
+    def get_padded_roofs(self, img=None, pad=0, roof_list=None, all_roofs=None, all_labels=None):
+        '''Get roofs using bounding boxes. Add padding. Resize the patch to match the size of a settings.PATCH
+        '''
+        for roof in roof_list:
+            roof_type = settings.METAL if roof.roof_type=='metal' else settings.THATCH
+
+            #get the right padding
+            pad_h = settings.PATCH_H if roof.height< settings.PATCH_H else roof.height 
+            pad_w = settings.PATCH_W if roof.width < settings.PATCH_W else roof.width
+            pad_left = pad_right = pad_top = pad_bottom = pad
+           
+            #Adapt the padding to make sure we don't go off image
+            offset = roof.ymin-pad_bottom
+            pad_bottom = (pad_bottom + offset) if offset < 0 else pad_bottom
+            
+            offset = roof.xmin - pad_left
+            pad_left = (pad_left + offset) if offset < 0 else pad_left
+
+            offset = img.shape[0]-(roof.ymin + pad_h + pad_top)
+            pad_top = (pad_top + offset) if offset < 0 else pad_top
+
+            offset = img.shape[1]- (roof.xmin + pad_w + pad_right)
+            pad_right = (pad_right + offset) if offset < 0 else pad_right
+            
+            #get the patch, resize it and append it to list
+            patch = img[roof.ymin-pad_bottom:roof.ymin+pad_h+pad_top,
+                        roof.xmin-pad_left:roof.xmin+pad_w+pad_right]
+            resized_patch = cv2.resize(patch, (settings.PATCH_H, settings.PATCH_W)) 
+            all_roofs.append(resized_patch)
+            all_labels.append(roof_type)
+
+        return all_roofs, all_labels
 
 
-    def produce_xml_roofs(self):
+    def append_negative_patch_arrays(self, all_roofs, all_labels, patch_no):
+        '''Append negative numpy arrays with negative examples to the all_roofs list, and append the correct non_roof label to all_labels list
+        '''
+        print 'Getting the negative patches....\n'
+        img_names = DataLoader.get_img_names_from_path(path=settings.UNINHABITED_PATH)
+        negative_patches = (patch_no)/len(img_names)
+        
+        all_roof_objects = list()
+        #Get negative patches
+        for i, img_path in enumerate(img_names):
+            #get random ymin, xmin, but ensure the patch will fall inside of the image
+            print 'Negative image {0}'.format(i)
+            try:
+                img = cv2.imread(settings.UNINHABITED_PATH+img_path)
+            except IOError:
+                print 'Cannot open '+img_path
+            else:
+                h, w, _ = img.shape
+                
+                for p in range(negative_patches):
+                    w_max = w - settings.PATCH_W
+                    h_max = h - settings.PATCH_H
+                    xmin = random.randint(0, w_max)
+                    ymin = random.randint(0, h_max)
+
+                    roof = Roof(xmin=xmin, ymin=ymin,xmax=xmin+settings.PATCH_W, 
+                                    ymax=ymin+settings.PATCH_H, roof_type=settings.NON_ROOF)
+                    roof.img_name = settings.UNINHABITED_PATH+img_path
+                    try:
+                        patch = img[ymin:ymin+settings.PATCH_H, xmin:xmin+settings.PATCH_W]
+                    except Exception, e:
+                        print e
+                    else:
+                        all_roof_objects.append(roof)
+                        all_roofs.append(patch)
+                        all_labels.append(settings.NON_ROOF)
+        #return the roof arrays, the labels and the roof objects containing info about the roof patch origin 
+        return all_roofs, all_labels, all_roof_objects
+
+
+    def produce_xml_roofs(self, pad=0):
         #Get the filename 
         img_names = DataLoader.get_img_names_from_path(path=settings.INHABITED_PATH)
 
@@ -467,32 +555,68 @@ class DataLoader(object):
         f = open(settings.LABELS_PATH, 'w')
         f.close()
         
-        metal_all = dict()
-        thatch_all = dict()
-        with open(settings.LABELS_PATH, 'w') as label_file:
-            for i, img in enumerate(img_names):
-                img_path = settings.INHABITED_PATH+img
-                xml_path = settings.INHABITED_PATH+img[:-3]+'xml'
+        all_labels = list()
+        all_roofs = list()
+        #get the roof patches with padding
+        all_roof_objects = list()
+        for i, img_name in enumerate(img_names):
+            img_path = settings.INHABITED_PATH+img_name
+            xml_path = settings.INHABITED_PATH+img_name[:-3]+'xml'
 
-                thatch_roofs, metal_roofs = loader.get_roofs(xml_path)
-                metal_roofs = [(m, img) for m in metal_roofs]
-                thatch_roofs = [(m, img) for m in thatch_roofs]
-                metal_all.extend(metal_roofs)
-                thatch_all.extend(metal_roofs)
-        
-                
-        thatch_train_index = np.random.choice(len(thatch_all), int(.80*len(thatch_all), replace=False)
-        metal_train_index = np.random.choice(len(metal_all), int(.80*len(metal_all), replace=False)
-        thatch_train = 
-        
-            #for i, img in enumerate(img_names_train):
-                for r, roof in enumerate(metal_list):
-                    loader.produce_roof_patches(img_path=img_path, img_id=i+1, 
-                                        roof=roof, label_file=label_file)
-            neg_patches_wanted = settings.NEGATIVE_PATCHES_NUM*loader.total_patch_no
-            self.get_negative_patches(neg_patches_wanted, label_file)
-            #settings.print_debug('************* Total patches saved: *****************: '+str(loader.total_patch_no))
+            roof_objects = loader.get_roofs(xml_path, img_name)
+            #print 'Thatch: {0} \t  Metal: {1}'.format(len(thatch_roofs), len(metal_roofs))
+            try:
+                img = cv2.imread(img_path)
+            except Exception, e:
+                print e
+            else: 
+                all_roof_objects.extend(roof_objects)
+                all_roofs, all_labels = self.get_padded_roofs(img=img, pad=pad, roof_list=roof_objects,  
+                                                                all_roofs=all_roofs, all_labels=all_labels)
+        all_roofs, all_labels, negative_roof_objects = self.append_negative_patch_arrays(all_roofs, all_labels, 5*len(all_roofs))
+        all_roof_objects.extend(negative_roof_objects)
 
+        #do a stratified k-fold split of the roofs, where k=1
+        all_roofs = np.array(all_roofs)
+        all_labels = np.array(all_labels)
+        all_roof_objects = np.array(all_roof_objects, dtype=object)
+        split = cross_validation.StratifiedShuffleSplit(all_labels, 1, test_size=0.2, random_state=0)
+        
+        for train_index, test_index in split:
+            X_train, X_test = all_roofs[train_index], all_roofs[test_index], 
+            roofs_train, roofs_test = all_roof_objects[train_index], all_roof_objects[test_index]
+            y_train, y_test = all_labels[train_index], all_labels[test_index]
+
+        print 'Train {0} \t Test {1}'.format(X_train.shape[0], X_test.shape[0])
+        print 'Train labels:{0}'.format(np.bincount(y_train))
+        print 'Test labels:{0}'.format(np.bincount(y_test))
+
+        with open('../data/roof_train/labels.csv', 'w') as labels_train:
+            for r, (roof, label) in enumerate(zip(X_train, y_train)):
+                path = '../data/roof_train/{0}.jpg'.format(r)
+                cv2.imwrite(path, roof)
+                labels_train.write('{0}, {1}\n'.format(r, label))
+        
+        with open('../data/roof_test/labels.csv', 'w') as labels_test:
+            for r, (roof, label) in enumerate(zip(X_test, y_test)):
+                path = '../data/roof_test/{0}.jpg'.format(r)
+                cv2.imwrite(path, roof)
+                labels_test.write('{0}, {1}\n'.format(r, label))
+       
+        #save pickle roofs
+        pick_train = '../data/roof_train/roofs.pickle' 
+        pick_test = '../data/roof_test/roofs.pickle'
+        with open(pick_train, "wb") as f:
+            pickle.dump(roofs_train, f)
+        with open(pick_test, "wb") as f:
+            pickle.dump(roofs_test, f)
+         
+        with open(pick_train, "rb") as f:
+            roofs_train_loaded = pickle.load(f)
+        with open(pick_test, "rb") as f:
+            roofs_test_loaded = pickle.load(f)
+        
+     
 
     def produce_json_roofs(self, json_file=None):
         #Get the filename 
@@ -532,5 +656,5 @@ class DataLoader(object):
 
 if __name__ == '__main__':
     loader = DataLoader(labels_path='labels.csv', out_path='../data/testing_json/', in_path=settings.JSON_IMGS)
-    loader.produce_json_roofs(json_file='../data/images-new/labels.json')
-
+    #loader.produce_json_roofs(json_file='../data/images-new/labels.json')
+    loader.produce_xml_roofs(pad=10)

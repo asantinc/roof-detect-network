@@ -10,3 +10,7 @@ old/
 delete/
 viola_jones/output*
 viola_jones/data/
+*.lprof
+*.*.swn
+*.*swo
+

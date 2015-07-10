@@ -76,10 +76,7 @@ class ViolaDetector(object):
             roof_detections[roof_type] = list()
             for i, detector in enumerate(self.roof_detectors[roof_type]):
                 print 'Detecting with detector: '+str(i)
-                detected_roofs = detector.detectMultiScale(
-                        gray,
-                        scaleFactor=self.scale,
-                        minNeighbors=5)
+                detected_roofs = detector.detectMultiScale(gray, scaleFactor=self.scale, minNeighbors=5)
                 #group_detected_roofs, weights = cv2.groupRectangles(np.array(detected_roofs).tolist(), 0, 5)
                 roof_detections[roof_type].append(detected_roofs)
 
