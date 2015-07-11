@@ -168,7 +168,6 @@ class DataLoader(object):
         self.total_patch_no = 0
         self.step_size = settings.PATCH_W/2
 
-        assert out_path is not None and labels_path is not None and in_path is not None
         self.labels_path = labels_path
         self.out_path = out_path
         self.in_path = in_path
@@ -222,7 +221,6 @@ class DataLoader(object):
         return img
 
 
-
     def get_roofs(self, xml_file, img_name):
         '''Return list of Roofs
 
@@ -251,7 +249,12 @@ class DataLoader(object):
                 for grandchild in child:
                     #get roof type
                     if grandchild.tag == 'action':
-                        roof.roof_type = grandchild.text
+                        if grandchild.text[0] == 'M' or grandchild.text[0] == 'm':
+                            roof.roof_type = 'metal'
+                        elif grandchild.text[0] == 'T' or grandchild.text[0] == 't':
+                            roof.roof_type = 'thatch'
+                        else:
+                            raise TypeError('Unknown roof type found in file {0}'.format(xml_file)) 
                     
                     #get positions of bounding box
                     if grandchild.tag == 'bndbox':
@@ -500,7 +503,7 @@ class DataLoader(object):
             #get the patch, resize it and append it to list
             patch = img[roof.ymin-pad_bottom:roof.ymin+pad_h+pad_top,
                         roof.xmin-pad_left:roof.xmin+pad_w+pad_right]
-            resized_patch = cv2.resize(patch, (settings.PATCH_H, settings.PATCH_W)) 
+            resized_patch = cv2.resize(patch, (settings.PATCH_H, settings.PATCH_W), interpolation=cv2.INTER_AREA) 
             all_roofs.append(resized_patch)
             all_labels.append(roof_type)
 
@@ -547,21 +550,36 @@ class DataLoader(object):
         return all_roofs, all_labels, all_roof_objects
 
 
-    def produce_xml_roofs(self, pad=0):
-        #Get the filename 
-        img_names = DataLoader.get_img_names_from_path(path=settings.INHABITED_PATH)
+    def produce_xml_roofs(self, pad=0, negatives=True):
+        '''Uses images in settings/INHABITED_PATH or ../data/testing_new_source and the corresponding xml file to get roofs with padding and saves them to an 
+        output folder. 
+        If negatives is True, is also includes negatives.
+        Aside from the images, it saves: a file with labels to indicate each roof type and a pickled dump of all the roof info
+
+        Parameters:
+        ----
+        pad: int
+            Pixel padding for roof patch bounding box
+        negatives: boolean
+            Decides whether negatives will be processed or not
+        in_path: 
+            Where the positive example folder is
+        out_path:
+            Where roofs should be saved to
+        '''
+        in_path = settings.INHABITED_PATH if negatives else '../data/testing_new_source/'
+        img_names = DataLoader.get_img_names_from_path(path=in_path)
 
         #Get the roofs defined in the xml, save the corresponding image patches
-        f = open(settings.LABELS_PATH, 'w')
-        f.close()
+#        f = open(settings.LABELS_PATH, 'w')
+#        f.close()
         
         all_labels = list()
         all_roofs = list()
-        #get the roof patches with padding
         all_roof_objects = list()
         for i, img_name in enumerate(img_names):
-            img_path = settings.INHABITED_PATH+img_name
-            xml_path = settings.INHABITED_PATH+img_name[:-3]+'xml'
+            img_path = in_path+img_name
+            xml_path = in_path+img_name[:-3]+'xml'
 
             roof_objects = loader.get_roofs(xml_path, img_name)
             #print 'Thatch: {0} \t  Metal: {1}'.format(len(thatch_roofs), len(metal_roofs))
@@ -572,51 +590,72 @@ class DataLoader(object):
             else: 
                 all_roof_objects.extend(roof_objects)
                 all_roofs, all_labels = self.get_padded_roofs(img=img, pad=pad, roof_list=roof_objects,  
-                                                                all_roofs=all_roofs, all_labels=all_labels)
-        all_roofs, all_labels, negative_roof_objects = self.append_negative_patch_arrays(all_roofs, all_labels, 5*len(all_roofs))
-        all_roof_objects.extend(negative_roof_objects)
-
-        #do a stratified k-fold split of the roofs, where k=1
+                                                                all_roofs=all_roofs, all_labels=all_labels)   
+        
         all_roofs = np.array(all_roofs)
         all_labels = np.array(all_labels)
         all_roof_objects = np.array(all_roof_objects, dtype=object)
-        split = cross_validation.StratifiedShuffleSplit(all_labels, 1, test_size=0.2, random_state=0)
         
-        for train_index, test_index in split:
-            X_train, X_test = all_roofs[train_index], all_roofs[test_index], 
-            roofs_train, roofs_test = all_roof_objects[train_index], all_roof_objects[test_index]
-            y_train, y_test = all_labels[train_index], all_labels[test_index]
-
-        print 'Train {0} \t Test {1}'.format(X_train.shape[0], X_test.shape[0])
-        print 'Train labels:{0}'.format(np.bincount(y_train))
-        print 'Test labels:{0}'.format(np.bincount(y_test))
-
-        with open('../data/roof_train/labels.csv', 'w') as labels_train:
-            for r, (roof, label) in enumerate(zip(X_train, y_train)):
-                path = '../data/roof_train/{0}.jpg'.format(r)
-                cv2.imwrite(path, roof)
-                labels_train.write('{0}, {1}\n'.format(r, label))
-        
-        with open('../data/roof_test/labels.csv', 'w') as labels_test:
-            for r, (roof, label) in enumerate(zip(X_test, y_test)):
-                path = '../data/roof_test/{0}.jpg'.format(r)
-                cv2.imwrite(path, roof)
-                labels_test.write('{0}, {1}\n'.format(r, label))
+        if negatives == False:
+            #save all the patches, pickle the roofs
+            with open('../data/testing_new/labels.csv', 'w') as labels_train:
+                for r, (roof, label) in enumerate(zip(all_roofs, all_labels)):
+                    path = '../data/testing_new/{0}.jpg'.format(r)
+                    cv2.imwrite(path, roof)
+                    labels_train.write('{0}, {1}\n'.format(r, label))
+            with open('../data/testing_new/stats.txt', 'w') as stats:
+                non_roof, metal, thatch = np.bincount(all_labels)
+                stats.write('non_roof,{0}\nmetal,{1}\nthatch,{2}'.format(non_roof, metal, thatch))
+            with open('../data/testing_new/roofs.pickle', "wb") as f:
+                pickle.dump(all_roof_objects, f)
+ 
+        else: 
+            all_roofs, all_labels, negative_roof_objects = self.append_negative_patch_arrays(all_roofs, all_labels, 5*len(all_roofs))
+            all_roof_objects.extend(negative_roof_objects)
        
-        #save pickle roofs
-        pick_train = '../data/roof_train/roofs.pickle' 
-        pick_test = '../data/roof_test/roofs.pickle'
-        with open(pick_train, "wb") as f:
-            pickle.dump(roofs_train, f)
-        with open(pick_test, "wb") as f:
-            pickle.dump(roofs_test, f)
-         
-        with open(pick_train, "rb") as f:
-            roofs_train_loaded = pickle.load(f)
-        with open(pick_test, "rb") as f:
-            roofs_test_loaded = pickle.load(f)
-        
-     
+            #do a stratified k-fold split of the roofs, where k=1
+            split = cross_validation.StratifiedShuffleSplit(all_labels, 1, test_size=0.2, random_state=0)
+            for train_index, test_index in split:
+                X_train, X_test = all_roofs[train_index], all_roofs[test_index], 
+                roofs_train, roofs_test = all_roof_objects[train_index], all_roof_objects[test_index]
+                y_train, y_test = all_labels[train_index], all_labels[test_index]
+
+            print 'Train {0} \t Test {1}'.format(X_train.shape[0], X_test.shape[0])
+            print 'Train labels:{0}'.format(np.bincount(y_train))
+            print 'Test labels:{0}'.format(np.bincount(y_test))
+
+            with open('../data/roof_train/labels.csv', 'w') as labels_train:
+                for r, (roof, label) in enumerate(zip(X_train, y_train)):
+                    path = '../data/roof_train/{0}.jpg'.format(r)
+                    cv2.imwrite(path, roof)
+                    labels_train.write('{0}, {1}\n'.format(r, label))
+            with open('../data/roof_train/stats.txt', 'w') as stats:
+                non_roof, metal, thatch = np.bincount(y_train)
+                stats.write('non_roof,{0}\nmetal,{1}\nthatch,{2}'.format(non_roof, metal, thatch))
+            
+            with open('../data/roof_test/labels.csv', 'w') as labels_test:
+                for r, (roof, label) in enumerate(zip(X_test, y_test)):
+                    path = '../data/roof_test/{0}.jpg'.format(r)
+                    cv2.imwrite(path, roof)
+                    labels_test.write('{0}, {1}\n'.format(r, label))
+            with open('../data/roof_test/stats.txt', 'w') as stats:
+                non_roof, metal, thatch = np.bincount(y_test)
+                stats.write('non_roof,{0}\nmetal,{1}\nthatch,{2}'.format(non_roof, metal, thatch))
+
+          
+            #save pickle roofs
+            pick_train = '../data/roof_train/roofs.pickle' 
+            pick_test = '../data/roof_test/roofs.pickle'
+            with open(pick_train, "wb") as f:
+                pickle.dump(roofs_train, f)
+            with open(pick_test, "wb") as f:
+                pickle.dump(roofs_test, f)
+             
+            with open(pick_train, "rb") as f:
+                roofs_train_loaded = pickle.load(f)
+            with open(pick_test, "rb") as f:
+                roofs_test_loaded = pickle.load(f)
+                   
 
     def produce_json_roofs(self, json_file=None):
         #Get the filename 
@@ -655,6 +694,7 @@ class DataLoader(object):
 #         #settings.print_debug('************* Total patches saved: *****************: '+str(loader.total_patch_no))
 
 if __name__ == '__main__':
-    loader = DataLoader(labels_path='labels.csv', out_path='../data/testing_json/', in_path=settings.JSON_IMGS)
+    #loader = DataLoader(labels_path='labels.csv', out_path='../data/testing_json/', in_path=settings.JSON_IMGS)
     #loader.produce_json_roofs(json_file='../data/images-new/labels.json')
-    loader.produce_xml_roofs(pad=10)
+    loader = DataLoader()
+    loader.produce_xml_roofs(negatives=False)

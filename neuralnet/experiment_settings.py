@@ -69,7 +69,7 @@ DAT_PATH = '../viola_jones/all_dat/'
 VEC_PATH = '../viola_jones/vec_files/'
 VIOLA_AUGM_DATA = '../viola_jones/data/'
 CASCADE_PATH = '../viola_jones/cascades/'
-
+VIOLA_OUT = '../output/viola/'
 
 
 def time_stamped(fname, fmt='%m-%d-%H-%M_{fname}'):
@@ -366,17 +366,16 @@ def get_params_from_file(file_name):
 if __name__ == '__main__':
     #test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epochs = set_parameters()  
     #params = get_params_from_file(NET_PARAMS_PATH+raw_input('Parameter file NAME: '))
-    params = get_params_from_file(NET_PARAMS_PATH+'params2.csv') 
+    param_file = 'params'+raw_input('Enter param file number :')+'.csv'
+    params = get_params_from_file(NET_PARAMS_PATH+param_file) 
     
     if params['net_name'] == 0:
-        params['net_name'] = 'conv{0}_nonroofs{1}_test{2}'.format(params['num_layers'], params['non_roofs'], 100*params['test_percent']) 
+        params['net_name'] = time_stamped(param_file)
+        print 'Network name is: {0}'.format(params['net_name'])
     if params['roofs_only']:
         params['net_name'] = params['net_name']+'_roofs'
     
-    #add date to net_name
-    params['net_name'] = time_stamped(params['net_name'])
-    print 'Network name is: {0}'.format(params['net_name'])
-    
+
     to_do = 't'
     #to_do = raw_input('o to optimize, t to train: ')
     #set up the experiment

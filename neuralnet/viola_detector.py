@@ -38,20 +38,32 @@ class ViolaDetector(object):
         assert detector_paths is not None 
         self.detector_paths = detector_paths
         self.roof_detectors = dict()
-        self.roof_detectors['metal'] = [cv2.CascadeClassifier(path) for path in detector_paths['metal']]
-        self.roof_detectors['thatch'] = [cv2.CascadeClassifier(path) for path in detector_paths['thatch']]
+        self.roof_detectors['metal'] = [cv2.CascadeClassifier(settings.VIOLA_IN+path) for path in detector_paths['metal']]
+        self.roof_detectors['thatch'] = [cv2.CascadeClassifier(settings.VIOLA_IN+path) for path in detector_paths['thatch']]
 
         #file name beginning
-        self.file_name_default = ''
-        if num_pos != 0 and num_neg != 0:
-            self.file_name_default = '''numPos{0}_numNeg{1}_scale{2}'''.format(num_pos, num_neg, self.scale)
-        
+        self.file_name_default = '''numPos{0}_numNeg{1}_scale{2}'''.format(num_pos, num_neg, self.scale)
+        for det in self.detector_paths['metal']:
+            mkdir_cmd = 'mkdir {0}{1}'.format(settings.VIOLA_OUT, det)
+            try:
+                subprocess.check_call(mkdir_cmd, shell=True)
+            except Exception as e:
+                print e
+        for det in self.detector_paths['thatch']:
+            mkdir_cmd = 'mkdir {0}'.format(det)
+            try:
+                subprocess.check_call(mkdir_cmd, shell=True)
+            except Exception as e:
+                print e
+
+
         #open report file and create output folder if it doesn't exist
-        assert output_folder is not None
-        if not os.path.isdir(output_folder):
-            subprocess.check_call('mkdir {0}'.format(self.output_folder[:-1]), shell=True)
+        metal_det = '+'.join(self.roof_detectors['metal']
+        thatch_det = '+'.join(self.roof_detectors['thatch']
+        self.output_folder = settings.VIOLA_OUT+metal_det+'+'+thatch_det
+        if not os.path.isdir(self.output_folder):
+            subprocess.check_call('mkdir {0}'.format(self.output_folder), shell=True)
         print 'Will output files to: {0}'.format(self.output_folder)
-        self.output_folder = output_folder
         self.report_file = self.output_folder+'report.txt'
         try:
             report = open(self.report_file, 'w')
@@ -249,6 +261,8 @@ class ViolaDetector(object):
             self.output_folder = output_folder 
         cv2.imwrite(self.output_folder+self.file_name_default+'_'+img_name, img)
 
+    def 
+
 
 if __name__ == '__main__':
     #can have multiple detectors for each type of roof
@@ -256,7 +270,7 @@ if __name__ == '__main__':
     detectors['metal'] = []
     detectors['thatch'] = ['../viola_jones/cascade_thatch_5_augment/cascade.xml']
     
-    output = '../output/viola_thatch_5_augment/'
+    output = '../output/viola/'
     num_pos = 0
     num_neg = 0
     viola = ViolaDetector(num_pos, num_neg, detector_paths=detectors, output_folder=output, save_imgs=True)

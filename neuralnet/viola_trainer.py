@@ -189,7 +189,8 @@ class ViolaDataSetup(object):
         '''
         Return .dat files containing positions and sizes of roofs in training images
         This uses the info about the Inhabited roofs but adds padding also and produces .Dat
-        file with samples embedded in the full images
+        file with samples embedded in the full images. Because we use the whole image, we can't
+        do data augmentation.
         '''
         if size_divide:
             metal = [list() for i in range(3)]
@@ -255,6 +256,7 @@ class ViolaDataSetup(object):
             else:
                 metal_f.close()
             thatch_f.close() 
+
 
     @staticmethod
     def get_roof_dat(roof_lists, roof, size_divide=False):
