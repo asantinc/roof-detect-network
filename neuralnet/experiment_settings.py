@@ -37,6 +37,7 @@ UNINHABITED_PATH = '../data/uninhabited/'
 JSON_IMGS = '../data/images-new/'
 DELETE_PATH = '../data/delete/'
 NEGATIVE_PATCHES_NUM = 5
+NEGATIVE_PATH = '../data/roof_negatives/'
 
 #types of roof
 NON_ROOF = 0

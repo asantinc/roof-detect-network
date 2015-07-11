@@ -300,11 +300,10 @@ class DataLoader(object):
         '''Save a patch located at the xmin, ymin position to the patches folder 
         '''
         assert xmin > -1 and ymin > -1
-
         with open(self.labels_path, 'a') as labels_file:
             try:
                 patch = img[ymin:(ymin+settings.PATCH_H), xmin:(xmin+settings.PATCH_W)]
-                misc.imsave(self.out_path+str(self.total_patch_no)+str(extension), patch)
+                cv2.imwrite(self.out_path+str(self.total_patch_no)+str(extension), patch)
                 
                 #save an image showing where the patch was taken for debugging
                 '''if settings.DEBUG:
@@ -450,15 +449,20 @@ class DataLoader(object):
                 self.save_patch_scaled(img=img, roof=roof)
                 
 
-    def get_negative_patches(self, total_patches, label_file):
+    def get_negative_patches(self, total_patches, label_file, out_path=None):
+        '''Save negative patches to a folder
+        '''
         print 'Getting the negative patches....\n'
         img_names = DataLoader.get_img_names_from_path(path=settings.UNINHABITED_PATH)
+        
+        self.labels_path = label_file
+        self.out_path = out_path if out_path is not None else self.out_path
 
         negative_patches = (total_patches)/len(img_names)
         
         #Get negative patches
         for i, img_path in enumerate(img_names):
-            settings.print_debug('Negative image: '+str(i))
+            #settings.print_debug('Negative image: '+str(i))
             for p in range(negative_patches):
                 #get random ymin, xmin, but ensure the patch will fall inside of the image
                 try:
@@ -509,7 +513,7 @@ class DataLoader(object):
 
         return all_roofs, all_labels
 
-
+'''
     def append_negative_patch_arrays(self, all_roofs, all_labels, patch_no):
         '''Append negative numpy arrays with negative examples to the all_roofs list, and append the correct non_roof label to all_labels list
         '''
@@ -548,9 +552,9 @@ class DataLoader(object):
                         all_labels.append(settings.NON_ROOF)
         #return the roof arrays, the labels and the roof objects containing info about the roof patch origin 
         return all_roofs, all_labels, all_roof_objects
+'''
 
-
-    def produce_xml_roofs(self, pad=0, negatives=True):
+    def produce_xml_roofs(self, pad=0, new_test_set=False):
         '''Uses images in settings/INHABITED_PATH or ../data/testing_new_source and the corresponding xml file to get roofs with padding and saves them to an 
         output folder. 
         If negatives is True, is also includes negatives.
@@ -567,7 +571,7 @@ class DataLoader(object):
         out_path:
             Where roofs should be saved to
         '''
-        in_path = settings.INHABITED_PATH if negatives else '../data/testing_new_source/'
+        in_path = settings.INHABITED_PATH if new_test_set==False else '../data/testing_new_source/'
         img_names = DataLoader.get_img_names_from_path(path=in_path)
 
         #Get the roofs defined in the xml, save the corresponding image patches
@@ -596,7 +600,7 @@ class DataLoader(object):
         all_labels = np.array(all_labels)
         all_roof_objects = np.array(all_roof_objects, dtype=object)
         
-        if negatives == False:
+        if new_test_set:
             #save all the patches, pickle the roofs
             with open('../data/testing_new/labels.csv', 'w') as labels_train:
                 for r, (roof, label) in enumerate(zip(all_roofs, all_labels)):
@@ -608,11 +612,9 @@ class DataLoader(object):
                 stats.write('non_roof,{0}\nmetal,{1}\nthatch,{2}'.format(non_roof, metal, thatch))
             with open('../data/testing_new/roofs.pickle', "wb") as f:
                 pickle.dump(all_roof_objects, f)
- 
+            return all_roofs.shape[0]
+
         else: 
-            all_roofs, all_labels, negative_roof_objects = self.append_negative_patch_arrays(all_roofs, all_labels, 5*len(all_roofs))
-            all_roof_objects.extend(negative_roof_objects)
-       
             #do a stratified k-fold split of the roofs, where k=1
             split = cross_validation.StratifiedShuffleSplit(all_labels, 1, test_size=0.2, random_state=0)
             for train_index, test_index in split:
@@ -655,7 +657,9 @@ class DataLoader(object):
                 roofs_train_loaded = pickle.load(f)
             with open(pick_test, "rb") as f:
                 roofs_test_loaded = pickle.load(f)
-                   
+            
+            return X_train.shape[0], X_test.shape[0]
+
 
     def produce_json_roofs(self, json_file=None):
         #Get the filename 
@@ -697,4 +701,5 @@ if __name__ == '__main__':
     #loader = DataLoader(labels_path='labels.csv', out_path='../data/testing_json/', in_path=settings.JSON_IMGS)
     #loader.produce_json_roofs(json_file='../data/images-new/labels.json')
     loader = DataLoader()
-    loader.produce_xml_roofs(negatives=False)
+    train_no, test_no = loader.produce_xml_roofs(new_test_set=False)
+    loader.get_negative_patches(10*train_no, settings.NEGATIVE_PATH+'labels.csv', out_path=settings.NEGATIVE_PATH)
