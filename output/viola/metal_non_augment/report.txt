@@ -1,0 +1,3 @@
+****************** DETECTORS USED ******************
+thatch
+metal
