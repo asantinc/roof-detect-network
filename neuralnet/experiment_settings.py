@@ -73,6 +73,9 @@ CASCADE_PATH = '../viola_jones/cascades/'
 VIOLA_OUT = '../output/viola/'
 
 
+#Pipeline
+PIPE_PARAMS_PATH = '../data/pipe_params/'
+
 def time_stamped(fname, fmt='%m-%d-%H-%M_{fname}'):
     return datetime.datetime.now().strftime(fmt).format(fname=fname)
 #with open(timeStamped('myfile.txt'),'w') as outf:

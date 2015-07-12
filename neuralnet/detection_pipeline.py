@@ -27,7 +27,7 @@ OUTPUT_PATH = 'output'
 
 
 class Pipeline(object):
-    def __init__(self, step_size=None, test_files=None, test_folder=None, viola_process=True):
+    def __init__(self, pipe_name=None, step_size=None, test_files=None, test_folder=None, viola_process=True):
         self.step_size = step_size if step_size is not None else STEP_SIZE
         self.viola_process = viola_process
 
@@ -44,10 +44,13 @@ class Pipeline(object):
         #OUTPUT FOLDER: create it if it doesn't exist
         #out_name = raw_input('Name of output folder: ')
         out_name = OUTPUT_PATH
-        assert out_name != ''
-        self.out_path = '../output/pipeline/{0}/'.format(out_name)
+        assert pipe_name is not None
+        self.out_path = '../output/pipeline/{0}/'.format(pipe_name)
         if not os.path.isdir(self.out_path):
-            subprocess.check_call('mkdir {0}'.format(self.out_path[:-1]), shell=True)
+            subprocess.check_call('mkdir {0}'.format(self.out_path), shell=True)
+        else:
+            print 'Directory {0} already exists \n'.format(self.out_path)
+            sys.exit(-1)
         print 'Will output files to: {0}'.format(self.out_path)
 
         #DETECTORS
@@ -210,3 +213,25 @@ if __name__ == '__main__':
     #pipe.experiment.test_preloaded()
     pipe.run()
 
+
+def get_params_from_file(file_name):
+    parameters = dict()
+    with open(file_name, 'r') as f:
+        reader = csv.reader(f, delimiter=',')
+        for par in reader:
+            if len(par) == 2:
+                parameteres[par[0].strip()] = par[1].strip()
+    return parameters
+
+
+if __name__ == '__main__':
+    param_file = 'params'+raw_input('Enter param file number :')+'.csv'
+    params = get_params_from_file(settings.PIPE_PARAMS_PATH+param_file) 
+
+    Pipeline()
+    if params['net_name'] == 0:
+        params['net_name'] = time_stamped(param_file)
+        print 'Network name is: {0}'.format(params['net_name'])
+    if params['roofs_only']:
+        params['net_name'] = params['net_name']+'_roofs'
+ 

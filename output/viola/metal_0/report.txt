@@ -1,0 +1,5 @@
+****************** DETECTORS USED ******************
+thatch
+metal
+Image 0018.jpg metal: 0/7
+Image 0032.jpg metal: 0/17

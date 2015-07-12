@@ -50,18 +50,17 @@ class Roof(object):
         return (self.xmax-self.xmin)
 
 
-    def check_overlap_total(self, patch_mask, patch_sum, img_rows, img_cols):
+    def check_overlap_total(self, patch_mask, img_rows, img_cols):
         roof_area = self.width*self.height
         curr_roof = np.zeros((img_rows, img_cols))
         curr_roof[self.ymin:self.ymin+self.height, self.xmin:self.xmin+self.width] = 1
-        # misc.imsave('../viola_jones/1.jpg', curr_roof)
         curr_roof[patch_mask] = 0 
-        # misc.imsave('../viola_jones/2.jpg', curr_roof)
         
         roof_area_found = roof_area-self.sum_mask(curr_roof)
+       
         percent_found = ((roof_area_found)/roof_area)
         
-        print percent_found
+        print 'Percent of current roof found: percent_found'
         return percent_found
 
 
@@ -74,24 +73,25 @@ class Roof(object):
     def max_overlap_single_patch(self, rows=0, cols=0, detections=[]):
         '''Return maximum percentage overlap between this roof and a single patch in a set of candidate patches from the same image
         '''
-        roof_area = self.width*self.height
+        roof_area = min_miss = self.width*self.height
         best_cascade = -1   #keep track of the 
-        roof_mask = np.zeros((rows, cols))
-        min_mask = np.zeros((rows, cols))
-        min_mask[self.ymin:self.ymin+self.height, self.xmin:self.xmin+self.width] = 1
+        roof_mask = np.zeros((rows, cols)) 
+        
         for j, detection in enumerate(detections):
             for (x,y,w,h) in detection:                           #for each patch found
                 roof_mask[self.ymin:self.ymin+self.height, self.xmin:self.xmin+self.width] = 1   #the roof
                 roof_mask[y:y+h, x:x+w] = 0        #detection
+                curr_miss = self.sum_mask(roof_mask)
 
-                if self.sum_mask(roof_mask) == 0:                       #we have found the roof
+                if curr_miss == 0:                       #we have found the roof
                     return 1.0
-                elif self.sum_mask(roof_mask) < self.sum_mask(min_mask):               #keep track of best match
-                    min_mask = np.copy(roof_mask)                
+                elif curr_miss < min_miss:               #keep track of best match
+                    min_miss = curr_miss                
                     x_true, y_true, w_true, h_true = x,y,w,h
                     best_cascade = j
-        percent_found = (roof_area-self.sum_mask(min_mask))*(1.)/roof_area
-        print 'Percent found: '+str(percent_found)+'  Best cascade: '+str(best_cascade)
+
+        percent_found = (roof_area-min_miss)*(1.)/roof_area
+        print 'Percent found: {0} \t  Best cascade: {1}'.format(percent_found, best_cascade)
         return percent_found
 
 
@@ -316,7 +316,7 @@ class DataLoader(object):
                 print e
             else:
                 labels_file.write(str(self.total_patch_no)+','+str(roof_type)+'\n')
-                print 'Saved patch: '+str(self.total_patch_no)+'\n'
+                #print 'Saved patch: '+str(self.total_patch_no)+'\n'
                 self.total_patch_no = self.total_patch_no+1
 
 
@@ -457,7 +457,7 @@ class DataLoader(object):
         
         self.labels_path = label_file
         self.out_path = out_path if out_path is not None else self.out_path
-
+        print 'Saving negative: '+str(total_patches)+'\n'
         negative_patches = (total_patches)/len(img_names)
         
         #Get negative patches
@@ -513,46 +513,6 @@ class DataLoader(object):
 
         return all_roofs, all_labels
 
-'''
-    def append_negative_patch_arrays(self, all_roofs, all_labels, patch_no):
-        '''Append negative numpy arrays with negative examples to the all_roofs list, and append the correct non_roof label to all_labels list
-        '''
-        print 'Getting the negative patches....\n'
-        img_names = DataLoader.get_img_names_from_path(path=settings.UNINHABITED_PATH)
-        negative_patches = (patch_no)/len(img_names)
-        
-        all_roof_objects = list()
-        #Get negative patches
-        for i, img_path in enumerate(img_names):
-            #get random ymin, xmin, but ensure the patch will fall inside of the image
-            print 'Negative image {0}'.format(i)
-            try:
-                img = cv2.imread(settings.UNINHABITED_PATH+img_path)
-            except IOError:
-                print 'Cannot open '+img_path
-            else:
-                h, w, _ = img.shape
-                
-                for p in range(negative_patches):
-                    w_max = w - settings.PATCH_W
-                    h_max = h - settings.PATCH_H
-                    xmin = random.randint(0, w_max)
-                    ymin = random.randint(0, h_max)
-
-                    roof = Roof(xmin=xmin, ymin=ymin,xmax=xmin+settings.PATCH_W, 
-                                    ymax=ymin+settings.PATCH_H, roof_type=settings.NON_ROOF)
-                    roof.img_name = settings.UNINHABITED_PATH+img_path
-                    try:
-                        patch = img[ymin:ymin+settings.PATCH_H, xmin:xmin+settings.PATCH_W]
-                    except Exception, e:
-                        print e
-                    else:
-                        all_roof_objects.append(roof)
-                        all_roofs.append(patch)
-                        all_labels.append(settings.NON_ROOF)
-        #return the roof arrays, the labels and the roof objects containing info about the roof patch origin 
-        return all_roofs, all_labels, all_roof_objects
-'''
 
     def produce_xml_roofs(self, pad=0, new_test_set=False):
         '''Uses images in settings/INHABITED_PATH or ../data/testing_new_source and the corresponding xml file to get roofs with padding and saves them to an 

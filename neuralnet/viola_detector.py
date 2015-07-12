@@ -3,6 +3,7 @@ import subprocess
 import pdb
 import math
 from collections import defaultdict
+import pickle
 
 import numpy as np
 import cv2
@@ -12,17 +13,15 @@ from scipy import misc, ndimage #load images
 import get_data
 import experiment_settings as settings
 from viola_trainer import ViolaTrainer, ViolaDataSetup
-
+from timer import Timer
 
 class ViolaDetector(object):
-    def __init__(self, num_pos=None, num_neg=None, 
+    def __init__(self, params_f=None, 
             detector_paths=None, 
             output_folder=None,
             save_imgs=False,
             scale=1.05
             ):
-        self.num_pos = num_pos if num_pos is not None else 0
-        self.num_neg = num_neg if num_neg is not None else 0
         self.scale = scale
         self.save_imgs = save_imgs
 
@@ -38,11 +37,17 @@ class ViolaDetector(object):
         assert detector_paths is not None 
         self.detector_paths = detector_paths
         self.roof_detectors = dict()
-        self.roof_detectors['metal'] = [cv2.CascadeClassifier(settings.VIOLA_IN+path) for path in detector_paths['metal']]
-        self.roof_detectors['thatch'] = [cv2.CascadeClassifier(settings.VIOLA_IN+path) for path in detector_paths['thatch']]
+        self.roof_detectors['metal'] = [cv2.CascadeClassifier('../viola_jones/'+path+'/cascade.xml') for path in detector_paths['metal']]
+        self.roof_detectors['thatch'] = [cv2.CascadeClassifier('../viola_jones/'+path+'/cascade.xml') for path in detector_paths['thatch']]
 
         #file name beginning
-        self.file_name_default = '''numPos{0}_numNeg{1}_scale{2}'''.format(num_pos, num_neg, self.scale)
+        metal_name = '+'.join(detector_paths['metal'])+'+' if len(detector_paths['metal'])>0 else ''
+        metal_name += '+'.join(detector_paths['thatch']) if len(detector_paths['thatch'])>0 else metal_name[:-1]
+        #self.out_file = metal_name
+        self.out_file = params_f
+
+        #make a folder if it doens't exist
+        '''
         for det in self.detector_paths['metal']:
             mkdir_cmd = 'mkdir {0}{1}'.format(settings.VIOLA_OUT, det)
             try:
@@ -55,12 +60,10 @@ class ViolaDetector(object):
                 subprocess.check_call(mkdir_cmd, shell=True)
             except Exception as e:
                 print e
-
+        '''
 
         #open report file and create output folder if it doesn't exist
-        metal_det = '+'.join(self.roof_detectors['metal']
-        thatch_det = '+'.join(self.roof_detectors['thatch']
-        self.output_folder = settings.VIOLA_OUT+metal_det+'+'+thatch_det
+        self.output_folder = settings.VIOLA_OUT+params_f
         if not os.path.isdir(self.output_folder):
             subprocess.check_call('mkdir {0}'.format(self.output_folder), shell=True)
         print 'Will output files to: {0}'.format(self.output_folder)
@@ -75,71 +78,82 @@ class ViolaDetector(object):
         else:
             report.close()
 
-
     def detect_roofs(self, img_name=None, img_path=None, reject_levels=1.3, level_weights=5, scale=None):
-        img = cv2.imread(img_path, flags=cv2.IMREAD_COLOR)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        if os.path.isfile(self.output_folder+img_name+'.pickle'):
+            #load from file
+            with open(self.output_folder+img_name+'.pickle', 'rb') as f:
+                self.roofs_detected[img_name] = pickle.load(f) 
+        else:
+            img = cv2.imread(img_path, flags=cv2.IMREAD_COLOR)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        self.scale = scale if scale is not None else self.scale
+            self.scale = scale if scale is not None else self.scale
 
-        #get detections in the image
-        roof_detections = dict()
-        for roof_type in self.roof_detectors.keys():
-            roof_detections[roof_type] = list()
-            for i, detector in enumerate(self.roof_detectors[roof_type]):
-                print 'Detecting with detector: '+str(i)
-                detected_roofs = detector.detectMultiScale(gray, scaleFactor=self.scale, minNeighbors=5)
-                #group_detected_roofs, weights = cv2.groupRectangles(np.array(detected_roofs).tolist(), 0, 5)
-                roof_detections[roof_type].append(detected_roofs)
+            #get detections in the image
+            roof_detections = dict()
+            for roof_type in self.roof_detectors.keys():
+                roof_detections[roof_type] = list()
+                for i, detector in enumerate(self.roof_detectors[roof_type]):
+                    print 'Detecting with detector: '+str(i)
+                    with Timer() as t: 
+                        detected_roofs = detector.detectMultiScale(gray, scaleFactor=self.scale, minNeighbors=5)
+                    print '{0} took {1} secs with detector {2} '.format(img_name, t.secs, i)
+                    #group_detected_roofs, weights = cv2.groupRectangles(np.array(detected_roofs).tolist(), 0, 5)
+                    roof_detections[roof_type].append(detected_roofs)
 
-        self.roofs_detected[img_name] = roof_detections
+            self.roofs_detected[img_name] = roof_detections
+           
+            #save detections to file
+            with open(self.output_folder+img_name+'.pickle', 'wb') as f:
+                pickle.dump(self.roofs_detected[img_name], f)
+                 
 
-
-    def compare_detections_to_roofs_folder(path=settings.INHABITED_PATH, reject_levels=1.3, level_weights=5, scale=1.05):
+    def compare_detections_to_roofs_folder(self, path=settings.INHABITED_PATH, save_detections=False, reject_levels=1.3, level_weights=5, scale=1.05):
         '''Compare detections to ground truth roofs for set of images in a folder
         '''
         loader = get_data.DataLoader()
         img_names = get_data.DataLoader.get_img_names_from_path(path=path)
         for i, img_name in enumerate(img_names):
-            self.compare_detections_to_roofs(img_name=img_name, path=path, reject_levels=reject_levels, level_weights=level_weights, scale=scale)
+            self.compare_detections_to_roofs(loader, img_name=img_name, path=path, reject_levels=reject_levels, level_weights=level_weights, scale=scale)
         self.print_report(final_stats=True)
    
 
-    def compare_detections_to_roofs(self, img_name='', path='', reject_levels=1.3, level_weights=5, scale=1.05):
+    def compare_detections_to_roofs(self, 
+            loader, img_name='', path='', 
+            reject_levels=1.3, level_weights=5, scale=1.05):
         '''Compare detections to ground truth roofs in an image
         '''
         self.scale = scale
         img_path = path+img_name
         xml_path = path+img_name[:-3]+'xml'
-
-        self.detect_roofs(img_name=img_name, img_path=img_path)
-        self.report_roofs_detected(i, img_name)
+        
+        self.detect_roofs(img_name=img_name, img_path=img_path) 
+        self.report_roofs_detected(img_name)
+        roof_list = loader.get_roofs(xml_path, img_path)
+        self.save_detection_img(img_path, img_name, roof_list)
 
         try:
-            image = misc.imread(img_path)
+            image = cv2.imread(img_path)
         except IOError:
             print 'Cannot open '+img_path
         rows, cols, _ = image.shape
-        roof_list, _, _ = loader.get_roofs(xml_path)
         
         self.match_roofs_to_detection(img_name, roof_list, rows, cols)
         self.print_report(img_name)
 
-        if self.save_imgs:
-            self.save_detection_img(img_path, img_name, roof_list)
-
-        self.print_report(final_stats=False)
 
 
     def get_patch_mask(self, img_name, rows=1200, cols=2000):
+        '''Mark the area of a detection as True, everything else as False
+        '''
         patch_mask = np.zeros((rows, cols), dtype=bool)
         patch_area = 0
-        for roof_type in self.roofs_detected.keys():
+        for roof_type in self.roofs_detected[img_name].keys():
             for i, detection in enumerate(self.roofs_detected[img_name][roof_type]):
                 for (x,y,w,h) in detection:
                     patch_mask[y:y+h, x:x+w] = True
                     patch_area += w*h
-        return patch_mask, patch_area
+        return patch_mask, float(patch_area)/(rows*cols)
 
 
     def get_detection_contours(self, patch_path, img_name):
@@ -168,27 +182,22 @@ class ViolaDetector(object):
     def match_roofs_to_detection(self, img_name, roof_list, rows=1200, cols=2000):
         #Compare detections to ground truth
         self.overlap_dict[img_name] = defaultdict(list)
-        patch_mask, patch_area = self.get_patch_mask(img_name)
+        patch_mask, detection_percent = self.get_patch_mask(img_name)
+        print 'Percent of image covered by detection:{0}'.format(detection_percent)
         patch_location = self.output_folder+img_name+'_mask.jpg'
         
-        misc.imsave(patch_location, patch_mask)
+        cv2.imwrite(patch_location, np.array(patch_mask, dtype=int))
 
         detection_contours = self.get_detection_contours(patch_location, img_name)
         for roof in roof_list:
-                #self.overlap_dict[img_name].append(roof.max_overlap_single_patch(rows=rows, cols=cols,detections=self.roofs_detected[img_name]))
-            self.overlap_dict[img_name][roof.roof_type].append(roof.check_overlap_total(patch_mask, patch_area, rows, cols))
+            self.overlap_dict[img_name][roof.roof_type].append(roof.check_overlap_total(patch_mask, rows, cols))
+            roof.max_overlap_single_patch()
 
-
-    def report_roofs_detected(self, i, img_name):
-        detect_nums = defaultdict(int)
-        for roof_type in self.roofs_detected.keys():
-            for detection_set in self.roofs_detected[img_name][roof_type]:
-                detect_nums[roof_type] += len(detection_set)
-        print '*************************** IMAGE:'+str(i)+','+str(img_name)+'***************************'
-        print 'Metal detected: {0} \t Thatch: {1} \t Total: {2}'.format(detect_nums['metal'], 
-                            detect_nums['thatch'], detect_nums['metal']+detect_nums['thatch'])
-
-
+    def report_roofs_detected(self, img_name):
+        for roof_type in ['metal', 'thatch']:
+            for i, detector in enumerate(self.detector_paths[roof_type]):
+                print 'Detector {0}: \t {1}'.format(detector, len(self.roofs_detected[img_name][roof_type][i]) )
+  
     def print_report(self, img_name='', detections_num=-1, final_stats=False):
         with open(self.report_file, 'a') as report:
             if not final_stats:
@@ -199,7 +208,7 @@ class ViolaDetector(object):
                 true_metal = true_thatch = 0
                 for roof_type in self.overlap_dict.keys():
                     for v in self.overlap_dict[img_name][roof_type]:
-                        if v > MIN_OVERLAP:
+                        if v > .20:
                             if roof_type == 'metal':
                                 true_metal += 1
                             elif roof_type == 'thatch':
@@ -213,7 +222,7 @@ class ViolaDetector(object):
                 print log
                 report.write(log)
 
-            elif final_stats:
+            else:
                 #Print number of false positives, False negatives
                 log = ('******************************* RESULTS ********************************* \n'
                     +'METAL: \n'+
@@ -222,7 +231,6 @@ class ViolaDetector(object):
                     +'THATCH: \n'+
                     +'Precision: \t'+str(self.tp_thatch)+'/'+str(self.thatch_candidates)+
                     +'\n'+'Recall: \t'+str(self.tp_thatch)+'/'+str(self.all_true_thatch)+'\n')
-
                 print log
                 report.write(log)
 
@@ -230,13 +238,13 @@ class ViolaDetector(object):
     def mark_detections_on_img(self, img, img_name):
         ''' Save an image with the detections and the ground truth roofs marked with rectangles
         '''
-        for i, cascade in enumerate(self.roofs_detected[img_name]):
-            for (x,y,w,h) in cascade:
-                if i%3==0:
+        for f in range(len(self.roofs_detected[img_name])):
+            for i, (x,y,w,h) in enumerate(self.roofs_detected[img_name]['metal'][f]):
+                if f%3==0:
                     color=(255,0,0)
-                elif i%3==1:
+                elif f%3==1:
                     color=(0,0,255)
-                elif i%3==2:
+                elif f%3==2:
                     color=(255,255,255)
                 cv2.rectangle(img,(x,y),(x+w,y+h), color, 2)
         return img
@@ -244,8 +252,7 @@ class ViolaDetector(object):
 
     def mark_roofs_on_img(self, img, img_name, roof_list):
         for roof in roof_list:
-            if roof.roof_type == self.roof_type:
-                cv2.rectangle(img,(roof.xmin,roof.ymin),(roof.xmin+roof.width,roof.ymin+roof.height),(0,255,0),2)
+            cv2.rectangle(img,(roof.xmin,roof.ymin),(roof.xmin+roof.width,roof.ymin+roof.height),(0,255,0),2)
         return img
 
 
@@ -257,24 +264,21 @@ class ViolaDetector(object):
 
 
     def save_image(self, img, img_name, output_folder=None):
-        if output_folder is not None:
-            self.output_folder = output_folder 
-        cv2.imwrite(self.output_folder+self.file_name_default+'_'+img_name, img)
+        self.output_folder = output_folder if output_folder is not None else self.output_folder  
+        cv2.imwrite(self.output_folder+'_'+img_name, img)
 
-    def 
 
 
 if __name__ == '__main__':
     #can have multiple detectors for each type of roof
     detectors = dict()
-    detectors['metal'] = []
-    detectors['thatch'] = ['../viola_jones/cascade_thatch_5_augment/cascade.xml']
-    
+    detectors['metal'] = [ 'cascade_metal_0_square_augment_num3088_w24_h24','cascade_metal_0_tall_augment_num1608_w12_h24','cascade_metal_0_wide_augment_num2184_w24_h12']
+    detectors['thatch'] = []
+
     output = '../output/viola/'
-    num_pos = 0
-    num_neg = 0
-    viola = ViolaDetector(num_pos, num_neg, detector_paths=detectors, output_folder=output, save_imgs=True)
-    viola.compare_detections_to_roofs_folder(reject_levels=0.5, level_weights=2, scale=1.05)
+    params_f = 'metal_0/'
+    viola = ViolaDetector(params_f=params_f, detector_paths=detectors, output_folder=output, save_imgs=True)
+    viola.compare_detections_to_roofs_folder(save_detections=True, reject_levels=0.5, level_weights=2, scale=1.05)
 
 
 
