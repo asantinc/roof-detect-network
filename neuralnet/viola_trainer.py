@@ -437,7 +437,7 @@ if __name__ == '__main__':
         roof_type = 'metal' if t=='m' else 'thatch'
     vecs = [v]
     ViolaTrainer.train_cascade(vec_files=vecs, roof_type=roof_type)
-    '''
+    
     #ViolaDataSetup.setup_positive_samples(padding=0)
     #ViolaDataSetup.vec_file_samples() 
      

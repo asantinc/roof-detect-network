@@ -284,13 +284,12 @@ class ViolaDetector(object):
 if __name__ == '__main__':
     #can have multiple detectors for each type of roof
     detectors = dict()
-    #detectors['metal'] = [ 'cascade_metal_0_square_augment_num3088_w24_h24','cascade_metal_0_tall_augment_num1608_w12_h24','cascade_metal_0_wide_augment_num2184_w24_h12']
-    detectors['metal'] = ['cascade_w25_h12_pos393_neg700.xml', 'cascade_w12_h25_pos393_neg700.xml']
+    detectors['metal'] = [ 'cascade_metal_0_tall_augm0_num59_w25_h50', 'cascade_metal_0_wide_augm0_num77_w50_h25']
     detectors['thatch'] = []
 
     output = '../output/viola/'
-    params_f = 'metal_non_augment_neg700_pos393/'
-    viola = ViolaDetector(params_f=params_f, detector_paths=detectors, output_folder=output, save_imgs=True, old_detector = True)
+    params_f = 'augm0_bigger_wide_tall/'
+    viola = ViolaDetector(params_f=params_f, detector_paths=detectors, output_folder=output, save_imgs=True, old_detector = False)
     viola.compare_detections_to_roofs_folder(save_detections=True, reject_levels=0.5, level_weights=2, scale=1.05)
 
 
