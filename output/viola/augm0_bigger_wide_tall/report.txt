@@ -1,6 +1,39 @@
 ****************** DETECTORS USED ******************
-thatch
-metal
-Image 0018.jpg metal: 0/7
-Image 0032.jpg metal: 0/17
-Image 0034.jpg metal: 0/13
+METAL: 
+cascade_metal_0_tall_augm0_num59_w25_h50
+cascade_metal_0_wide_augm0_num77_w50_h25THATCH: 
+
+Image 0018.jpg metal: 7/7
+Image 0032.jpg metal: 17/17
+Image 0034.jpg metal: 13/13
+Image 0001.jpg metal: 16/17
+Image 0007.jpg metal: 1/1
+Image 0020.jpg metal: 31/32
+Image 0017.jpg metal: 4/4
+Image 0023.jpg metal: 7/7
+Image 0031.jpg metal: 35/35
+Image 0013.jpg metal: 1/1
+Image 0009.jpg metal: 2/3
+Image 0029.jpg metal: 24/24
+Image 0003.jpg metal: 7/9
+Image 0016.jpg metal: 0/0
+Image 0019.jpg metal: 16/16
+Image 0027.jpg metal: 27/27
+Image 0011.jpg metal: 6/6
+Image 0033.jpg metal: 17/17
+Image 0021.jpg metal: 22/23
+Image 0012.jpg metal: 0/0
+Image 0014.jpg metal: 0/0
+Image 0015.jpg metal: 0/0
+Image 0004.jpg metal: 1/1
+Image 0008.jpg metal: 1/1
+Image 0026.jpg metal: 11/14
+Image 0030.jpg metal: 13/14
+Image 0036.jpg metal: 24/24
+Image 0006.jpg metal: 8/8
+Image 0010.jpg metal: 12/12
+Image 0028.jpg metal: 17/17
+Image 0035.jpg metal: 22/24
+Image 0005.jpg metal: 0/0
+Image 0024.jpg metal: 0/0
+Image 0025.jpg metal: 0/0
