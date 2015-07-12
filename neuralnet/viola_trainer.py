@@ -4,6 +4,7 @@ import pdb
 import math
 import getopt
 import sys
+import csv
 
 import numpy as np
 import cv2
@@ -85,7 +86,7 @@ class ViolaDataSetup(object):
             xml_path = settings.INHABITED_PATH+img_name[:-3]+'xml'
             img_path = settings.INHABITED_PATH+img_name
     
-            roofs, _, _ = roof_loader.get_roofs(xml_path)
+            roofs = roof_loader.get_roofs(xml_path, img_name)
             metal_log = list()
             thatch_log = list()
 
@@ -194,12 +195,12 @@ class ViolaDataSetup(object):
         '''
         if size_divide:
             metal = [list() for i in range(3)]
-            metal[0] = '{0}metal_{1}_tall.dat'.format(settings.DAT_PATH, padding)
-            metal[1] = '{0}metal_{1}_square.dat'.format(settings.DAT_PATH, padding)
-            metal[2] = '{0}metal_{1}_wide.dat'.format(settings.DAT_PATH, padding)
+            metal[0] = '{0}metal_{1}_tall_augm0.dat'.format(settings.DAT_PATH, padding)
+            metal[1] = '{0}metal_{1}_square_augm0.dat'.format(settings.DAT_PATH, padding)
+            metal[2] = '{0}metal_{1}_wide_augm0.dat'.format(settings.DAT_PATH, padding)
         else:
-            metal_n =  '{0}metal_{1}.dat'.format(settings.DAT_PATH, padding) 
-        thatch_n = '{0}thatch_{1}.dat'.format(settings.DAT_PATH, padding)
+            metal_n =  '{0}metal_{1}_augm0.dat'.format(settings.DAT_PATH, padding) 
+        thatch_n = '{0}thatch_{1}_augm0.dat'.format(settings.DAT_PATH, padding)
 
         try:
             if size_divide:
@@ -219,9 +220,9 @@ class ViolaDataSetup(object):
             for img_name in img_names_list:
                 print 'Processing image: {0}'.format(img_name)
                 xml_path = settings.INHABITED_PATH+img_name[:-3]+'xml'
-                img_path = settings.INHABITED_PATH+img_name
+                img_path = '../'+settings.INHABITED_PATH+img_name
         
-                roofs, _, _ = roof_loader.get_roofs(xml_path)
+                roofs = roof_loader.get_roofs(xml_path, img_name)
                 metal_log = [list() for i in range(3)] if size_divide else list()
                 thatch_log = list()
 
@@ -269,11 +270,11 @@ class ViolaDataSetup(object):
         ratio = 0
         if roof.roof_type == 'metal' and size_divide:
             aspect_ratio = float(roof.width)/(roof.height)
-            if (aspect_ratio > 1.5):                       #TALL ROOF
+            if (aspect_ratio > 1.5):                       #WIDE ROOF
                 roof_lists[2].append(string_to_add)
             elif aspect_ratio >= 0.75 and ratio <= 1.5:    #SQUARE
                 roof_lists[1].append(string_to_add)
-            elif aspect_ratio < 0.75:                      #WIDE ROOF
+            elif aspect_ratio < 0.75:                      #TALL ROOF
                 roof_lists[0].append(string_to_add)
         else:#either it's a thatches roof or it's metal but we don't care about the width/height ratio
             roof_lists.append(string_to_add)
@@ -295,9 +296,7 @@ class ViolaDataSetup(object):
         for file_name in os.listdir(settings.DAT_PATH):
             if file_name.endswith('.dat'):
                 # number of lines tells us number of samples
-                sample_num = 0
-                with open(settings.DAT_PATH+file_name) as f:
-                    sample_num = sum(1 for _ in f)
+                sample_num = ViolaDataSetup.get_sample_num_from_dat(settings.DAT_PATH+file_name) 
                 
                 w = raw_input('Width of {0}: '.format(file_name))
                 h = raw_input('Height of {0}: '.format(file_name))
@@ -315,6 +314,16 @@ class ViolaDataSetup(object):
                 except Exception as e:
                     print e
         return vec_info
+
+
+    @staticmethod
+    def get_sample_num_from_dat(dat_path):
+        with open(dat_path, 'rb') as csvfile:
+            sample_num = 0
+            reader = csv.reader(csvfile, delimiter='\t')
+            for row in reader:
+                sample_num += int(row[1])
+        return sample_num
 
 
     @staticmethod
@@ -406,6 +415,8 @@ if __name__ == '__main__':
 #   ViolaDataSetup.setup_positive_samples_full_image(padding=0, size_divide=False)
 #    ViolaDataSetup.vec_file_samples()
     #pass in a vec file without the extension
+
+    #TRAINING CASCADE
     no_details = True
     roof_type = ''  
     try:
@@ -426,4 +437,8 @@ if __name__ == '__main__':
         roof_type = 'metal' if t=='m' else 'thatch'
     vecs = [v]
     ViolaTrainer.train_cascade(vec_files=vecs, roof_type=roof_type)
+    '''
+    #ViolaDataSetup.setup_positive_samples(padding=0)
+    #ViolaDataSetup.vec_file_samples() 
+     
 

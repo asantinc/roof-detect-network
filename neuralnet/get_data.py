@@ -665,3 +665,4 @@ if __name__ == '__main__':
     loader = DataLoader()
     train_no, test_no = loader.produce_xml_roofs(new_test_set=False)
     loader.get_negative_patches(10*train_no, settings.NEGATIVE_PATH+'labels.csv', out_path=settings.NEGATIVE_PATH)
+
