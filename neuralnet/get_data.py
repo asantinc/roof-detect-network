@@ -58,7 +58,7 @@ class Roof(object):
         
         roof_area_found = roof_area-self.sum_mask(curr_roof)
        
-        percent_found = ((roof_area_found)/roof_area)
+        percent_found = (float(roof_area_found)/roof_area)
         
         print 'Percent of current roof found: {0}'.format(percent_found)
         return percent_found

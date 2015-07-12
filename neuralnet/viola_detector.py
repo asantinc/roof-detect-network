@@ -78,7 +78,11 @@ class ViolaDetector(object):
         try:
             report = open(self.report_file, 'w')
             report.write('****************** DETECTORS USED ******************\n')
-            report.write('\n'.join(detector_paths))
+            report.write('METAL: \n')
+            report.write('\n'.join(detector_paths['metal']))
+            
+            report.write('THATCH: \n')
+            report.write('\n'.join(detector_paths['thatch']))           
             report.write('\n')
         except IOError as e:
             print e
@@ -144,7 +148,6 @@ class ViolaDetector(object):
         except IOError:
             print 'Cannot open '+img_path
         rows, cols, _ = image.shape
-        
         self.match_roofs_to_detection(img_name, roof_list, rows, cols)
         self.print_report(img_name)
 
@@ -160,8 +163,9 @@ class ViolaDetector(object):
                 for (x,y,w,h) in detection:
                     patch_mask[y:y+h, x:x+w] = True
                     patch_area += w*h
-        return patch_mask, float(patch_area)/(rows*cols)
 
+        area_covered = np.sum(patch_area)
+        return patch_mask, float(area_covered)/(rows*cols) 
 
     def get_detection_contours(self, patch_path, img_name):
         im_gray = cv2.imread(patch_path, cv2.CV_LOAD_IMAGE_GRAYSCALE)
@@ -192,7 +196,6 @@ class ViolaDetector(object):
         patch_mask, detection_percent = self.get_patch_mask(img_name)
         print 'Percent of image covered by detection:{0}'.format(detection_percent)
         patch_location = self.output_folder+img_name+'_mask.jpg'
-        
         cv2.imwrite(patch_location, np.array(patch_mask, dtype=int))
 
         detection_contours = self.get_detection_contours(patch_location, img_name)
@@ -215,7 +218,7 @@ class ViolaDetector(object):
                 
                 #report true positives
                 true_metal = true_thatch = 0
-                for roof_type in self.overlap_dict.keys():
+                for roof_type in self.overlap_dict[img_name].keys():
                     print roof_type
               
                     print self.overlap_dict[img_name][roof_type]
