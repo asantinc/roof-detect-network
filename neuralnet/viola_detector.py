@@ -20,7 +20,8 @@ class ViolaDetector(object):
             detector_paths=None, 
             output_folder=None,
             save_imgs=False,
-            scale=1.05
+            scale=1.05,
+            old_detector=True
             ):
         self.scale = scale
         self.save_imgs = save_imgs
@@ -37,8 +38,14 @@ class ViolaDetector(object):
         assert detector_paths is not None 
         self.detector_paths = detector_paths
         self.roof_detectors = dict()
-        self.roof_detectors['metal'] = [cv2.CascadeClassifier('../viola_jones/'+path+'/cascade.xml') for path in detector_paths['metal']]
-        self.roof_detectors['thatch'] = [cv2.CascadeClassifier('../viola_jones/'+path+'/cascade.xml') for path in detector_paths['thatch']]
+
+        if old_detector:
+            self.roof_detectors['metal'] = [cv2.CascadeClassifier('../viola_jones/cascades/'+path) for path in detector_paths['metal']]
+            self.roof_detectors['thatch'] = [cv2.CascadeClassifier('../viola_jones/cascades/'+path) for path in detector_paths['thatch']]
+
+        else:
+            self.roof_detectors['metal'] = [cv2.CascadeClassifier('../viola_jones/'+path+'/cascade.xml') for path in detector_paths['metal']]
+            self.roof_detectors['thatch'] = [cv2.CascadeClassifier('../viola_jones/'+path+'/cascade.xml') for path in detector_paths['thatch']]
 
         #file name beginning
         metal_name = '+'.join(detector_paths['metal'])+'+' if len(detector_paths['metal'])>0 else ''
@@ -272,12 +279,13 @@ class ViolaDetector(object):
 if __name__ == '__main__':
     #can have multiple detectors for each type of roof
     detectors = dict()
-    detectors['metal'] = [ 'cascade_metal_0_square_augment_num3088_w24_h24','cascade_metal_0_tall_augment_num1608_w12_h24','cascade_metal_0_wide_augment_num2184_w24_h12']
+    #detectors['metal'] = [ 'cascade_metal_0_square_augment_num3088_w24_h24','cascade_metal_0_tall_augment_num1608_w12_h24','cascade_metal_0_wide_augment_num2184_w24_h12']
+    detectors['metal'] = ['cascades/cascade_w25_h12_pos393_neg1500.xml', 'cascades/cascade_w12_h25_pos393_neg1500']
     detectors['thatch'] = []
 
     output = '../output/viola/'
-    params_f = 'metal_0/'
-    viola = ViolaDetector(params_f=params_f, detector_paths=detectors, output_folder=output, save_imgs=True)
+    params_f = 'metal_non_augment/'
+    viola = ViolaDetector(params_f=params_f, detector_paths=detectors, output_folder=output, save_imgs=True, old_detector = True)
     viola.compare_detections_to_roofs_folder(save_detections=True, reject_levels=0.5, level_weights=2, scale=1.05)
 
 
