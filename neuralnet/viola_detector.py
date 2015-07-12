@@ -198,13 +198,15 @@ class ViolaDetector(object):
         detection_contours = self.get_detection_contours(patch_location, img_name)
         for roof in roof_list:
             self.overlap_dict[img_name][roof.roof_type].append(roof.check_overlap_total(patch_mask, rows, cols))
-            roof.max_overlap_single_patch()
+            roof.max_overlap_single_patch(detections=self.roofs_detected[img_name])
+
 
     def report_roofs_detected(self, img_name):
         for roof_type in ['metal', 'thatch']:
             for i, detector in enumerate(self.detector_paths[roof_type]):
                 print 'Detector {0}: \t {1}'.format(detector, len(self.roofs_detected[img_name][roof_type][i]) )
-  
+
+
     def print_report(self, img_name='', detections_num=-1, final_stats=False):
         with open(self.report_file, 'a') as report:
             if not final_stats:
@@ -214,6 +216,9 @@ class ViolaDetector(object):
                 #report true positives
                 true_metal = true_thatch = 0
                 for roof_type in self.overlap_dict.keys():
+                    print roof_type
+              
+                    print self.overlap_dict[img_name][roof_type]
                     for v in self.overlap_dict[img_name][roof_type]:
                         if v > .20:
                             if roof_type == 'metal':
@@ -280,11 +285,11 @@ if __name__ == '__main__':
     #can have multiple detectors for each type of roof
     detectors = dict()
     #detectors['metal'] = [ 'cascade_metal_0_square_augment_num3088_w24_h24','cascade_metal_0_tall_augment_num1608_w12_h24','cascade_metal_0_wide_augment_num2184_w24_h12']
-    detectors['metal'] = ['cascades/cascade_w25_h12_pos393_neg1500.xml', 'cascades/cascade_w12_h25_pos393_neg1500']
+    detectors['metal'] = ['cascade_w25_h12_pos393_neg700.xml', 'cascade_w12_h25_pos393_neg700.xml']
     detectors['thatch'] = []
 
     output = '../output/viola/'
-    params_f = 'metal_non_augment/'
+    params_f = 'metal_non_augment_neg700_pos393/'
     viola = ViolaDetector(params_f=params_f, detector_paths=detectors, output_folder=output, save_imgs=True, old_detector = True)
     viola.compare_detections_to_roofs_folder(save_detections=True, reject_levels=0.5, level_weights=2, scale=1.05)
 
