@@ -1,0 +1,6 @@
+metal detectors: 	metal_0_augm0_num679_w25_h25thatch_detector: 	
+Detections:		0
+metal		>0.9		>0.75		>0.4		>0.2		Missed
+any
+Roofs		0		0		0		0		355
+Recall:		0.0000		0.0000		0.0000		0.0000		1.0000

@@ -20,61 +20,46 @@ from experiment_settings import Experiment, SaveLayerInfo, PrintLogSave
 from get_data import DataLoader, Roof
 from viola_detector import ViolaDetector
 from my_net import MyNeuralNet
-
-# TODO: depending on resolution step_size will be affected...
-STEP_SIZE = settings.PATCH_H
-OUTPUT_PATH = 'output'
+import viola_detector
 
 
 class Pipeline(object):
-    def __init__(self, pipe_name=None, step_size=None, test_files=None, test_folder=None, viola_process=True):
-        self.step_size = step_size if step_size is not None else STEP_SIZE
-        self.viola_process = viola_process
+    def __init__(self, detectors=None, out_folder_name=None, validation=True, step_size=None, neural=None):
+        self.detector_paths = detectors
+        self.step_size = step_size if step_size is not None else settings.STEP_SIZE
+        self.setup_input_output_report(validation, out_folder_name)
 
-        #image_files
-        if test_files is None:
-            self.test_fnames = DataLoader.get_img_names_from_path(path = settings.INHABITED_PATH)
-            self.test_img_path =  settings.INHABITED_PATH 
-        else:
-            self.test_fnames = test_files
-            self.test_img_path = test_folder
-        assert self.test_fnames is not None
-        assert self.test_img_path is not None
+        #Viola detection
+        self.viola=None
+        if detectors is not None:
+            self.viola = ViolaDetector(detector_names=detectors, out_path=self.out_path, folder_name=out_folder_name, save_imgs=False)
 
-        #OUTPUT FOLDER: create it if it doesn't exist
-        #out_name = raw_input('Name of output folder: ')
-        out_name = OUTPUT_PATH
-        assert pipe_name is not None
-        self.out_path = '../output/pipeline/{0}/'.format(pipe_name)
+        self.experiment = Experiment(**neural)
+
+
+    def setup_input_output_report(self, validation, out_folder_name):
+        '''
+        Create output folder if it doesn't exist
+        Create report file, write to it the detector info
+        '''
+        #INPUT PATH and FILES
+        self.test_img_path = settings.VALIDATION_PATH if validation else settings.TESTING_PATH 
+        self.test_fnames = DataLoader.get_img_names_from_path(path =self.test_img_path  )
+        
+        #OUTPUT FOLDER
+        self.out_path ='{0}{1}/'.format(settings.PIPE_OUT, out_folder_name)
         if not os.path.isdir(self.out_path):
             subprocess.check_call('mkdir {0}'.format(self.out_path), shell=True)
         else:
             print 'Directory {0} already exists \n'.format(self.out_path)
-            sys.exit(-1)
         print 'Will output files to: {0}'.format(self.out_path)
 
-        #DETECTORS
-        if self.viola_process:
-            self.detector_paths = list()
-            '''
-            while True:
-                cascade_name = raw_input('Cascade file to use: ' )
-                detector = settings.CASCADE_PATH+cascade_name+'.xml'
-                if cascade_name == '':
-                    break
-                self.detector_paths.append(detector)
-            '''
-            self.detector_path = DETECTORS
-            print 'Using detectors: '+'\t'.join(self.detector_paths)
+        #create report file
+        self.report_path = self.out_path+'report.txt'
+        with open(self.report_path, 'w') as report:
+            report.write('\t'.join(self.detector_paths))
 
-            #create report file
-            self.report_path = self.out_path+'report.txt'
-            with open(self.report_path, 'w') as report:
-                report.write('\t'.join(self.detector_paths))
 
-            self.viola = ViolaDetector(detector_paths=self.detector_paths, output_folder=self.out_path, save_imgs=True)
-            #the output should be a picture with the windows marked!
-        self.experiment = Experiment(preloaded=True, preloaded_path='conv5_nonroofs2_test20.0', flip=False, net_name='My_test_net', num_layers=5)
 
     def run(self):
         '''
@@ -91,7 +76,7 @@ class Pipeline(object):
             print 'Pre-processing image: {0}'.format(img_name)
             try:
                 self.image = cv2.imread(self.test_img_path+img_name)
-                self.image = np.asarray(self.image, dtype='float32')/255
+                self.image = np.asarray(self.image, dtype='float32')
                 self.image_detections = cv2.imread(self.test_img_path+img_name)
 
             except IOError:
@@ -101,12 +86,13 @@ class Pipeline(object):
             self.image = np.transpose(self.image, (2,0,1))
             self.img_name = img_name
 
-            if self.viola_process:
+            if self.detectors:
                 rows, cols, _ = image.shape
                 thatch_mask = np.zeros((rows, cols), dtype=bool)
                 self.process_viola(rows, cols, verbose=True)
-
-            self.sliding_convolution()
+                raise ValueError('Classfy patches with network')
+            else:
+                self.sliding_convolution()
             
             cv2.imwrite(self.out_path+self.img_name+'test.jpg', self.image_detections)     
 
@@ -191,29 +177,6 @@ class Pipeline(object):
                 cv2.rectangle(self.image_detections, (x_pos+4, y_pos+4), (x_pos+settings.PATCH_H-4, y_pos+settings.PATCH_H-4), color, 1)
 
 
-if __name__ == '__main__':
-    #to detect a single image pass it in as a parameter
-    #else, pipeline will use the files in settings.TEST_PATH folder
-    try:
-        opts, args = getopt.getopt(sys.argv[1:], "f:l:")
-    except getopt.GetoptError:
-        print 'Command line error'
-        sys.exit(2)  
-    
-    for opt, arg in opts:
-        if opt == '-f':
-            test_file = arg
-            test_files = list()
-            test_files.append(test_file)
-        if opt == '-l':
-            test_folder = arg
-
-    pipe = Pipeline(test_files=None, test_folder=None, viola_process=False)
-    #dictionaries accessed by file_name
-    #pipe.experiment.test_preloaded()
-    pipe.run()
-
-
 def get_params_from_file(file_name):
     parameters = dict()
     with open(file_name, 'r') as f:
@@ -225,6 +188,7 @@ def get_params_from_file(file_name):
 
 
 if __name__ == '__main__':
+    '''
     param_file = 'params'+raw_input('Enter param file number :')+'.csv'
     params = get_params_from_file(settings.PIPE_PARAMS_PATH+param_file) 
 
@@ -234,4 +198,31 @@ if __name__ == '__main__':
         print 'Network name is: {0}'.format(params['net_name'])
     if params['roofs_only']:
         params['net_name'] = params['net_name']+'_roofs'
- 
+
+    #to detect a single image pass it in as a parameter
+    #else, pipeline will use the files in settings.TEST_PATH folder
+    '''
+    #preloaded=, preloaded_path=neural_name, flip=False, net_name='My_test_net', num_layers=5
+
+    weight_name = 'conv5_nonroofs2_test20.0'
+    neural_params={'preloaded':True, 'preloaded_path':weight_name, 'flip':False, 'net_name':'test1', 'num_layers':5}
+    #get params 
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "v:")
+    except getopt.GetoptError:
+        print 'Command line error'
+        sys.exit(2)  
+    no_viola = False
+    for opt, arg in opts:
+        if opt == '-n':
+            no_viola = True
+    if no_viola:
+        detectors, combo_f_name = None, 'no_viola'
+    else:
+        detectors, combo_num =viola_detector.get_detectors()
+        combo_f_name = 'combo{0}'.format(combo_num)
+
+    pipe = Pipeline(detectors=detectors, neural=neural_params, out_folder_name=combo_f_name)
+    pipe.run()
+
+

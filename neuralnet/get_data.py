@@ -5,16 +5,19 @@ import random #get random patches
 import xml.etree.ElementTree as ET #traverse the xml files
 from collections import defaultdict
 import pickle
+import itertools
+import subprocess
 
 from scipy import misc, ndimage #load images
 import cv2
 from sklearn import cross_validation
+from sklearn.utils import shuffle
+from sklearn.cross_validation import LeaveOneLabelOut
 
 import experiment_settings as settings #getting constants
 import json
 from pprint import pprint
 
-EXTENSION = '.png'
 TEST = 0.20
 
 class Roof(object):
@@ -56,15 +59,15 @@ class Roof(object):
         curr_roof[self.ymin:self.ymin+self.height, self.xmin:self.xmin+self.width] = 1
         curr_roof[patch_mask] = 0 
         
-        roof_area_found = roof_area-self.sum_mask(curr_roof)
+        roof_area_found = roof_area-Roof.sum_mask(curr_roof)
        
         percent_found = (float(roof_area_found)/roof_area)
         
-        print 'Percent of current roof found: {0}'.format(percent_found)
+        #print 'Percent of current roof found: {0}'.format(percent_found)
         return percent_found
 
-
-    def sum_mask(self, array):
+    @staticmethod
+    def sum_mask(array):
         '''Sum all ones in a binary array
         '''
         return np.sum(np.sum(array, axis=0), axis=0)
@@ -74,27 +77,27 @@ class Roof(object):
         '''Return maximum percentage overlap between this roof and a single patch in a set of candidate patches from the same image
         '''
         roof_area = min_miss = self.width*self.height
-        
+                
         best_cascade = -1   #keep track of the 
         roof_mask = np.zeros((rows, cols)) 
-        for roof_type in detections.keys():
-            for i, detector in enumerate(detections[roof_type]):
-                
-                for (x,y,w,h) in detector:                           #for each patch found
-                    roof_mask[self.ymin:self.ymin+self.height, self.xmin:self.xmin+self.width] = 1   #the roof
-                    roof_mask[y:y+h, x:x+w] = 0        #detection
-                    curr_miss = self.sum_mask(roof_mask)
-                    
-                    if curr_miss == 0:                       #we have found the roof
-                        return 1.0
-                    elif curr_miss < min_miss:               #keep track of best match
-                        min_miss = curr_miss                
-                        x_true, y_true, w_true, h_true = x,y,w,h
-                        best_cascade = i
+        for (x,y,w,h) in detections:                           #for each patch found
+            roof_mask[self.ymin:self.ymin+self.height, self.xmin:self.xmin+self.width] = 1   #the roof
+            roof_mask[y:y+h, x:x+w] = 0        #detection
+            curr_miss = Roof.sum_mask(roof_mask)
+            
+            #save the coverage percentage
+            if curr_miss == 0:                       #we have found the roof
+                return 1.0
+            elif curr_miss < min_miss:               #keep track of best match
+                #add it to the true positives
+                min_miss = curr_miss                
+                x_true, y_true, w_true, h_true = x,y,w,h
+                best_cascade = i
 
         percent_found = (roof_area-min_miss)*(1.)/roof_area
-        print 'Percent found: {0} \t  Best cascade: {1}'.format(percent_found, best_cascade)
         return percent_found
+
+               
 
 
 class DataAugmentation(object):
@@ -298,7 +301,7 @@ class DataLoader(object):
         return img_names
 
 
-    def save_patch(self, img=None, xmin=-1, ymin=-1, roof_type=-1, extension=EXTENSION):
+    def save_patch(self, img=None, xmin=-1, ymin=-1, roof_type=-1, extension='.jpg'):
         '''Save a patch located at the xmin, ymin position to the patches folder 
         '''
         assert xmin > -1 and ymin > -1
@@ -306,14 +309,6 @@ class DataLoader(object):
             try:
                 patch = img[ymin:(ymin+settings.PATCH_H), xmin:(xmin+settings.PATCH_W)]
                 cv2.imwrite(self.out_path+str(self.total_patch_no)+str(extension), patch)
-                
-                #save an image showing where the patch was taken for debugging
-                '''if settings.DEBUG:
-                    img_copy = np.array(img, copy=True)
-                    img_copy[ymin:(ymin+settings.PATCH_H), xmin:(xmin+settings.PATCH_W), 0:1] = 255
-                    img_copy[ymin:(ymin+settings.PATCH_H), xmin:(xmin+settings.PATCH_W), 1:3] = 0
-                    misc.imsave(settings.DELETE_PATH+str(self.total_patch_no)+'_DEL.jpg', img_copy)
-                '''
             except (IndexError, IOError, KeyError, ValueError) as e:
                 print e
             else:
@@ -322,7 +317,7 @@ class DataLoader(object):
                 self.total_patch_no = self.total_patch_no+1
 
 
-    def save_patch_scaled(self, roof=None, img=None, extension=EXTENSION):
+    def save_patch_scaled(self, roof=None, img=None, extension='.jpg'):
         '''Save a downscaled image of a roof that is too large as is to fit within the PATCH_SIZE 
         '''
         roof_type = settings.METAL if roof.roof_type=='metal' else settings.THATCH
@@ -464,7 +459,7 @@ class DataLoader(object):
         
         #Get negative patches
         for i, img_path in enumerate(img_names):
-            #settings.print_debug('Negative image: '+str(i))
+            print ('Negative image: '+str(i)+'\n')
             for p in range(negative_patches):
                 #get random ymin, xmin, but ensure the patch will fall inside of the image
                 try:
@@ -482,6 +477,59 @@ class DataLoader(object):
                     self.save_patch(img=img, xmin=xmin, ymin=ymin, roof_type=settings.NON_ROOF) 
         
         
+
+#######################################################################
+## Get roofs from training set and save positive patches to the neural training folder
+#######################################################################
+    def neural_training_positive_full_roofs(self, pad=0, out_path=settings.TRAINING_NEURAL_POS, in_path=settings.TRAINING_PATH):
+        '''Uses images in settings/INHABITED_PATH or ../data/testing_new_source and the corresponding xml file to get roofs with padding and saves them to an 
+        output folder. 
+        If negatives is True, is also includes negatives.
+        Aside from the images, it saves: a file with labels to indicate each roof type and a pickled dump of all the roof info
+
+        Parameters:
+        ----
+        pad: int
+            Pixel padding for roof patch bounding box
+        negatives: boolean
+            Decides whether negatives will be processed or not
+        in_path: 
+            Where the positive example folder is
+        out_path:
+            Where roofs should be saved to
+        '''
+        img_names = DataLoader.get_img_names_from_path(path=in_path)
+        all_labels = list()
+        all_roofs = list()
+        for i, img_name in enumerate(img_names):
+            img_path = in_path+img_name
+            xml_path = in_path+img_name[:-3]+'xml'
+
+            roof_objects = loader.get_roofs(xml_path, img_name)
+            try:
+                img = cv2.imread(img_path)
+            except Exception, e:
+                print e
+            else: 
+                all_roofs, all_labels = self.get_padded_roofs(img=img, pad=pad, roof_list=roof_objects,  
+                                                                all_roofs=all_roofs, all_labels=all_labels)   
+        
+        all_roofs = np.array(all_roofs)
+        all_labels = np.array(all_labels)
+        
+        #save all the patches, pickle the roofs
+        with open(out_path+'labels.csv', 'w') as labels_train:
+            for r, (roof, label) in enumerate(zip(all_roofs, all_labels)):
+                print '{0}/{1}'.format(r, len(all_roofs))
+                roof_name = '{0}.jpg'.format(r)
+                out_img = out_path+roof_name
+                cv2.imwrite(out_img, roof)
+                labels_train.write('{0}, {1}\n'.format(r, label))
+        with open(out_path+'stats.txt', 'w') as stats:
+            non_roof, metal, thatch = np.bincount(all_labels)
+            stats.write('non_roof,{0}\nmetal,{1}\nthatch,{2}'.format(non_roof, metal, thatch))
+
+
     def get_padded_roofs(self, img=None, pad=0, roof_list=None, all_roofs=None, all_labels=None):
         '''Get roofs using bounding boxes. Add padding. Resize the patch to match the size of a settings.PATCH
         '''
@@ -516,113 +564,6 @@ class DataLoader(object):
         return all_roofs, all_labels
 
 
-    def produce_xml_roofs(self, pad=0, new_test_set=False):
-        '''Uses images in settings/INHABITED_PATH or ../data/testing_new_source and the corresponding xml file to get roofs with padding and saves them to an 
-        output folder. 
-        If negatives is True, is also includes negatives.
-        Aside from the images, it saves: a file with labels to indicate each roof type and a pickled dump of all the roof info
-
-        Parameters:
-        ----
-        pad: int
-            Pixel padding for roof patch bounding box
-        negatives: boolean
-            Decides whether negatives will be processed or not
-        in_path: 
-            Where the positive example folder is
-        out_path:
-            Where roofs should be saved to
-        '''
-        in_path = settings.INHABITED_PATH if new_test_set==False else '../data/testing_new_source/'
-        img_names = DataLoader.get_img_names_from_path(path=in_path)
-
-        #Get the roofs defined in the xml, save the corresponding image patches
-#        f = open(settings.LABELS_PATH, 'w')
-#        f.close()
-        
-        all_labels = list()
-        all_roofs = list()
-        all_roof_objects = list()
-        for i, img_name in enumerate(img_names):
-            img_path = in_path+img_name
-            xml_path = in_path+img_name[:-3]+'xml'
-
-            roof_objects = loader.get_roofs(xml_path, img_name)
-            #print 'Thatch: {0} \t  Metal: {1}'.format(len(thatch_roofs), len(metal_roofs))
-            try:
-                img = cv2.imread(img_path)
-            except Exception, e:
-                print e
-            else: 
-                all_roof_objects.extend(roof_objects)
-                all_roofs, all_labels = self.get_padded_roofs(img=img, pad=pad, roof_list=roof_objects,  
-                                                                all_roofs=all_roofs, all_labels=all_labels)   
-        
-        all_roofs = np.array(all_roofs)
-        all_labels = np.array(all_labels)
-        all_roof_objects = np.array(all_roof_objects, dtype=object)
-        
-        if new_test_set:
-            #save all the patches, pickle the roofs
-            with open('../data/testing_new/labels.csv', 'w') as labels_train:
-                for r, (roof, label) in enumerate(zip(all_roofs, all_labels)):
-                    path = '../data/testing_new/{0}.jpg'.format(r)
-                    cv2.imwrite(path, roof)
-                    labels_train.write('{0}, {1}\n'.format(r, label))
-            with open('../data/testing_new/stats.txt', 'w') as stats:
-                non_roof, metal, thatch = np.bincount(all_labels)
-                stats.write('non_roof,{0}\nmetal,{1}\nthatch,{2}'.format(non_roof, metal, thatch))
-            with open('../data/testing_new/roofs.pickle', "wb") as f:
-                pickle.dump(all_roof_objects, f)
-            return all_roofs.shape[0]
-
-        else: 
-            #do a stratified k-fold split of the roofs, where k=1
-            split = cross_validation.StratifiedShuffleSplit(all_labels, 1, test_size=0.2, random_state=0)
-            for train_index, test_index in split:
-                X_train, X_test = all_roofs[train_index], all_roofs[test_index], 
-                roofs_train, roofs_test = all_roof_objects[train_index], all_roof_objects[test_index]
-                y_train, y_test = all_labels[train_index], all_labels[test_index]
-
-            print 'Train {0} \t Test {1}'.format(X_train.shape[0], X_test.shape[0])
-            print 'Train labels:{0}'.format(np.bincount(y_train))
-            print 'Test labels:{0}'.format(np.bincount(y_test))
-
-            with open('../data/roof_train/labels.csv', 'w') as labels_train:
-                for r, (roof, label) in enumerate(zip(X_train, y_train)):
-                    path = '../data/roof_train/{0}.jpg'.format(r)
-                    cv2.imwrite(path, roof)
-                    labels_train.write('{0}, {1}\n'.format(r, label))
-            with open('../data/roof_train/stats.txt', 'w') as stats:
-                non_roof, metal, thatch = np.bincount(y_train)
-                stats.write('non_roof,{0}\nmetal,{1}\nthatch,{2}'.format(non_roof, metal, thatch))
-            
-            with open('../data/roof_test/labels.csv', 'w') as labels_test:
-                for r, (roof, label) in enumerate(zip(X_test, y_test)):
-                    path = '../data/roof_test/{0}.jpg'.format(r)
-                    cv2.imwrite(path, roof)
-                    labels_test.write('{0}, {1}\n'.format(r, label))
-            with open('../data/roof_test/stats.txt', 'w') as stats:
-                non_roof, metal, thatch = np.bincount(y_test)
-                stats.write('non_roof,{0}\nmetal,{1}\nthatch,{2}'.format(non_roof, metal, thatch))
-
-          
-            #save pickle roofs
-            pick_train = '../data/roof_train/roofs.pickle' 
-            pick_test = '../data/roof_test/roofs.pickle'
-            with open(pick_train, "wb") as f:
-                pickle.dump(roofs_train, f)
-            with open(pick_test, "wb") as f:
-                pickle.dump(roofs_test, f)
-             
-            with open(pick_train, "rb") as f:
-                roofs_train_loaded = pickle.load(f)
-            with open(pick_test, "rb") as f:
-                roofs_test_loaded = pickle.load(f)
-            
-            return X_train.shape[0], X_test.shape[0]
-
-
     def produce_json_roofs(self, json_file=None):
         #Get the filename 
         img_names = DataLoader.get_img_names_from_path(path=settings.JSON_IMGS, extension='.png')
@@ -639,30 +580,81 @@ class DataLoader(object):
                 # for r, roof in enumerate(roof_list):
                 #     self.produce_roof_patches(img_path=img_path, img_id=i, roof=roof)
 
-#     with open(settings.LABELS_PATH, 'w') as label_file:
-#         max_w = 0
-#         max_h = 0
-#         for i, img in enumerate(img_names):
-# #            print 'Processing image: '+str(i)+'\n'
-#             img_path = settings.INHABITED_PATH+img
-#             xml_path = settings.INHABITED_PATH+img[:-3]+'xml'
 
-#             roof_list, cur_max_w, cur_max_h = loader.get_roofs(xml_path)
-#            # max_h = cur_max_h if (max_h<cur_max_h) else max_h
-#            # max_w = cur_max_w if (max_w<cur_max_h) else max_h
+#######################################################################
+## SEPARATING THE DATA INTO TRAIN, VALIDATION AND TESTING SETS
+#######################################################################
+    def get_train_test_valid_all(self):
+        '''Will write to either test, train of validation folder each of the images from source
+        '''
+        groups = list()
+                
+        #get list of images in source/inhabted and source/inhabited_2
+        train_1 = [settings.INHABITED_1+img for img in DataLoader.get_img_names_from_path(path =settings.INHABITED_1)]
+        train_2 = [settings.INHABITED_2+img for img in DataLoader.get_img_names_from_path(path =settings.INHABITED_2)]
+        train_imgs = train_1 + train_2
 
-#             for r, roof in enumerate(roof_list):
-# #                print 'Processing roof: '+str(r)+'\n'
-#                 loader.produce_roof_patches(img_path=img_path, img_id=i+1, 
-#                                     roof=roof, label_file=label_file, max_h=max_h, max_w=max_w)
-#         neg_patches_wanted = settings.NEGATIVE_PATCHES_NUM*loader.total_patch_no
-#         loader.get_negative_patches(neg_patches_wanted, label_file)
-#         #settings.print_debug('************* Total patches saved: *****************: '+str(loader.total_patch_no))
+        #shuffle for randomness
+        train_imgs = shuffle(train_imgs, random_state=0)
+
+        total_metal = total_thatch = 0
+        roof_dict = dict()
+        for i, img_path in enumerate(train_imgs): 
+            roofs = self.get_roofs(img_path[:-3]+'xml', img_path)
+            cur_metal= sum([0 if roof.roof_type=='thatch' else 1 for roof in roofs ])
+            cur_thatch= sum([0 if roof.roof_type=='metal' else 1 for roof in roofs ])
+            total_metal += cur_metal
+            total_thatch += cur_thatch
+            roof_dict[img_path] = (cur_metal, cur_thatch) 
+
+        train_imgs, train_imgs_left, metal_left_over, thatch_left_over, train_metal, train_thatch = self.get_50_percent(roof_dict, 
+                                                                                                            train_imgs, total_metal, total_thatch)
+        valid_imgs, test_imgs, test_metal, test_thatch, valid_metal, valid_thatch = self.get_50_percent(roof_dict, train_imgs_left, metal_left_over, thatch_left_over)
+
+        for files, dest in zip([train_imgs, valid_imgs, test_imgs], [settings.TRAINING_PATH, settings.VALIDATION_PATH, settings.TESTING_PATH]):
+            for img in files:
+                print 'Saving file {0} to {1}'.format(img, dest)
+                subprocess.check_call('cp {0} {1}'.format(img, dest), shell=True)
+                subprocess.check_call('cp {0} {1}'.format(img[:-3]+'xml', dest), shell=True)
+
+        with open('../data/data_stats.txt', 'w') as r:
+            r.write('\tTrain\tValid\tTest\n')
+            r.write('Metal\t{0}\t{1}\t{2}\n'.format(train_metal, valid_metal, test_metal))
+            r.write('Thatch\t{0}\t{1}\t{2}\n'.format(train_thatch, valid_thatch, test_thatch))
+                
+
+    def get_50_percent(self, roof_dict, train_imgs, total_metal, total_thatch):
+        metal_40 = int(0.48*total_metal)        
+        thatch_40 = int(0.48*total_thatch)
+        metal_60 = int(0.55*total_metal)
+        thatch_60 = int(0.55*total_thatch)
+
+        cumulative_metal = 0
+        cumulative_thatch = 0
+        img_index = -1
+        for i, img_path in enumerate(train_imgs):
+            cumulative_metal += roof_dict[img_path][0]
+            cumulative_thatch += roof_dict[img_path][1]
+            if (cumulative_metal>metal_40 and cumulative_thatch>metal_40) and (cumulative_metal<metal_60 and cumulative_thatch<thatch_60):
+                img_index = i
+                break
+        assert img_index != -1
+        return train_imgs[:i+1], train_imgs[i+1:], total_metal-cumulative_metal, total_thatch-cumulative_thatch, cumulative_metal, cumulative_thatch 
+
+
 
 if __name__ == '__main__':
     #loader = DataLoader(labels_path='labels.csv', out_path='../data/testing_json/', in_path=settings.JSON_IMGS)
     #loader.produce_json_roofs(json_file='../data/images-new/labels.json')
-    loader = DataLoader()
-    train_no, test_no = loader.produce_xml_roofs(new_test_set=False)
-    loader.get_negative_patches(10*train_no, settings.NEGATIVE_PATH+'labels.csv', out_path=settings.NEGATIVE_PATH)
 
+#    loader = DataLoader()
+#    training, validation, testing = .50, .25, .25
+#    train_no, test_no = loader.produce_xml_roofs(new_test_set=False)
+#    loader.get_negative_patches(10*train_no, settings.NEGATIVE_PATH+'labels.csv', out_path=settings.NEGATIVE_PATH)
+
+#    loader = DataLoader()
+#    loader.get_train_test_valid_all()
+    loader = DataLoader()
+    loader.get_negative_patches(10000, '../data/neural_training/negatives/labels.csv', out_path='../data/neural_training/negatives/') 
+
+    #loader.neural_training_positive_full_roofs()

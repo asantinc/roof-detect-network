@@ -28,16 +28,28 @@ import my_net
 import FlipBatchIterator as flip
 
 
+
 #Constants for patch production
+TESTING_PATH = '../data/testing/'
+VALIDATION_PATH = '../data/validation/'
+TRAINING_PATH = '../data/training/'
+INHABITED_1 = '../data/source/inhabited/'
+INHABITED_2 = '../data/source/inhabited2/'
+
+TRAINING_NEURAL_POS = '../data/neural_training/positives/'
+TRAINING_NEURAL_NEG = '../data/neural_training/negatives/'
+
 TRAIN_PROPORTION = 0.80
 PATCHES_OUT_PATH = '/afs/inf.ed.ac.uk/user/s08/s0839470/roof/data/training/'
 LABELS_PATH = '/afs/inf.ed.ac.uk/user/s08/s0839470/roof/data/training/labels.csv'
-INHABITED_PATH = '../data/inhabited/'
-UNINHABITED_PATH = '../data/uninhabited/'
+INHABITED_PATH = '../data/source/inhabited/'
+UNINHABITED_PATH = '../data/source/uninhabited/'
+TESTING_NEW_SOURCE = '../data/testing_new_source/'
 JSON_IMGS = '../data/images-new/'
 DELETE_PATH = '../data/delete/'
 NEGATIVE_PATCHES_NUM = 5
 NEGATIVE_PATH = '../data/roof_negatives/'
+TRAIN_NEURAL_VIOLA_EXTRA = '/afs/inf.ed.ac.uk/group/ANC/s0839470/viola_neural_patches/' #extra storage in ANC disk space
 
 #types of roof
 NON_ROOF = 0
@@ -71,12 +83,19 @@ VEC_PATH = '../viola_jones/vec_files/'
 VIOLA_AUGM_DATA = '../viola_jones/data/'
 CASCADE_PATH = '../viola_jones/cascades/'
 VIOLA_OUT = '../output/viola/'
-
+FULLY_CLASSIFIED = .90
+MOSTLY_CLASSIFIED = 0.75
+PARTIALLY_CLASSIFIED = 0.40
+NEAR_MISS = 0.20
 
 #Pipeline
 PIPE_PARAMS_PATH = '../data/pipe_params/'
+PIPE_OUT = '../output/pipeline/'
+STEP_SIZE = PATCH_H #used by detection pipeline
 
-def time_stamped(fname, fmt='%m-%d-%H-%M_{fname}'):
+
+
+def time_stamped(fname, fmt='%d-%m-%H-%M_{fname}'):
     return datetime.datetime.now().strftime(fmt).format(fname=fname)
 #with open(timeStamped('myfile.txt'),'w') as outf:
 
@@ -108,22 +127,26 @@ class Experiment(object):
 
         print 'Setting up the Neural Net \n'
         self.setup_net(print_out=print_out)
-       
+
         print 'Loading data \n'
         self.roof_loader = load.RoofLoader()
+        '''
         if self.test_path is None and self.train_path is None:
             self.X_train, self.X_test, self.y_train, self.y_test = self.roof_loader.load(test_percent=self.test_percent, 
                                                 non_roofs=self.non_roofs, roofs_only=self.roofs_only, max_roofs=max_roofs) 
         else:
-            self.X_train, self.X_test, self.y_train, self.y_test = self.roof_loader.load_from_separate_folders() 
-            self.non_roofs = 20 #the way the nonroofs are set up now we cannot choose how many non-roofs we load
+            self.X_train, self.X_test, self.y_train, self.y_test = self.roof_loader.load_from_separate_folders(non_roofs=non_roofs) 
+            self.non_roofs = non_roofs 
+        '''
+        self.X, self.y = self.roof_loader.neural_load_training(non_roofs=non_roofs)
+        print self.X.shape, self.y.shape
         print 'Data is loaded \n'
+
 
         #set up the data scaler
         self.scaler = DataScaler()
-        print self.X_train.shape
-        self.X_train = self.scaler.fit_transform(self.X_train)
-        self.X_test =  self.scaler.transform2(self.X_test)
+        self.X = self.scaler.fit_transform(self.X)
+        #self.X_test =  self.scaler.transform2(self.X_test)
 
         #preload weights
         if self.preloaded:
@@ -176,14 +199,14 @@ class Experiment(object):
         self.printer.log_to_file(self.net, self.__str__(), overwrite=True)
         
         #fit the network to X_train
-        self.net.fit(self.X_train, self.y_train)
+        self.net.fit(self.X, self.y)
         self.net.save_weights()
 
         #find predictions for test set
         
         #raise ValueError('Does this prediction do it with 40x40 crops of 32x32 crops?') 
-        predicted = self.net.predict(self.X_test)
-        self.evaluation(predicted, self.X_train, self.X_test, self.y_train, self.y_test)
+        #predicted = self.net.predict(self.X_test)
+        #self.evaluation(predicted, self.X_train, self.X_test, self.y_train, self.y_test)
 
 
     def test_preloaded(self, plot_loss=True, test_case=None):  

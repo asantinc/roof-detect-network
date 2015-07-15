@@ -75,16 +75,16 @@ class ViolaDataSetup(object):
 
 
     @staticmethod
-    def transform_roofs(padding=5):
+    def transform_roofs(padding=5, path=settings.TRAINING_PATH):
         ''' Save augmented jpgs of data with padding, rotations and flips
         '''
-        img_names_list = get_data.DataLoader().get_img_names_from_path(path=settings.INHABITED_PATH)
+        img_names_list = get_data.DataLoader().get_img_names_from_path(path=path)
         roof_loader = get_data.DataLoader()
 
         for img_id, img_name in enumerate(img_names_list):
             print 'Processing image: {0}'.format(img_name)
-            xml_path = settings.INHABITED_PATH+img_name[:-3]+'xml'
-            img_path = settings.INHABITED_PATH+img_name
+            xml_path = path+img_name[:-3]+'xml'
+            img_path = path+img_name
     
             roofs = roof_loader.get_roofs(xml_path, img_name)
             metal_log = list()
@@ -193,14 +193,18 @@ class ViolaDataSetup(object):
         file with samples embedded in the full images. Because we use the whole image, we can't
         do data augmentation.
         '''
+        all_dat_names = list() #return this with info about dat files
         if size_divide:
             metal = [list() for i in range(3)]
             metal[0] = '{0}metal_{1}_tall_augm0.dat'.format(settings.DAT_PATH, padding)
             metal[1] = '{0}metal_{1}_square_augm0.dat'.format(settings.DAT_PATH, padding)
             metal[2] = '{0}metal_{1}_wide_augm0.dat'.format(settings.DAT_PATH, padding)
+            all_dat_names.extend([m for m in metal])
         else:
             metal_n =  '{0}metal_{1}_augm0.dat'.format(settings.DAT_PATH, padding) 
+            all_dat_names.append(metal_n)
         thatch_n = '{0}thatch_{1}_augm0.dat'.format(settings.DAT_PATH, padding)
+        all_dat_names.append(thatch_n)
 
         try:
             if size_divide:
@@ -219,8 +223,8 @@ class ViolaDataSetup(object):
 
             for img_name in img_names_list:
                 print 'Processing image: {0}'.format(img_name)
-                xml_path = settings.INHABITED_PATH+img_name[:-3]+'xml'
-                img_path = '../'+settings.INHABITED_PATH+img_name
+                xml_path = path+img_name[:-3]+'xml'
+                img_path = '../'+path+img_name
         
                 roofs = roof_loader.get_roofs(xml_path, img_name)
                 metal_log = [list() for i in range(3)] if size_divide else list()
@@ -258,6 +262,8 @@ class ViolaDataSetup(object):
                 metal_f.close()
             thatch_f.close() 
 
+        return all_dat_names #return the dat file names created
+
 
     @staticmethod
     def get_roof_dat(roof_lists, roof, size_divide=False):
@@ -270,9 +276,9 @@ class ViolaDataSetup(object):
         ratio = 0
         if roof.roof_type == 'metal' and size_divide:
             aspect_ratio = float(roof.width)/(roof.height)
-            if (aspect_ratio > 1.5):                       #WIDE ROOF
+            if (aspect_ratio > 1.25):                       #WIDE ROOF
                 roof_lists[2].append(string_to_add)
-            elif aspect_ratio >= 0.75 and ratio <= 1.5:    #SQUARE
+            elif aspect_ratio >= 0.75 and ratio <= 1.25:    #SQUARE
                 roof_lists[1].append(string_to_add)
             elif aspect_ratio < 0.75:                      #TALL ROOF
                 roof_lists[0].append(string_to_add)
@@ -401,21 +407,7 @@ class ViolaBasicTrainer(object):
                     log_to_file = '{0}\t{1}\t{2}\n'.format('../../'+img_path, 1, position_string)
                     out_file.write(log_to_file)
 
-if __name__ == '__main__':
-   #ViolaDataSetup.setup_positive_samples_full_image(padding=5)
-   #ViolaDataSetup.setup_positive_samples_full_image(padding=10)
-   #ViolaDataSetup.setup_positive_samples_full_image(padding=15)
-   #ViolaDataSetup.setup_positive_samples_full_image(padding=10)
-   #ViolaDataSetup.setup_positive_samples_full_image(padding=0)
-
-#   ViolaDataSetup.setup_positive_samples_full_image(padding=5, size_divide=False)
-#   ViolaDataSetup.setup_positive_samples_full_image(padding=10, size_divide=False)
-#   ViolaDataSetup.setup_positive_samples_full_image(padding=15,size_divide=False)
-#   ViolaDataSetup.setup_positive_samples_full_image(padding=10, size_divide=False)
-#   ViolaDataSetup.setup_positive_samples_full_image(padding=0, size_divide=False)
-#    ViolaDataSetup.vec_file_samples()
-    #pass in a vec file without the extension
-
+def train_cascade():
     #TRAINING CASCADE
     no_details = True
     roof_type = ''  
@@ -437,8 +429,17 @@ if __name__ == '__main__':
         roof_type = 'metal' if t=='m' else 'thatch'
     vecs = [v]
     ViolaTrainer.train_cascade(vec_files=vecs, roof_type=roof_type)
-    
-    #ViolaDataSetup.setup_positive_samples(padding=0)
-    #ViolaDataSetup.vec_file_samples() 
-     
+
+
+def data_setup():
+    ViolaDataSetup.setup_negative_samples() 
+    dat_names = ViolaDataSetup.setup_positive_samples(padding=0, path=settings.TRAINING_PATH, size_divide=False)     
+    ViolaDataSetup.vec_file_samples()
+
+if __name__ == '__main__':
+   #ViolaDataSetup.setup_positive_samples_full_image(padding=5)
+#   ViolaDataSetup.setup_positive_samples_full_image(padding=0, size_divide=False)
+
+    train_cascade()
+
 
