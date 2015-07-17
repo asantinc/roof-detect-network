@@ -92,7 +92,6 @@ class Roof(object):
                 #add it to the true positives
                 min_miss = curr_miss                
                 x_true, y_true, w_true, h_true = x,y,w,h
-                best_cascade = i
 
         percent_found = (roof_area-min_miss)*(1.)/roof_area
         return percent_found
@@ -101,6 +100,9 @@ class Roof(object):
 
 
 class DataAugmentation(object):
+###################
+#Neural Augmentation
+###################
     def transform(self, Xb):
         self.Xb = Xb
         self.random_flip()
@@ -123,15 +125,53 @@ class DataAugmentation(object):
         self.Xb = temp_Xb
 
 
+####################
+# Viola Jones augmentation
+#####################
     @staticmethod
-    def flip_save(img, img_path):
-        img1 = cv2.flip(img,flipCode=0)
-        cv2.imwrite('{0}_flip1.jpg'.format(img_path), img1)
-        img2 = cv2.flip(img,flipCode=1)
-        cv2.imwrite('{0}_flip2.jpg'.format(img_path), img2)
-        img3 = cv2.flip(img,flipCode=-1)
-        cv2.imwrite('{0}_flip3.jpg'.format(img_path), img3)
+    def flip_pad_save(in_path, roof, img_path, equalize=None):
+        assert equalize is not None
+        for i in range(4):
+            try:        
+                img = cv2.imread(in_path, flags=cv2.IMREAD_COLOR)
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                if equalize:
+                    gray = cv2.equalizeHist(gray)
+            except IOError:
+                print 'Cannot open '+img_path
+            else:
+                pad_rand = random.random()
+                if pad_rand < 0.2:
+                    padding = 2 
+                elif pad_rand < 0.4:
+                    padding = 3 
+                elif pad_rand < 0.6:
+                    padding = 4
+                elif pad_rand < 0.8:
+                    padding = 6
+                else:
+                    padding = 8 
+                roof = DataAugmentation.add_padding(roof, padding, in_path)
+                roof_img = np.copy(gray[roof.ymin:roof.ymin+roof.height,roof.xmin:roof.xmin+roof.width])
 
+                if i == 0:
+                    cv2.imwrite('{0}_flip0.jpg'.format(img_path), roof_img)
+                if i == 1:
+                    roof_img = cv2.flip(roof_img,flipCode=0)
+                    if roof_img.shape[0] > roof_img.shape[1]:
+                        roof_img = DataAugmentation.rotateImage(roof_img, clockwise=True)
+                    cv2.imwrite('{0}_flip1.jpg'.format(img_path), roof_img)
+                elif i == 2:
+                    roof_img = cv2.flip(roof_img,flipCode=1)
+                    if roof_img.shape[0] > roof_img.shape[1]:
+                        roof_img = DataAugmentation.rotateImage(roof_img, clockwise=True)
+                    cv2.imwrite('{0}_flip2.jpg'.format(img_path), roof_img)
+                else:
+                    roof_img = cv2.flip(roof_img,flipCode=-1)
+                    if roof_img.shape[0] > roof_img.shape[1]:
+                        roof_img = DataAugmentation.rotateImage(roof_img, clockwise=True)
+                    cv2.imwrite('{0}_flip3.jpg'.format(img_path), roof_img)
+            
 
     @staticmethod
     def rotateImage(img, clockwise=True):
@@ -250,17 +290,20 @@ class DataLoader(object):
         for child in root:
             if child.tag == 'object':
                 roof = Roof()
-                roof.img_name = settings.INHABITED_PATH+img_name
+                real_roof = False
+                roof.img_name = img_name 
                 for grandchild in child:
                     #get roof type
                     if grandchild.tag == 'action':
-                        if grandchild.text[0] == 'M' or grandchild.text[0] == 'm':
+                        if grandchild.text[:5].lower() == 'metal':
                             roof.roof_type = 'metal'
-                        elif grandchild.text[0] == 'T' or grandchild.text[0] == 't':
+                            real_roof = True
+                        elif grandchild.text[:6].lower() == 'thatch':
                             roof.roof_type = 'thatch'
+                            real_roof = True
                         else:
-                            raise TypeError('Unknown roof type found in file {0}'.format(xml_file)) 
-                    
+                            real_roof = False
+                            continue 
                     #get positions of bounding box
                     if grandchild.tag == 'bndbox':
                         for item in grandchild:
@@ -274,9 +317,9 @@ class DataLoader(object):
                                 roof.ymax = pos
                             elif item.tag  == 'ymin':
                                 roof.ymin = pos
-                    
-                roof.set_centroid()
-                roof_list.append(roof)
+                if real_roof:
+                    roof.set_centroid()
+                    roof_list.append(roof)
         return roof_list
 
 
@@ -652,9 +695,9 @@ if __name__ == '__main__':
 #    train_no, test_no = loader.produce_xml_roofs(new_test_set=False)
 #    loader.get_negative_patches(10*train_no, settings.NEGATIVE_PATH+'labels.csv', out_path=settings.NEGATIVE_PATH)
 
-#    loader = DataLoader()
-#    loader.get_train_test_valid_all()
     loader = DataLoader()
-    loader.get_negative_patches(10000, '../data/neural_training/negatives/labels.csv', out_path='../data/neural_training/negatives/') 
+    loader.get_train_test_valid_all()
+    #loader = DataLoader()
+    #loader.get_negative_patches(10000, '../data/neural_training/negatives/labels.csv', out_path='../data/neural_training/negatives/') 
 
     #loader.neural_training_positive_full_roofs()

@@ -163,6 +163,11 @@ class RoofLoader(object):
 # 2. The scaling has already been done in get_data
 # 3. Here we do the division over 255 though
 ###################################################
+#    def neural_load_detections_from_viola(self, in_path=settings.TRAINING_NEURAL_PATH):
+        #Need to load
+        # the false positives and true positives for thatch AND metal
+#        raise ValueError() 
+
 
     def neural_load_training(self, train_path=None, neg_path=None, max_roofs=None, non_roofs=None):
         '''

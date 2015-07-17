@@ -1,6 +1,8 @@
 import os
 import subprocess
 import pdb
+import getopt
+import sys
 import math
 from collections import defaultdict
 import pickle
@@ -14,7 +16,6 @@ from scipy import misc, ndimage #load images
 import get_data
 from get_data import Roof
 import experiment_settings as settings
-from viola_trainer import ViolaTrainer, ViolaDataSetup
 from timer import Timer
 
 
@@ -113,40 +114,35 @@ class ViolaDetector(object):
             self.roof_detectors['thatch'] = [cv2.CascadeClassifier('../viola_jones/cascades/'+path) for path in detector_names['thatch']]
 
         else:
-            self.roof_detectors['metal'] = [cv2.CascadeClassifier('../viola_jones/'+path+'/cascade.xml') for path in detector_names['metal']]
-            self.roof_detectors['thatch'] = [cv2.CascadeClassifier('../viola_jones/'+path+'/cascade.xml') for path in detector_names['thatch']]
+            self.roof_detectors['metal'] = [cv2.CascadeClassifier('../viola_jones/cascade_'+path+'/cascade.xml') for path in detector_names['metal']]
+            self.roof_detectors['thatch'] = [cv2.CascadeClassifier('../viola_jones/cascade_'+path+'/cascade.xml') for path in detector_names['thatch']]
 
         print self.roof_detectors
 
-    def detect_roofs(self, img_name=None, img_path=None, reject_levels=1.3, level_weights=5, scale=None):
-        #if self.neural==False:
-       # if os.path.isfile(self.output_folder+img_name+'.pickle'):
-       #     #load from file
-       #     with open(self.output_folder+img_name+'.pickle', 'rb') as f:
-       #         self.viola_detections.set_detections(pickle.load(f)) 
 
-       # else:
+
+    def detect_roofs(self, img_name=None, img_path=None, reject_levels=1.3, level_weights=5, scale=None):
         img = cv2.imread(img_path, flags=cv2.IMREAD_COLOR)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray = cv2.equalizeHist(gray)
 
         self.scale = scale if scale is not None else self.scale
 
         #get detections in the image
         self.total_detection_time = 0
+        rejectLevels= list()
+        LevelWeights=list()
         for roof_type in self.roof_detectors.keys():
             for i, detector in enumerate(self.roof_detectors[roof_type]):
                 print 'Detecting with detector: '+str(i)
                 with Timer() as t: 
                     detected_roofs = detector.detectMultiScale(gray, scaleFactor=self.scale, minNeighbors=5)
+                print 'Time: {0}'.format(t.secs)
                 self.viola_detections.total_time += t.secs
                 #group_detected_roofs, weights = cv2.groupRectangles(np.array(detected_roofs).tolist(), 0, 5)
                 self.viola_detections.set_detections(roof_type, img_name, detected_roofs)
                 print 'DETECTED {0} roofs'.format(len(detected_roofs))
-    #save detections to file
-#            if self.neural==False:
-        #with open(self.output_folder+img_name+'.pickle', 'wb') as f:
-        #    pickle.dump(self.viola_detections[img_name], f)
-             
+            
 
     def detect_evaluate_roofs_folder(self, path=settings.VALIDATION_PATH, save_detections=False, reject_levels=1.3, level_weights=5, scale=1.05):
         '''Compare detections to ground truth roofs for set of images in a folder
@@ -155,7 +151,7 @@ class ViolaDetector(object):
             loader = get_data.DataLoader()
             img_names = get_data.DataLoader.get_img_names_from_path(path=path)
             for i, img_name in enumerate(img_names):
-                print 'Processing image {0}/{1}'.format(i, len(img_names))
+                print 'Processing image {0}/{1}\t{2}'.format(i, len(img_names), img_name)
                 self.detect_evaluate_roofs(loader, img_name=img_name, path=path, reject_levels=reject_levels, level_weights=level_weights, scale=scale)
              
             #we can store the stats to use them directly
@@ -167,7 +163,7 @@ class ViolaDetector(object):
                 self.overlap_roof_with_detections = pickle.load(f)
 
         self.print_report()
-   
+        open(self.output_folder+'DONE', 'w').close() 
 
     def detect_evaluate_roofs(self, 
             loader, img_name='', path='', 
@@ -177,7 +173,6 @@ class ViolaDetector(object):
         self.scale = scale
         img_path = path+img_name
         xml_path = path+img_name[:-3]+'xml'
-        pdb.set_trace()
         self.detect_roofs(img_name=img_name, img_path=img_path) 
         #self.report_roofs_detected(img_name)
         roof_list = loader.get_roofs(xml_path, img_path)
@@ -192,17 +187,21 @@ class ViolaDetector(object):
 
 
 
-    def get_patch_mask(self, img_name, rows=1200, cols=2000):
+    def get_patch_mask(self, img_name=None, detections=None, rows=1200, cols=2000):
         '''Mark the area of a detection as True, everything else as False
         '''
+        if detections == None:#we either have a list of detections or an img_name
+            assert img_name is not None
+        detections = self.viola_detections.get_img_detections_any_type(img_name) if detections is None else detections
         patch_mask = np.zeros((rows, cols), dtype=bool)
         patch_area = 0
-        for (x,y,w,h) in self.viola_detections.get_img_detections_any_type(img_name):
+        for (x,y,w,h) in detections:
             patch_mask[y:y+h, x:x+w] = True
             patch_area += w*h
 
         area_covered = np.sum(patch_area)
         return patch_mask, float(area_covered)/(rows*cols) 
+
 
     def get_detection_contours(self, patch_path, img_name):
         im_gray = cv2.imread(patch_path, cv2.CV_LOAD_IMAGE_GRAYSCALE)
@@ -247,33 +246,40 @@ class ViolaDetector(object):
             self.overlap_roof_with_detections[img_name][roof.roof_type]['single'].append(roof.max_overlap_single_patch(detections=self.viola_detections.get_img_detections_any_type(img_name)))
 
 
-    def get_neural_training_data(self, roof_type=None, out_path=None, in_path=None, detector_name=None):
+    def get_neural_training_data(self, save_false_pos=False, roof_type=None, out_path=settings.TRAINING_NEURAL_PATH, detector_name=None):
         '''
         Run detection to get false positives, true positives from viola jones. Save these patches.
         These results will be used to then train a neural network.
         '''
-        self.true_pos = dict()
-        self.false_pos = dict()
+        in_path = settings.TRAINING_PATH #since this is to train neural network, we can only use training data
+        true_pos_list = list()
+        false_pos_list = list()
 
         loader = get_data.DataLoader()
         img_names = get_data.DataLoader.get_img_names_from_path(path=in_path)
 
         for num, img_name in enumerate(img_names):
             print 'Processing image: '+str(num)+', '+img_name+'\n' 
-            self.detect_roofs(img_name=img_name, img_path=in_path)
+            self.detect_roofs(img_name=img_name, img_path=in_path+img_name)
             
             #get roofs
             xml_path = in_path+img_name[:-3]+'xml'
             roof_list = loader.get_roofs(xml_path, img_name)
 
             #get true and false positives
-            self.true_pos[img_name], self.false_pos[img_name] = self.find_true_false_positives(1200, 2000, img_name, roof_type, roof_list) 
+            cur_true_pos, cur_false_pos = self.find_true_false_positives(1200, 2000, img_name, roof_type, roof_list, threshold=settings.NEAR_MISS) 
 
-            #save roof patches to file
-            self.save_patches_to_folder(in_path=in_path, img_name=img_name, out_path=out_path+'true_pos/'+detector_name, patches=self.true_pos[img_name])
-            self.save_patches_to_folder(in_path=in_path, img_name=img_name, out_path=out_path+'false_pos/'+detector_name, patches=self.false_pos[img_name])
-            self.mark_false_true_detections_and_roofs(out_path, in_path, img_name, roof_list, 
-                                                            self.false_pos[img_name], self.true_pos[img_name])
+            if save_false_pos:
+                self.mark_false_true_detections_and_roofs(out_path, in_path, img_name, roof_list, 
+                                                           cur_false_pos,  cur_true_pos)
+
+            true_pos_list.extend(cur_true_pos)
+            false_pos_list.extend(cur_false_pos)
+
+        with open(out_path+'{1}_true_pos_from_viola_{0}.pickle'.format(detector_name, roof_type), 'wb') as true_pos_file:
+            pickle.dump(true_pos_list, true_pos_file) 
+        with open(out_path+'{1}_false_pos_from_viola_{0}.pickle'.format(detector_name, roof_type), 'wb') as false_pos_file:
+            pickle.dump(false_pos_list, false_pos_file)
 
 
     def save_patches_to_folder(self, in_path=None, img_name=None, out_path=None, patches=None):
@@ -303,7 +309,12 @@ class ViolaDetector(object):
         true_pos = list()
         false_pos_logical = np.empty(len(detections), dtype=bool)
 
-        for d, (x,y,w,h) in enumerate(detector):                           #for each patch found
+        other_roof_type = 'metal' if roof_type == 'thatch' else 'thatcht'
+        other_roofs = [(r.xmin, r.ymin, r.width, r.height) for r in roof_list if r.roof_type==other_roof_type]
+        other_roofs_type_mask, percent_covered = self.get_patch_mask(detections=other_roofs)
+        other_roofs_type_sum = Roof.sum_mask(other_roofs_type_mask)  
+
+        for d, (x,y,w,h) in enumerate(detections):                           #for each patch found
             for roof in roof_list: #check whether match exists with any roof                   
                 if roof.roof_type != roof_type:
                     continue
@@ -319,18 +330,17 @@ class ViolaDetector(object):
                     true_pos.append((x,y,w,h))
                     false_pos_logical[d] = False
                 else:
-                    false_pos_logical[d] = True
-                    #remove the true pos from the false positives
+                    #check whether it overlaps with the other type of roof (if the sum is lower now)
+                    copy_other_roofs_type_mask = np.copy(other_roofs_type_mask) 
+                    copy_other_roofs_type_mask[y:y+h, x:x+w] = 0 
+                    if (other_roofs_type_sum - Roof.sum_mask(copy_other_roofs_type_mask))<5:
+                        #if our detection covers very little of any roof of the opposite class, we don't consider this a negative patch
+                        false_pos_logical[d] = True
+
         det = np.array(detections)
         false_pos = det[false_pos_logical]
+        print 'Roofs:{2},  True Pos: {0}, False pos: {1}'.format(len(true_pos), len(false_pos), len(roof_list))
         return true_pos, false_pos 
-
-
-#    def report_roofs_detected(self, img_name):
-#        for roof_type in ['metal', 'thatch']:
-#            for i, detector in enumerate(self.detector_names[roof_type]):
-#                #print 'Detector {0}: \t {1}'.format(detector, len(self.viola_detections[img_name][roof_type][i]) )
-#                pass
 
 
     def print_report(self):
@@ -509,9 +519,30 @@ class ViolaDetector(object):
         self.output_folder = output_folder if output_folder is not None else self.output_folder  
         cv2.imwrite(self.output_folder+'_'+img_name, img)
 
-def get_detectors():
+
+def pickle_neural_true_false_positives():
+    #Getting patches for neural network
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "c:")
+    except getopt.GetoptError:
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-c':
+            combo_f = arg
+    assert combo_f is not None
+    detectors = get_detectors(combo_f)
+    viola = ViolaDetector(load_pickle_stats = False, detector_names=detectors, save_imgs=False, old_detector = False, neural=True)
+    if len(detectors['metal']) > 0:
+        roof_type = 'metal'
+    elif len(detectors['thatch']) > 0:
+        roof_type = 'thatch'
+    else:
+        raise ValueError('No detector found in combo{0}'.format(combo_f))
+    viola.get_neural_training_data(save_false_pos = True, roof_type=roof_type, detector_name='combo'+combo_f) 
+
+
+def get_detectors(combo_f):
     detectors = dict()
-    combo_f = raw_input('Enter detector combo file number: ')
     detector_file = '../viola_jones/detector_combos/combo'+str(combo_f)+'.csv'
     detectors = defaultdict(list)
     with open(detector_file, 'r') as csvfile:
@@ -522,31 +553,154 @@ def get_detectors():
             if line[0] == 'metal':
                 detectors['metal'].append(line[1].strip())
             elif line[0] == 'thatch':
-                detector['thatch'].append(line[1].strip())
+                detectors['thatch'].append(line[1].strip())
             else:
                 raise ValueError("Unknown detector type {0}".format(line[0]))
-    return detectors, combo_f 
+    return detectors
 
-def get_neural_patches():
-    #Getting patches for neural network
-    detectors, combo_f_name = get_detectors()
-    in_path = settings.INHABITED_PATH  
-    out_path = settings.TRAIN_NEURAL_VIOLA_EXTRA
-    viola = ViolaDetector(load_pickle_stats = False, detector_names=detectors, save_imgs=True, old_detector = False, neural=True)
-    viola.get_neural_training_data(roof_type='metal', out_path=out_path, in_path=in_path, detector_name='combo'+combo_f_name) 
 
-def testing_detectors():
-    #can have multiple detectors for each type of roof   
-    detectors, combo_f_name = get_detectors()
-    #need to detect on validation set
-    out_path = '../output/viola/with_inhabited/'
-    in_path = settings.INHABITED_PATH    
-    folder_name = 'combo'+combo_f_name+'/'
-    viola = ViolaDetector(load_pickle_stats = False, folder_name=folder_name, out_path=out_path, detector_names=detectors, save_imgs=False, old_detector = False)
-    viola.detect_evaluate_roofs_folder(path=in_path, save_detections=True, reject_levels=0.5, level_weights=2, scale=1.05)
+def get_all_combos():
+    path = settings.COMBO_PATH
+    detector_list = list()
+    combo_f_names = list()
+
+    for f_name in os.listdir(path):
+        if os.path.isfile(path+f_name) and f_name.startswith('combo') and ('equalized') in f_name:
+            combo_f = f_name[5:7]
+            if combo_f.endswith('.'):
+                combo_f = combo_f[:1]
+            
+            detector_list.append(get_detectors(combo_f))
+            combo_f_names.append(combo_f)
+    return detector_list, combo_f_names 
+
+def testing_detectors(all=False, validation=False, small_test=False):
+    '''Test either a single detector or all detectors in the combo files
+    '''
+    #TESTING ONLY ONE DETECTOR that must be passed in as an argument  
+    if all == False:
+        #combo_f = raw_input('Enter detector combo file number: ')
+        combo_f = None
+        try:
+            opts, args = getopt.getopt(sys.argv[1:], "c:")
+        except getopt.GetoptError:
+            sys.exit(2)
+        for opt, arg in opts:
+            if opt == '-c':
+                combo_f = arg
+        assert combo_f is not None
+        detectors = get_detectors(combo_f)
+        detector_list = [detectors]
+        combo_f_names = [combo_f]
+    else:#get all detector combos
+        detector_list, combo_f_names =  get_all_combos()
+
+    #need to detect on validation set. To make it easier to digest, initially we also looked at training set
+    for detector, combo_f_name in zip(detector_list, combo_f_names):
+        if validation and small_test==False:
+            out_path = settings.VIOLA_OUT+'with_validation_set/'
+            in_path = settings.VALIDATION_PATH 
+        elif validation == False and small_test ==False:
+            out_path = settings.VIOLA_OUT+'with_training_set/'
+            in_path = settings.TRAINING_PATH
+        else:
+            out_path = settings.VIOLA_OUT+'small_test/'
+            in_path = '../data/small_test/'
+
+        folder_name = 'combo'+combo_f_name+'/'
+        viola = ViolaDetector(load_pickle_stats = False, folder_name=folder_name, out_path=out_path, detector_names=detector, save_imgs=False, old_detector = False)
+        viola.detect_evaluate_roofs_folder(path=in_path, save_detections=True, reject_levels=0.5, level_weights=2, scale=1.05)
+
+
+
+def check_cascade_status():
+    '''Check the status of all of the cascades
+    '''
+    casc_path = '../viola_jones/'
+    for f_name in os.listdir(casc_path):
+        if os.path.isdir(casc_path+f_name) and f_name.startswith('cascade_'):
+            if os.path.isfile(casc_path+f_name+'/cascade.xml'):
+                print '{0}\t\t\t done'.format(f_name)
+            else:
+                print '{0}\t\t\t MISSING'.format(f_name)
+
+
+def set_up_basic_combos():
+    '''Set up combo with a single detector per combo
+    '''
+    casc_path = '../viola_jones/'
+    out_path = '../viola_jones/detector_combos/combo'
+    combo_num = 0
+    f_names = dict() #roof_type, equalized, augmented
+    f_names['metal'] = dict()
+    f_names['thatch'] = dict()
+    f_names['metal']['equalized']=defaultdict(set)
+    f_names['metal']['not_equalized'] =defaultdict(set)
+    f_names['thatch']['equalized']=defaultdict(set)
+    f_names['thatch']['not_equalized']=defaultdict(set)
+
+    for f_name in os.listdir(casc_path):
+        if os.path.isdir(casc_path+f_name) and f_name.startswith('cascade_') and ('equalized' in f_name):
+            if os.path.isfile(casc_path+f_name+'/cascade.xml'):
+                try:
+                    roof_type = 'metal' if 'metal' in f_name else 'thatch'
+                    equalized = 'not_equalized' if 'not_equalized' not in f_name else 'equalized'
+                    augmented = 'augm1' if 'augm1' in f_name else 'augm0'
+                    f_names[roof_type][equalized][augmented].add(f_name)
+                except KeyError:
+                    pdb.set_trace()
+                detector_name = f_name[8:]
+                with open('{0}{1}.csv'.format(out_path, combo_num), 'w') as f:
+                    if detector_name.startswith('metal'):
+                        d_type = 'metal'
+                    elif detector_name.startswith('thatch'):
+                        d_type = 'thatch'
+                    else:
+                        raise ValueError('Unknown roof type for cascade')
+
+                    f.write('{0}, {1}'.format(d_type, detector_name))
+                combo_num += 1
+            else:
+                print 'Could not process incomplete: {0}'.format(f_name)
+    #set up the rectangular and square detectors together 
+    for roof_type in ['metal', 'thatch']:
+        for equalized in ['equalized', 'not_equalized']:
+            for augm in ['augm1', 'augm0']:
+                detectors = f_names[roof_type][equalized][augm]
+                if len(detectors) > 1:
+                    #write a new combo file
+                    with open('{0}{1}.csv'.format(out_path, combo_num), 'w') as f:
+                        log_to_file = ''
+                        for d in detectors:
+                            detector_name = d[8:]
+                            if detector_name.startswith('metal'):
+                                d_type = 'metal'
+                            elif detector_name.startswith('thatch'):
+                                d_type = 'thatch'
+                            else:
+                                raise ValueError('Unknown roof type for cascade')
+                            log_to_file += '{0}, {1}\n'.format(d_type, detector_name)
+                        f.write(log_to_file)
+                        combo_num += 1
+                else:
+                    print 'Only one detector found: {0}'.format(detectors)
+
+
+def get_img_size():
+    for i, f_name in enumerate(os.listdir(settings.TRAINING_PATH)):
+        img = cv2.imread(settings.TRAINING_PATH+f_name)
+        print img.shape[0], img.shape[1]
+        
+        if i%20==0:
+            pdb.set_trace()
 
 
 
 
 if __name__ == '__main__':
-    testing_detectors()
+#    check_cascade_status()
+#    set_up_basic_combos()
+#    get_img_size()
+    #testing_detectors(all=False, validation=True)
+    
+    pickle_neural_true_false_positives()

@@ -1,3 +1,0 @@
-I have a run of detection on the training set because I wanted to see how the detector did on similar training images. These are kept in the 'with_training_set' folder
-
-The other runs should be done with the test set, and they are in 'with_test_set'

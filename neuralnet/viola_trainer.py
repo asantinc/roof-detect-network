@@ -2,6 +2,7 @@ import os
 import subprocess
 import pdb
 import math
+import random
 import getopt
 import sys
 import csv
@@ -18,7 +19,7 @@ import experiment_settings as settings
 
 class ViolaTrainer(object):
     @staticmethod
-    def train_cascade(vec_files=None, stages=20, minHitRate=0.99999, roof_type=None, padding=-1):
+    def train_cascade(vec_files=None, feature_type='haar', max_false_alarm_rate=0.5, stages=20, minHitRate=0.99999, roof_type=None, padding=-1):
         cascades = list()
         roof_type = roof_type
         if vec_files is None:    
@@ -35,14 +36,14 @@ class ViolaTrainer(object):
                 assert int(float(sample_num)) > 0
 
                 print 'Training with vec file: {0}'.format(vec_file)
-                cascade_folder = '../viola_jones/cascade_{0}/'.format(vec_file[:-4])
+                cascade_folder = '../viola_jones/cascade_{0}_FA{1}_{2}/'.format(vec_file[:-4], max_false_alarm_rate, feature_type)
                 cascades.append(cascade_folder+'cascade.xml')
                 mkdir_cmd = 'mkdir {0}'.format(cascade_folder)
                 try:
                     subprocess.check_call(mkdir_cmd, shell=True)
                 except Exception as e:
                     print e
-
+                
                 cmd = list()
                 cmd.append('/usr/bin/opencv_traincascade')
                 cmd.append('-data {0}'.format(cascade_folder))
@@ -50,6 +51,9 @@ class ViolaTrainer(object):
                 cmd.append('-bg ../viola_jones/bg.txt')
                 cmd.append('-numStages {0}'.format(stages)) 
                 cmd.append('-minHitRate {0}'.format(minHitRate))
+                if feature_type != 'haar':
+                    cmd.append('-featureType LBP')
+                cmd.append('-maxFalseAlarmRate {0}'.format(max_false_alarm_rate))
                 cmd.append('-precalcValBufSize 1024 -precalcIdxBufSize 1024')
                 numPos = int(float(sample_num)*.8)
                 cmd.append('-numPos {0} -numNeg {1}'.format(numPos, numPos*2))
@@ -64,6 +68,119 @@ class ViolaTrainer(object):
 
 
 class ViolaDataSetup(object):
+
+
+#######################################################
+##### FINAL METHOD USED TO PRODUCE PATCHES FOR VIOLA
+#######################################################
+    @staticmethod
+    def final_cascades_data_setup(equalized=True, path=settings.TRAINING_PATH, padding=0):
+        '''
+        Make them lie down, save patches to folder
+        Augment patches, save them to augmented folder
+        '''
+        img_names_list = get_data.DataLoader().get_img_names_from_path(path=path)
+        roof_loader = get_data.DataLoader()
+        for img_id, img_name in enumerate(img_names_list):
+            print 'Processing image: {0}'.format(img_name)
+            xml_path = path+img_name[:-3]+'xml'
+            img_path = path+img_name
+    
+            roofs = roof_loader.get_roofs(xml_path, img_name)
+            metal_log = list()
+            thatch_log = list()
+            try:        
+                img = cv2.imread(img_path, flags=cv2.IMREAD_COLOR)
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                if equalized:
+                    gray = cv2.equalizeHist(gray)
+            except IOError:
+                print 'Cannot open '+img_path
+            else:
+                for roof_id, roof in enumerate(roofs):
+                    print 'Processing image {0}: roof {1}'.format(img_id, roof_id)
+
+                    if padding > 0:
+                        roof = DataAugmentation.add_padding(roof, padding, img_path)
+                    roof_type = roof.roof_type 
+                    roof_img = np.copy(gray[roof.ymin:roof.ymin+roof.height,roof.xmin:roof.xmin+roof.width])
+                       
+                    #if it's vertical, make it lie down
+                    if roof_img.shape[0] > roof_img.shape[1]:
+                        roof_img = DataAugmentation.rotateImage(roof_img, clockwise=True)
+                    
+                    #we want to split data depending on its width/height ratio
+                    roof_shape = 'square'
+                    if roof_img.shape[0] < 0.70*roof_img.shape[1] or roof_img.shape[0]*.70 > roof_img.shape[1]:
+                        roof_shape = 'rectangular'
+ 
+                    #write basic positive example to the right folder
+                    img_name_short = img_name[:-4]
+                    equalize_folder = 'equalized' if equalized else 'not_equalized'
+                    general_path = '{1}/{2}/{3}/{4}_{5}'.format(settings.TRAINING_VIOLA_POS_PATH, 
+                                                                roof_type, roof_shape, equalize_folder, img_name_short, roof_id, padding)
+                    cv2.imwrite('{0}{1}.jpg'.format(settings.TRAINING_VIOLA_POS_PATH, general_path), roof_img)    
+                    cv2.imwrite('{0}{1}.jpg'.format(settings.TRAINING_VIOLA_POS_AUGM_FULL_PATH, general_path), roof_img)
+
+                    #calculate and write the augmented images too
+                    DataAugmentation.flip_pad_save(img_path, roof, settings.TRAINING_VIOLA_POS_AUGM_FULL_PATH+general_path, equalize=equalized)
+
+    @staticmethod
+    def final_cascades_data_setup_single_size(path=settings.TRAINING_PATH, padding=0):
+        '''
+        No division between different roof sizes: if a roof has a size that is off, we resize it
+        Make them lie down, save patches to folder
+        Augment patches, save them to augmented folder
+        '''
+        raside ValueError('You need to figure out where things are saving to. Do you want to resize the roofs to a single size? Might be silly, but you will have more examples')
+        img_names_list = get_data.DataLoader().get_img_names_from_path(path=path)
+        roof_loader = get_data.DataLoader()
+        for img_id, img_name in enumerate(img_names_list):
+            print 'Processing image: {0}'.format(img_name)
+            xml_path = path+img_name[:-3]+'xml'
+            img_path = path+img_name
+    
+            roofs = roof_loader.get_roofs(xml_path, img_name)
+            metal_log = list()
+            thatch_log = list()
+            try:        
+                img = cv2.imread(img_path, flags=cv2.IMREAD_COLOR)
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                if equalized:
+                    gray = cv2.equalizeHist(gray)
+            except IOError:
+                print 'Cannot open '+img_path
+            else:
+                for roof_id, roof in enumerate(roofs):
+                    print 'Processing image {0}: roof {1}'.format(img_id, roof_id)
+
+                    if padding > 0:
+                        roof = DataAugmentation.add_padding(roof, padding, img_path)
+                    roof_type = roof.roof_type 
+                    roof_img = np.copy(gray[roof.ymin:roof.ymin+roof.height,roof.xmin:roof.xmin+roof.width])
+                       
+                    #if it's vertical, make it lie down
+                    if roof_img.shape[0] > roof_img.shape[1]:
+                        roof_img = DataAugmentation.rotateImage(roof_img, clockwise=True)
+                    
+                    #we want to split data depending on its width/height ratio
+                    roof_shape = 'square'
+                    if roof_img.shape[0] < 0.70*roof_img.shape[1] or roof_img.shape[0]*.70 > roof_img.shape[1]:
+                        roof_shape = 'rectangular'
+ 
+                    #write basic positive example to the right folder
+                    img_name_short = img_name[:-4]
+                    equalize_folder = 'equalized' if equalized else 'not_equalized'
+                    general_path = '{1}/{2}/{3}/{4}_{5}'.format(settings.TRAINING_VIOLA_POS_PATH, 
+                                                                roof_type, roof_shape, equalize_folder, img_name_short, roof_id, padding)
+                    cv2.imwrite('{0}{1}.jpg'.format(settings.TRAINING_VIOLA_POS_PATH, general_path), roof_img)    
+                    cv2.imwrite('{0}{1}.jpg'.format(settings.TRAINING_VIOLA_POS_AUGM_FULL_PATH, general_path), roof_img)
+
+                    #calculate and write the augmented images too
+                    pdb.set_trace()
+                    DataAugmentation.flip_pad_save(img_path, roof, settings.TRAINING_VIOLA_POS_AUGM_FULL_PATH+general_path, equalize=equalized)
+
+
     @staticmethod
     def setup_negative_samples():
         '''Write file with info about location of negative examples
@@ -75,7 +192,7 @@ class ViolaDataSetup(object):
 
 
     @staticmethod
-    def transform_roofs(padding=5, path=settings.TRAINING_PATH):
+    def transform_roofs(padding=5, path=settings.TRAINING_PATH, out_path= settings.VIOLA_AUGM_DATA):
         ''' Save augmented jpgs of data with padding, rotations and flips
         '''
         img_names_list = get_data.DataLoader().get_img_names_from_path(path=path)
@@ -103,7 +220,7 @@ class ViolaDataSetup(object):
                         roof = DataAugmentation.add_padding(roof, padding, img_path)
 
                     roof_img = np.copy(gray[roof.ymin:roof.ymin+roof.height,roof.xmin:roof.xmin+roof.width])
-                    general_path = '{0}{1}/img{2}_'.format(settings.VIOLA_AUGM_DATA, roof.roof_type, img_id)
+                    general_path = '{0}{1}/img{2}_'.format(out_path, roof.roof_type, img_id)
 
                     for rotation in range(4):
                         if rotation == 0:
@@ -116,7 +233,39 @@ class ViolaDataSetup(object):
 
 
     @staticmethod
-    def setup_positive_samples_full_image(padding=5, size_divide=True):
+    def setup_positive_samples_full_image_single_size(in_path=settings.VIOLA_AUGM_DATA, dat_file_name=None):
+        '''Save .dat files containing location of training images
+        Each of the training images contains a single roof
+        '''
+        assert dat_file_name is not None
+        try:
+            dat_f = open(settings.DAT_PATH+dat_file_name, 'w')
+        except IOError as e:
+            print e
+            sys.exit(-1)
+        else:
+            img_names_list = get_data.DataLoader().get_img_names_from_path(path=in_path)
+            for img_name in img_names_list:
+                img_path = in_path+img_name
+                try:
+                    img = cv2.imread(img_path, flags=cv2.IMREAD_COLOR)
+                except IOError:
+                    print 'Cannot open '+img_path
+                else:
+                    height, width, _ = img.shape
+
+                    #append roof characteristics separated by single space
+                    position_string = '{0} {1} {2} {3}'.format(0, 0, width, height)
+                    log_to_file = '{0}\t{1}\t{2}\n'.format('../'+img_path, 1, position_string)
+
+                    #add to .dat file depending on roof time and on ratio (if metal)
+                    dat_f.write(log_to_file)
+        finally:
+            dat_f.close()
+
+
+    @staticmethod
+    def setup_positive_samples_full_image(padding=5, size_divide=True, in_path=settings.VIOLA_AUGM_DATA):
         '''Save .dat files containing location of training images
 
         Each of the training images contains a single roof
@@ -186,7 +335,7 @@ class ViolaDataSetup(object):
 
 
     @staticmethod
-    def setup_positive_samples(padding=0, path=settings.INHABITED_PATH, size_divide=True):
+    def setup_positive_samples(padding=0, path=settings.TRAINING_PATH, size_divide=True):
         '''
         Return .dat files containing positions and sizes of roofs in training images
         This uses the info about the Inhabited roofs but adds padding also and produces .Dat
@@ -291,8 +440,11 @@ class ViolaDataSetup(object):
         '''Return string formatted for .dat file
         '''
         return img_path+'\t'+str(len(roof_list))+'\t'+'\t'.join(roof_list)+'\n'
+    
 
-
+#################################################################
+#VEC FILE SETUP
+################################################################
     @staticmethod
     def vec_file_samples():
         '''Save a vec file for every .dat file found in settings.DAT_PATH
@@ -407,7 +559,11 @@ class ViolaBasicTrainer(object):
                     log_to_file = '{0}\t{1}\t{2}\n'.format('../../'+img_path, 1, position_string)
                     out_file.write(log_to_file)
 
-def train_cascade():
+########################################
+## FINAL CODE USED BELOW
+########################################
+
+def train_cascade(max_false_alarm=0.2, feature_type='LBP'):
     #TRAINING CASCADE
     no_details = True
     roof_type = ''  
@@ -428,7 +584,8 @@ def train_cascade():
         t = raw_input('Type of roof: ' )
         roof_type = 'metal' if t=='m' else 'thatch'
     vecs = [v]
-    ViolaTrainer.train_cascade(vec_files=vecs, roof_type=roof_type)
+    ViolaTrainer.train_cascade(vec_files=vecs, max_false_alarm_rate=max_false_alarm, feature_type=feature_type, roof_type=roof_type)
+
 
 
 def data_setup():
@@ -436,10 +593,24 @@ def data_setup():
     dat_names = ViolaDataSetup.setup_positive_samples(padding=0, path=settings.TRAINING_PATH, size_divide=False)     
     ViolaDataSetup.vec_file_samples()
 
+def produce_all_viola_patches():
+    ViolaDataSetup.final_cascades_data_setup(equalized=True)
+
+def produce_dat_files():
+    for roof_type in ['metal', 'thatch']:
+        for shape in ['rectangular', 'square']:
+            for illum in ['equalized', 'not_equalized']:
+                for aug in [True, False]:
+                    augmented_path = settings.TRAINING_VIOLA_POS_AUGM_PATH if aug else settings.TRAINING_VIOLA_POS_PATH
+                    in_path = '{0}{1}/{2}/{3}/'.format(augmented_path, roof_type, shape, illum)
+                    augmented = 'augm1' if aug else 'augm0'
+                    dat_file = '{0}_{1}_{2}_{3}.dat'.format(roof_type, shape, illum, augmented)
+                    ViolaDataSetup.setup_positive_samples_full_image_single_size(in_path=in_path, dat_file_name= dat_file)
+
+
+
 if __name__ == '__main__':
-   #ViolaDataSetup.setup_positive_samples_full_image(padding=5)
-#   ViolaDataSetup.setup_positive_samples_full_image(padding=0, size_divide=False)
-
-    train_cascade()
-
-
+    #produce_dat_files()
+    #ViolaDataSetup.vec_file_samples()
+    #train_cascade(max_false_alarm=0.2, feature_type='LBP')
+    produce_all_viola_patches()

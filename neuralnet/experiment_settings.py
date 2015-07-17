@@ -27,18 +27,74 @@ import load
 import my_net
 import FlipBatchIterator as flip
 
+###################################
+#USED TO SET UP THE TRAINING, VALIDATION AND TESTING SETS
+###################################
+INHABITED_1 = '../data/source/inhabited/' #the positives from the first set provided by John
+INHABITED_2 = '../data/source/inhabited2/'  #second set, provided by Stephen
 
+###################################
+#types of roof
+###################################
+NON_ROOF = 0
+METAL = 1
+THATCH = 2
+#Constants for image size
+IMG_SIZE = 40
+CROP_SIZE = 32
+PATCH_W = PATCH_H = 40
 
-#Constants for patch production
+###################################
+#FULL IMAGES: testing, training, validation sets
+###################################
 TESTING_PATH = '../data/testing/'
 VALIDATION_PATH = '../data/validation/'
-TRAINING_PATH = '../data/training/'
-INHABITED_1 = '../data/source/inhabited/'
-INHABITED_2 = '../data/source/inhabited2/'
+TRAINING_PATH = '../data/training/source/'
 
-TRAINING_NEURAL_POS = '../data/neural_training/positives/'
-TRAINING_NEURAL_NEG = '../data/neural_training/negatives/'
 
+###################################
+#VIOLA TRAINING
+###################################
+#TRAINING_VIOLA_NEG_PATH = '/afs/inf.ed.ac.uk/group/ANC/s0839470/viola_training/negatives_false_pos/' 
+TRAINING_VIOLA_NEG_PATH ='../data/training/viola_training/negatives_false_pos/'
+TRAINING_VIOLA_POS_PATH =   '../data/training/viola_training/positives/' #'/afs/inf.ed.ac.uk/group/ANC/s0839470/viola_training/positives/'
+#TRAINING_VIOLA_POS_AUGM_PATH = '/afs/inf.ed.ac.uk/group/ANC/s0839470/viola_training/positives_augm1/' # '../data/training/viola_training/positives_aumg1/'
+TRAINING_VIOLA_POS_AUGM_PATH = '../data/training/viola_training/positives_augm1/'
+TRAINING_VIOLA_POS_AUGM_FULL_PATH = '../data/training/viola_training/positives_augm1_morepadding/'
+#Viola constants
+BG_FILE = '../viola_jones/bg.txt'
+DAT_PATH = '../viola_jones/all_dat/'
+VEC_PATH = '../viola_jones/vec_files/'
+VIOLA_AUGM_DATA = '../viola_jones/data/'
+
+
+####################################
+#VIOLA DETECTIONS
+####################################
+CASCADE_PATH = '../viola_jones/cascades/'
+VIOLA_OUT = '/afs/inf.ed.ac.uk/group/ANC/s0839470/output/viola/'
+FULLY_CLASSIFIED = .90
+MOSTLY_CLASSIFIED = 0.75
+PARTIALLY_CLASSIFIED = 0.40
+NEAR_MISS = 0.20
+COMBO_PATH = '../viola_jones/detector_combos/'
+
+###################################
+#NEURAL TRAINING PATCHES
+###################################
+TRAINING_NEURAL_PATH = '../data/training/neural_training/' #in this folder we also have the false_pos and true_pos from Viola as a pickle file
+TRAINING_NEURAL_POS = '../data/neural_training/positives/'  #where the true positives from training source are 
+TRAINING_NEURAL_NEG = '../data/neural_training/negatives/'  
+#Constants for training neural network
+NET_PARAMS_PATH = "../data/net_params/"
+OUT_REPORT = "../output/report/" 
+OUT_HISTORY = "../output/history/"
+OUT_IMAGES = "../output/images/"
+FTRAIN = '../data/training/'
+FTRAIN_LABEL = '../data/training/labels.csv'
+TEST_PATH = '../data/test/'
+
+'''
 TRAIN_PROPORTION = 0.80
 PATCHES_OUT_PATH = '/afs/inf.ed.ac.uk/user/s08/s0839470/roof/data/training/'
 LABELS_PATH = '/afs/inf.ed.ac.uk/user/s08/s0839470/roof/data/training/labels.csv'
@@ -50,45 +106,19 @@ DELETE_PATH = '../data/delete/'
 NEGATIVE_PATCHES_NUM = 5
 NEGATIVE_PATH = '../data/roof_negatives/'
 TRAIN_NEURAL_VIOLA_EXTRA = '/afs/inf.ed.ac.uk/group/ANC/s0839470/viola_neural_patches/' #extra storage in ANC disk space
-
-#types of roof
-NON_ROOF = 0
-METAL = 1
-THATCH = 2
-
-#Constants for image size
-IMG_SIZE = 40
-CROP_SIZE = 32
-PATCH_W = PATCH_H = 40
+'''
 
 CASCADE_PATH = '../viola_jones/cascades/'
 
-#Constants for training neural network
-NET_PARAMS_PATH = "../data/net_params/"
-OUT_REPORT = "../output/report/" 
-OUT_HISTORY = "../output/history/"
-OUT_IMAGES = "../output/images/"
-FTRAIN = '../data/training/'
-FTRAIN_LABEL = '../data/training/labels.csv'
-TEST_PATH = '../data/test/'
-
+###################################
 #Constants for debugging
+###################################
 VERBOSITY = 1   #varies from 1 to 3
 DEBUG = False
 
-#Viola constants
-BG_FILE = '../viola_jones/bg.txt'
-DAT_PATH = '../viola_jones/all_dat/'
-VEC_PATH = '../viola_jones/vec_files/'
-VIOLA_AUGM_DATA = '../viola_jones/data/'
-CASCADE_PATH = '../viola_jones/cascades/'
-VIOLA_OUT = '../output/viola/'
-FULLY_CLASSIFIED = .90
-MOSTLY_CLASSIFIED = 0.75
-PARTIALLY_CLASSIFIED = 0.40
-NEAR_MISS = 0.20
-
+###################################
 #Pipeline
+###################################
 PIPE_PARAMS_PATH = '../data/pipe_params/'
 PIPE_OUT = '../output/pipeline/'
 STEP_SIZE = PATCH_H #used by detection pipeline

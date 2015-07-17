@@ -1,1 +1,0 @@
-metal detectors: 	metal_0_square_augm0_num271_w50_h50	metal_0_tall_augm0_num180_w25_h50	metal_0_wide_augm0_num228_w50_h25thatch_detector: 	
