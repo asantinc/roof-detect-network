@@ -574,7 +574,7 @@ def get_all_combos():
             combo_f_names.append(combo_f)
     return detector_list, combo_f_names 
 
-def testing_detectors(all=False, validation=False, small_test=False):
+def testing_detectors(original_dataset=False, all=False, validation=False, small_test=False):
     '''Test either a single detector or all detectors in the combo files
     '''
     #TESTING ONLY ONE DETECTOR that must be passed in as an argument  
@@ -597,18 +597,22 @@ def testing_detectors(all=False, validation=False, small_test=False):
 
     #need to detect on validation set. To make it easier to digest, initially we also looked at training set
     for detector, combo_f_name in zip(detector_list, combo_f_names):
-        if validation and small_test==False:
-            out_path = settings.VIOLA_OUT+'with_validation_set/'
-            in_path = settings.VALIDATION_PATH 
-        elif validation == False and small_test ==False:
-            out_path = settings.VIOLA_OUT+'with_training_set/'
-            in_path = settings.TRAINING_PATH
+        if original_dataset == False:
+            if validation and small_test==False:
+                out_path = settings.VIOLA_OUT+'with_validation_set/'
+                in_path = settings.VALIDATION_PATH 
+            elif validation == False and small_test ==False:
+                out_path = settings.VIOLA_OUT+'with_training_set/'
+                in_path = settings.TRAINING_PATH
+            else:
+                out_path = settings.VIOLA_OUT+'small_test/'
+                in_path = '../data/small_test/'
         else:
-            out_path = settings.VIOLA_OUT+'small_test/'
-            in_path = '../data/small_test/'
-
+            out_path = settings.ORIGINAL_VIOLA_OUTPUT
+            in_path = settings.ORIGINAL_VALIDATION_PATH
         folder_name = 'combo'+combo_f_name+'/'
         viola = ViolaDetector(load_pickle_stats = False, folder_name=folder_name, out_path=out_path, detector_names=detector, save_imgs=False, old_detector = False)
+        pdb.set_trace()
         viola.detect_evaluate_roofs_folder(path=in_path, save_detections=True, reject_levels=0.5, level_weights=2, scale=1.05)
 
 
@@ -701,6 +705,6 @@ if __name__ == '__main__':
 #    check_cascade_status()
 #    set_up_basic_combos()
 #    get_img_size()
-    #testing_detectors(all=False, validation=True)
+    testing_detectors(all=False, original_dataset=True, validation=True)
     
-    pickle_neural_true_false_positives()
+#    pickle_neural_true_false_positives()

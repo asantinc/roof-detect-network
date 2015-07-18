@@ -129,8 +129,7 @@ class DataAugmentation(object):
 # Viola Jones augmentation
 #####################
     @staticmethod
-    def flip_pad_save(in_path, roof, img_path, equalize=None):
-        assert equalize is not None
+    def flip_pad_save(in_path, roof, img_path, equalize=True):
         for i in range(4):
             try:        
                 img = cv2.imread(in_path, flags=cv2.IMREAD_COLOR)
@@ -627,15 +626,16 @@ class DataLoader(object):
 #######################################################################
 ## SEPARATING THE DATA INTO TRAIN, VALIDATION AND TESTING SETS
 #######################################################################
-    def get_train_test_valid_all(self):
+    def get_train_test_valid_all(self, original_data_only=False):
         '''Will write to either test, train of validation folder each of the images from source
         '''
         groups = list()
                 
         #get list of images in source/inhabted and source/inhabited_2
-        train_1 = [settings.INHABITED_1+img for img in DataLoader.get_img_names_from_path(path =settings.INHABITED_1)]
-        train_2 = [settings.INHABITED_2+img for img in DataLoader.get_img_names_from_path(path =settings.INHABITED_2)]
-        train_imgs = train_1 + train_2
+        train_imgs = [settings.INHABITED_1+img for img in DataLoader.get_img_names_from_path(path =settings.INHABITED_1)]
+        if original_data_only == False:
+            train_2 = [settings.INHABITED_2+img for img in DataLoader.get_img_names_from_path(path =settings.INHABITED_2)]
+            train_imgs = train_imgs + train_2
 
         #shuffle for randomness
         train_imgs = shuffle(train_imgs, random_state=0)
@@ -654,19 +654,24 @@ class DataLoader(object):
                                                                                                             train_imgs, total_metal, total_thatch)
         valid_imgs, test_imgs, test_metal, test_thatch, valid_metal, valid_thatch = self.get_50_percent(roof_dict, train_imgs_left, metal_left_over, thatch_left_over)
 
-        for files, dest in zip([train_imgs, valid_imgs, test_imgs], [settings.TRAINING_PATH, settings.VALIDATION_PATH, settings.TESTING_PATH]):
+        train_path = settings.ORIGINAL_TRAINING_PATH if original_data_only else settings.TRAINING_PATH
+        valid_path = settings.ORIGINAL_VALIDATION_PATH if original_data_only else settings.VALIDATION_PATH
+        testing_path = settings.ORIGINAL_TESTING_PATH if original_data_only else settings.TESTING_PATH
+        for files, dest in zip([train_imgs, valid_imgs, test_imgs], [train_path, valid_path, testing_path]):
             for img in files:
                 print 'Saving file {0} to {1}'.format(img, dest)
                 subprocess.check_call('cp {0} {1}'.format(img, dest), shell=True)
                 subprocess.check_call('cp {0} {1}'.format(img[:-3]+'xml', dest), shell=True)
 
-        with open('../data/data_stats.txt', 'w') as r:
+        with open('/afs/inf.ed.ac.uk/group/ANC/s0839470/original_dataset_train_test_valid/data_stats.txt' , 'w') as r:
+        #with open('../data/original_dataset_train_test_valid/data_stats.txt', 'w') as r:
             r.write('\tTrain\tValid\tTest\n')
             r.write('Metal\t{0}\t{1}\t{2}\n'.format(train_metal, valid_metal, test_metal))
             r.write('Thatch\t{0}\t{1}\t{2}\n'.format(train_thatch, valid_thatch, test_thatch))
                 
 
     def get_50_percent(self, roof_dict, train_imgs, total_metal, total_thatch):
+        # we want to keep around 50:25:25 ratio for training, validation, testing
         metal_40 = int(0.48*total_metal)        
         thatch_40 = int(0.48*total_thatch)
         metal_60 = int(0.55*total_metal)
@@ -690,13 +695,9 @@ if __name__ == '__main__':
     #loader = DataLoader(labels_path='labels.csv', out_path='../data/testing_json/', in_path=settings.JSON_IMGS)
     #loader.produce_json_roofs(json_file='../data/images-new/labels.json')
 
-#    loader = DataLoader()
-#    training, validation, testing = .50, .25, .25
-#    train_no, test_no = loader.produce_xml_roofs(new_test_set=False)
-#    loader.get_negative_patches(10*train_no, settings.NEGATIVE_PATH+'labels.csv', out_path=settings.NEGATIVE_PATH)
-
     loader = DataLoader()
-    loader.get_train_test_valid_all()
+#    loader.get_train_test_valid_all( original_data_only=True)
+     
     #loader = DataLoader()
     #loader.get_negative_patches(10000, '../data/neural_training/negatives/labels.csv', out_path='../data/neural_training/negatives/') 
 

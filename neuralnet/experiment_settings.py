@@ -51,6 +51,12 @@ TESTING_PATH = '../data/testing/'
 VALIDATION_PATH = '../data/validation/'
 TRAINING_PATH = '../data/training/source/'
 
+#PATH TO THE DATA THAT ONLY HAD INHABITED_1 FILES IN IT...I created this because it seems like I'm getting terrible results with the new data
+ORIGINAL_TESTING_PATH = '/afs/inf.ed.ac.uk/group/ANC/s0839470/original_dataset_train_test_valid/testing/' #'../data/original_dataset_train_test_valid/testing'
+ORIGINAL_VALIDATION_PATH = '/afs/inf.ed.ac.uk/group/ANC/s0839470/original_dataset_train_test_valid/validation/'# '../data/original_dataset_train_test_valid/validation'
+ORIGINAL_TRAINING_PATH = '/afs/inf.ed.ac.uk/group/ANC/s0839470/original_dataset_train_test_valid/training/' #'../data/original_dataset_train_test_valid/training'
+ORIGINAL_VIOLA_PATCHES_AUGM = '../data/original_dataset_viola_patches/' #'/afs/inf.ed.ac.uk/group/ANC/s0839470/original_dataset_viola_patches/'
+ORIGINAL_VIOLA_OUTPUT = '../other_output_is_in_afs/viola_with_original_dataset/'
 
 ###################################
 #VIOLA TRAINING
