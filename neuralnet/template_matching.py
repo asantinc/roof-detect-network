@@ -9,7 +9,7 @@ from timer import Timer
 def get_template(shape=None, size=None):
     template = np.zeros((size[0]+20, size[1]+20))
     print template.shape
-    template[20:20+size[0], 20:20+size[1]] = 1
+    template[20:20+size[0], 20:20+size[1]] = 255 #white central region 
     return template
 
 
@@ -31,10 +31,12 @@ class ScoredImage(object):
     def threshold_img(self, threshold=None):
         #only mark with ones the regions where the score is above some threhold
         coords = [coord for coord, score in self.scores.iteritems() if score > threshold]
+
         for coord in coords:
             #draw rectangles around the original image
             cv2.rectangle(self.img, (coord[0],coord[1]),(self.template.shape[0]+coord[0],
                                                 coord[1]+self.template.shape[1]), (0,0,255),5)
+        #gray_filtered = cv2.inRange(gray, 190, 255)
         return self.img 
 
 
@@ -102,3 +104,6 @@ if __name__ == '__main__':
                 cv2.imwrite('test.jpg', threshold)
             print t.secs
         break
+
+
+
