@@ -1,4 +1,5 @@
 viola_jones/all_output/
+templating/
 data/*
 Lasagne/
 nolearn/
