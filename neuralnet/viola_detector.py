@@ -224,28 +224,7 @@ class ViolaDetector(object):
         cv2.imwrite(bounding_path, output_bounds)
         return contours
 
-        
-    def match_roofs_to_detection(self, img_name, roof_list, rows=1200, cols=2000):
-        #Compare detections to ground truth
-        patch_mask, detection_percent = self.get_patch_mask(img_name)
-        #print 'Percent of image covered by detection:{0}'.format(detection_percent)
-        patch_location = self.output_folder+img_name+'_mask.jpg'
-        if self.save_imgs:
-            cv2.imwrite(patch_location, np.array(patch_mask, dtype=int))
-            detection_contours = self.get_detection_contours(patch_location, img_name)
-
-        #initialize the detection evaluation metrics for the current image
-        self.overlap_roof_with_detections[img_name] = defaultdict()
-        for roof_type in ['thatch', 'metal']:
-            self.overlap_roof_with_detections[img_name][roof_type] = defaultdict(list)
-            for coverage_type in ['any', 'single']: 
-                self.overlap_roof_with_detections[img_name][roof_type][coverage_type] = list()
-
-        for roof in roof_list:
-            self.overlap_roof_with_detections[img_name][roof.roof_type]['any'].append(roof.check_overlap_total(patch_mask, rows, cols))
-            self.overlap_roof_with_detections[img_name][roof.roof_type]['single'].append(roof.max_overlap_single_patch(detections=self.viola_detections.get_img_detections_any_type(img_name)))
-
-
+    
     def get_neural_training_data(self, save_false_pos=False, roof_type=None, out_path=settings.TRAINING_NEURAL_PATH, detector_name=None):
         '''
         Run detection to get false positives, true positives from viola jones. Save these patches.
