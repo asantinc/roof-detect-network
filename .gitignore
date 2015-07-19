@@ -1,4 +1,5 @@
 viola_jones/all_output/
+other_output_is_in_afs/
 templating/
 data/*
 Lasagne/
