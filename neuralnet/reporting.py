@@ -3,59 +3,69 @@ from collections import defaultdict
 from viola_detector import Detections
 from get_data import Roof, DataLoader #for get_roofs
 
+
+class Detections(object):
+    def __init__(self, roof_types=None):
+        self.detections = dict()
+        self.total_detection_num = 0
+        self.total_time = 0
+        self.imgs = set()
+        self.roof_types = ['metal', 'thatch'] is roof_types is None else roof_types
+        for roof_type in self.roof_types:
+            self.detections[roof_type] = defaultdict(list)
+
+    def set_detections(self, roof_type=None, img_name=None, detection_list = None):
+        assert roof_type is not None
+        assert img_name is not None
+        assert detection_list is not None
+        if img_name not in self.imgs:
+            self.imgs.update(img_name)
+        self.total_detection_num += len(detection_list)
+        self.detections[roof_type][img_name].extend(detection_list)        
+
+    def get_img_detections_specific_type(self, roof_type, img_name):
+        return self.detections[roof_type][img_name] 
+
+    def get_img_detections_any_type(self, img_name):
+        return self.detections[self.roof_types[0]][img_name]+self.detections[self.roof_types[1]][img_name]        
+
+
+
+
 class Evaluation(object):
-    def __init__(self, out_folder=None, detections=None, img_name=None  in_path=None, roofs):
+    def __init__(self, out_folder=None, detections=None, in_path=None, img_names=None, detector_names=None):
         self.VOC_threshold = 0.5 #threshold to assign a detection as a true positive
-        self.out_folder = out_folder
+        self.scores = defaultdict()
 
-        self.roof_list = roof_list
-        self.detections = detections #detection class
-        self.in_path = in_path #the path from which the images are taken
-        self.roof_types = roof_types=['metal', 'thatch'] if roof_types is None else roof_types
+        self.detections = detections    #detection class
+        self.in_path = in_path          #the path from which the images are taken
+        self.img_names = img_names
+        self.roof_types = ['metal', 'thatch'] if roof_types is None else roof_types
 
-       
         self.roofs = dict()
-        for img_path in img_list:
+        for img_path in self.img_names:
             self.roofs[img_path] = Loader().get_roofs(img_path[:-3]+'.xml', img_path)
-            self.overlap_roof_with_detections[img_name] = defaultdict()
+            #self.overlap_roof_with_detections[img_name] = defaultdict()
 
-        self.init_stats()
-        self.set_roof_overlap()
-
-
-    def init_stats(self)
-        self.total_area_percentage_covered = defaultdict()
-        self.total_area = defaultdict(int)
-        self.fully_classified = defaultdict()
-        self.mostly_classified = defaultdict()
-        self.partially_classified = defaultdict()
-        self.missed = defaultdict(int)
-        self.near_miss = defaultdict(int)
-        self.total_possible_area = defaultdict(int)
-
-    def set_roof_overlap(self):
-        for img_name in self.img_names:
-            for roof in self.roof_list[img_name]:
-                detections=self.detections.get_img_detections_any_type(img_name)
-                self.overlap_roof_with_detections[img_name][roof.roof_type].append(Evaluation.max_overlap_single_patch(roof=roof,detections=detections))
+        self.out_folder = out_folder
+        if detector_names is not None:
+            self.init_report(detector_names)
 
 
-    @staticmethod
-    def check_overlap_total(self, roof, patch_mask, img_rows, img_cols):
-        '''Check overlap between a single roof and any detection
-        Not a valid metric according to VOC detection metrics
-        '''
-        roof_area = roof.width*roof.height
-        curr_roof = np.zeros((img_rows, img_cols))
-        curr_roof[roof.ymin:roof.ymin+self.height,roof.xmin:roof.xmin+roof.width] = 1
-        curr_roof[patch_mask] = 0 
-        
-        roof_area_found = roof_area-Evaluation.sum_mask(curr_roof)
-       
-        percent_found = (float(roof_area_found)/roof_area)
-        
-        #print 'Percent of current roof found: {0}'.format(percent_found)
-        return percent_found
+    def init_report(self, detectors):
+        self.report_file = self.output_folder+'report.txt'
+        try:
+            report = open(self.report_file, 'w')
+            report.write('metal detectors: \t')
+            report.write('\t'.join(detector_names['metal']))
+            report.write('\n')
+            report.write('thatch_detector: \t')
+            report.write('\t'.join(detector_names['thatch']))           
+            report.write('\n')
+        except IOError as e:
+            print e
+        else:
+            report.close()
 
 
     @staticmethod
@@ -65,86 +75,22 @@ class Evaluation(object):
         return np.sum(np.sum(array, axis=0), axis=0)
 
 
-    @staticmethod
-    def max_VOC_overlap_single_patch(self, rows=1200, cols=2000, detections=None, roof=None):
-        '''Return maximum percentage overlap between this roof and a single patch in a set of candidate patches from the same image
-        '''
-        roof_area = min_miss = roof.width*roof.height
-                
-        roof_mask = np.zeros((rows, cols)) 
-        for (x,y,w,h) in detections:                           #for each patch found
-            roof_mask[roof.ymin:roof.ymin+roof.height, roof.xmin:roof.xmin+roof.width] = 1   #the roof
-            roof_mask[y:y+h, x:x+w] = 0        #detection
-            curr_miss = Evaluation.sum_mask(roof_mask)
-            
-            #save the coverage percentage
-            if curr_miss == 0:                       #we have found the roof
-                return 1.0
-            elif curr_miss < min_miss:               #keep track of best match
-                #add it to the true positives
-                min_miss = curr_miss                
-                x_true, y_true, w_true, h_true = x,y,w,h
-                
-        intersection_area = roof_area-curr_miss
-        detection_area = w_true*h_true
-        union_area = (roof_area+(detection_area) )-intersection_area
-
-        voc_measure = float(intersection_area)/union_area
-        #percent_found = (roof_area-min_miss)*(1.)/roof_area
-
-        return voc_measure
-
-
-   def set_scores(self): 
-        '''
-        Write to file:
-        - the number of roofs detected per file.
-        - the false positives and the false negative rates of the joint detector
-        - the average time taken for the detection
-        '''
-        raise ValueError('What is the purpose of this?')
-        for roof_type in self.roof_types:
-            for img_name in self.overlap_roof_with_detections.keys():
-                score_list =  self.overlap_roof_with_detections[img_name][roof_type]
-
-                for roof_score in score_list:
-                    if roof_score >= settings.FULLY_CLASSIFIED:
-                        fully_classified[roof_type] += 1
-                    elif roof_score>= settings.MOSTLY_CLASSIFIED:
-                        mostly_classified[roof_type] += 1
-                    elif roof_score >= settings.PARTIALLY_CLASSIFIED:
-                        partially_classified[roof_type] += 1
-                    elif roof_score >= settings.NEAR_MISS:
-                        near_miss[roof_type] += 1
-                    else:
-                        missed[roof_type]+= 1
-        
-        #dictionary containing stats that we can pickle and unpickle for comparisons between runs
-        evaluation = dict() 
-        evaluation['path'] = self.output_folder
-
-
+ 
     def print_report(self, write_to_file=True):
         log_to_file = list() 
-
-        #Print total detections
-        detection_num = self.detections.total_detection_num
-        evaluation['timing'] = self.detections.total_time
-
-        log_to_file.append('Detections:\t\t{0}'.format(detection_num))
+        log_to_file.append('Detections:\t\t{0}'.format(self.detections.total_detection_num))
         log_to_file.append('Time:\t\t{0}'.format(self.detections.total_time))
-
 
         for roof_type in ['metal', 'thatch']:
             if self.detector_names[roof_type] == []:
-                evaluation[roof_type] = False
                 continue
             # Need to get True positives, True negatives, Recall, Precision and F1
             log_to_file.append('{0}'.format(roof_type))
-            log_to_file.append('\t\t>Recall\t\t>Precision\t\t>F1 score\t\t')
+            log_to_file.append('\t\tTotal roofs\t\tDetections\t\tRecall\t\tPrecision\t\tF1 score\t\t')
 
-            evaluation[roof_type] = dict() #dict for actual metrics 
-            evaluation[roof_type] = 
+        self.scores['total_true_pos']
+        self.scores['total_false_pos']
+        self.scores['total_detections_pos']
 
             
         log_to_file.append('\n\n\n')
@@ -157,53 +103,51 @@ class Evaluation(object):
             pickle.dump(evaluation, f)
 
 
-
-    def find_true_false_positives(self, img_rows, img_cols, img_name, roof_type, threshold=settings.PARTIALLY_CLASSIFIED):
-        '''Divide detections between true positives and false positives depending on the percentage of a roof they cover
+    def score_img(self, rows=1200, cols=2000, img_name):
+        '''Find best overlap between each roof in an img and the detections,
+        according the VOC score
         '''
-        detections = self.detections.get_img_detections_specific_type(roof_type, img_name)
-        print 'Detect num: '+str(len(detections))+'\n'
-        true_pos = list()
-        false_pos_logical = np.empty(len(detections), dtype=bool)
-
-        other_roof_type = 'metal' if roof_type == 'thatch' else 'thatcht'
-        other_roofs = [(r.xmin, r.ymin, r.width, r.height) for r in roof_list[img_name] if r.roof_type==other_roof_type]
-        other_roofs_type_mask, percent_covered = self.get_patch_mask(detections=other_roofs)
-        other_roofs_type_sum = Roof.sum_mask(other_roofs_type_mask)  
-
-        #for every roof, check if any detection covers it enough
-        #
-        for d, (x,y,w,h) in enumerate(detections):                           #for each patch found
-            for roof in roof_list: #check whether match exists with any roof                   
-                if roof.roof_type != roof_type:
-                    continue
-                roof_mask = np.zeros((img_rows, img_cols))
-                roof_area = roof.width*roof.height
+        voc_scores = list()
+        true_pos = 0
+        false_pos = 0
+        for roof in self.roofs[img_name]:
+            best_voc_score = -1
+            roof_area = roof.width*roof.height
+                    
+            roof_mask = np.zeros((rows, cols)) 
+            for (x,y,w,h) in self.detections[img_name]:                           #for each patch found
                 roof_mask[roof.ymin:roof.ymin+roof.height, roof.xmin:roof.xmin+roof.width] = 1   #the roof
                 roof_mask[y:y+h, x:x+w] = 0        #detection
-                curr_miss = Roof.sum_mask(roof_mask)
+                roof_missed = Evaluation.sum_mask(roof_mask)
+                
+                intersection_area = roof_area-roof_missed
+                detection_area = w*h
+                union_area = (roof_area+(detection_area) )-intersection_area
+                voc_score = float(intersection_area)/union_area
 
-                #true positives
-                percent_found = (roof_area-curr_miss)*(1.)/roof_area
-                if percent_found > settings.PARTIALLY_CLASSIFIED:
-                    true_pos.append((x,y,w,h))
-                    false_pos_logical[d] = False
-                else:
-                    #check whether it overlaps with the other type of roof (if the sum is lower now)
-                    copy_other_roofs_type_mask = np.copy(other_roofs_type_mask) 
-                    copy_other_roofs_type_mask[y:y+h, x:x+w] = 0 
-                    if (other_roofs_type_sum - Roof.sum_mask(copy_other_roofs_type_mask))<5:
-                        #if our detection covers very little of any roof of the opposite class, we don't consider this a negative patch
-                        false_pos_logical[d] = True
+                if voc_score > best_voc_score:
+                    best_voc_score = voc_score
+                    x_true, y_true, w_true, h_true = x,y,w,h
 
-        det = np.array(detections)
-        false_pos = det[false_pos_logical]
-        print 'Roofs:{2},  True Pos: {0}, False pos: {1}'.format(len(true_pos), len(false_pos), len(roof_list))
-        self.true_positives = true_pos
-        self.false_positives = false_pos 
+            voc_scores.append(best_voc_score)
+            if (best_voc_score >= self.VOC_threshold):
+                true_pos += 1
+            else:
+                false_pos += 1
 
+        recall = true_pos / len(self.roofs[img_name])
+        precision = true_pos / len(self.detections[img_name])
+        self.scores[img_name]['precision'] = precision
+        self.scores[img_name]['recall'] = recall
+        self.scores[img_name]['voc_scores'] = voc_scores
 
-    def get_patch_mask(self, img_name=None, detections=None, rows=1200, cols=2000):
+        self.scores['total_true_pos'] += true_pos
+        self.scores['total_false_pos'] += false_neg
+        self.scores['total_detections_pos'] += len(self.detections[img_name])
+        self.scores['total_roofs'] += len(self.roofs[img_name])
+
+   @staticmethod
+    def get_patch_mask(img_name=None, detections=None, rows=1200, cols=2000):
         '''Mark the area of a detection as True, everything else as False
         '''
         if detections == None:#we either have a list of detections or an img_name
@@ -218,8 +162,8 @@ class Evaluation(object):
         area_covered = np.sum(patch_area)
         return patch_mask, float(area_covered)/(rows*cols) 
 
-
-    def get_detection_contours(self, patch_path, img_name):
+   @staticmethod
+    def get_detection_contours(patch_path, img_name):
         im_gray = cv2.imread(patch_path, cv2.CV_LOAD_IMAGE_GRAYSCALE)
         (thresh, im_bw) = cv2.threshold(im_gray, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
 
@@ -242,3 +186,36 @@ class Evaluation(object):
         return contours
 
 
+    def mark_false_true_detections_and_roofs(self, img_name, roof_list, false_pos, true_pos):
+        #get the img
+        try:
+            img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
+        except:
+            print 'Cannot open {0}'.format(self.in_path+img_name)
+
+        img = self.mark_roofs_on_img(img, img_name, roof_list, (255,0,0))
+        img = self.mark_roofs_on_img(img, img_name, false_pos, (0,255,0))
+        img = self.mark_roofs_on_img(img, img_name, true_pos, (255,255,255))
+
+        #save image 
+        cv2.imwrite(self.out_path+img_name+'_FP_TP.jpg', img) 
+
+    @staticmethod
+    def mark_roofs_on_img(self, img, img_name, roof_list, color=(0,255,0)):
+        for roof in roof_list:
+            if type(roof) is Roof:
+                x, y, w, h = roof.xmin, roof.ymin, roof.width, roof.height
+            else:
+                x, y, w, h = roof
+            cv2.rectangle(img,(x,y),(x+w, y+h),color,2)
+        return img
+
+
+    @staticmethod
+    def save_detection_img(img_path, img_name, roof_list):
+        img = cv2.imread(img_path, flags=cv2.IMREAD_COLOR)
+        img = self.mark_detections_on_img(img, img_name)
+        img = self.mark_roofs_on_img(img, img_name, roof_list)
+        cv2.imwrite(self.out_folder+'_'+img_name, img)
+
+    
