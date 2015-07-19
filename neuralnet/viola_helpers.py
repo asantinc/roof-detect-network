@@ -1,5 +1,12 @@
 from viola_detector import ViolaDetector, NeuralViolaDetector
+from reporting import Evaluation, Detections
+import getopt
+import sys
+from collections import defaultdict
+import csv
+import pdb
 
+import experiment_settings as settings
 
 def pickle_neural_true_false_positives():
     #Getting patches for neural network
@@ -12,7 +19,7 @@ def pickle_neural_true_false_positives():
             combo_f = arg
     assert combo_f is not None
     detectors = get_detectors(combo_f)
-    viola = ViolaDetector(load_pickle_stats = False, detector_names=detectors, save_imgs=False, old_detector = False, neural=True)
+    viola = NeuralViolaDetector(detector_names=detectors, save_imgs=False, old_detector = False, neural=True)
     if len(detectors['metal']) > 0:
         roof_type = 'metal'
     elif len(detectors['thatch']) > 0:
@@ -56,7 +63,7 @@ def get_all_combos():
     return detector_list, combo_f_names 
 
 
-def testing_detectors(original_dataset=False, all=False, validation=False, small_test=False):
+def testing_detectors(original_dataset=False, all=False, validation=True, small_test=False):
     '''Test either a single detector or all detectors in the combo files
     '''
     #TESTING ONLY ONE DETECTOR that must be passed in as an argument  
@@ -93,9 +100,9 @@ def testing_detectors(original_dataset=False, all=False, validation=False, small
             out_path = settings.ORIGINAL_VIOLA_OUTPUT
             in_path = settings.ORIGINAL_VALIDATION_PATH
         folder_name = 'combo'+combo_f_name+'/'
-        viola = ViolaDetector(load_pickle_stats = False, folder_name=folder_name, out_path=out_path, detector_names=detector, save_imgs=False, old_detector = False)
-        pdb.set_trace()
-        viola.detect_roofs_in_img_folder(path=in_path, save_detections=True, reject_levels=0.5, level_weights=2, scale=1.05)
+        viola = ViolaDetector(out_folder_name=folder_name, out_path=out_path, in_path=in_path, 
+                                                detector_names=detector, save_imgs=False, old_detector = False)
+        viola.detect_roofs_in_img_folder(reject_levels=0.5, level_weights=2, scale=1.05)
 
 
 def check_cascade_status():
@@ -181,5 +188,5 @@ def get_img_size():
 
 
 if __name__ == '__main__':
-    testing_detectors(all=False, original_dataset=True, validation=True)
+    testing_detectors(all=False, original_dataset=False, validation=False, small_test=True)
     

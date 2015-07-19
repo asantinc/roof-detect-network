@@ -1,16 +1,17 @@
 from collections import defaultdict
+import numpy as np
 
-from viola_detector import Detections
 from get_data import Roof, DataLoader #for get_roofs
 
 
 class Detections(object):
     def __init__(self, roof_types=None):
-        self.detections = dict()
-        self.total_detection_num = 0
+        self.detections = defaultdict(list)
+        self.detections_list = list()
+        self.total_detection_num = defaultdict(int)
         self.total_time = 0
         self.imgs = set()
-        self.roof_types = ['metal', 'thatch'] is roof_types is None else roof_types
+        self.roof_types = ['metal', 'thatch'] if roof_types is None else roof_types
         for roof_type in self.roof_types:
             self.detections[roof_type] = defaultdict(list)
 
@@ -18,13 +19,14 @@ class Detections(object):
         assert roof_type is not None
         assert img_name is not None
         assert detection_list is not None
-        if img_name not in self.imgs:
-            self.imgs.update(img_name)
-        self.total_detection_num += len(detection_list)
-        self.detections[roof_type][img_name].extend(detection_list)        
+            
+        self.total_detection_num[roof_type] += len(detection_list)
+        self.detections[roof_type][img_name] = detection_list    
+        self.detections_list.extend(detection_list)
 
     def get_img_detections_specific_type(self, roof_type, img_name):
         return self.detections[roof_type][img_name] 
+
 
     def get_img_detections_any_type(self, img_name):
         return self.detections[self.roof_types[0]][img_name]+self.detections[self.roof_types[1]][img_name]        
@@ -35,25 +37,28 @@ class Detections(object):
 class Evaluation(object):
     def __init__(self, out_folder=None, detections=None, in_path=None, img_names=None, detector_names=None):
         self.VOC_threshold = 0.5 #threshold to assign a detection as a true positive
-        self.scores = defaultdict()
+        self.scores = dict()
+        self.scores['total_true_pos'] = defaultdict(int)
+        self.scores['total_false_pos'] = defaultdict(int)
+        self.scores['total_detections'] = defaultdict(int)
+        self.scores ['total_roofs'] = defaultdict(int)
 
         self.detections = detections    #detection class
         self.in_path = in_path          #the path from which the images are taken
         self.img_names = img_names
-        self.roof_types = ['metal', 'thatch'] if roof_types is None else roof_types
+        self.roof_types = ['metal', 'thatch'] 
 
         self.roofs = dict()
-        for img_path in self.img_names:
-            self.roofs[img_path] = Loader().get_roofs(img_path[:-3]+'.xml', img_path)
-            #self.overlap_roof_with_detections[img_name] = defaultdict()
+        for img_name in self.img_names:
+            self.roofs[img_name] = DataLoader().get_roofs(self.in_path+img_name[:-3]+'xml', img_name)
 
         self.out_folder = out_folder
         if detector_names is not None:
             self.init_report(detector_names)
 
 
-    def init_report(self, detectors):
-        self.report_file = self.output_folder+'report.txt'
+    def init_report(self, detector_names):
+        self.report_file = self.out_folder+'report.txt'
         try:
             report = open(self.report_file, 'w')
             report.write('metal detectors: \t')
@@ -78,44 +83,49 @@ class Evaluation(object):
  
     def print_report(self, write_to_file=True):
         log_to_file = list() 
-        log_to_file.append('Detections:\t\t{0}'.format(self.detections.total_detection_num))
-        log_to_file.append('Time:\t\t{0}'.format(self.detections.total_time))
+        print '*************** FINAL REPORT *****************'
+        log_to_file.append('Total Detection Time:\t\t{0}'.format(self.detections.total_time))
 
         for roof_type in ['metal', 'thatch']:
-            if self.detector_names[roof_type] == []:
-                continue
-            # Need to get True positives, True negatives, Recall, Precision and F1
-            log_to_file.append('{0}'.format(roof_type))
-            log_to_file.append('\t\tTotal roofs\t\tDetections\t\tRecall\t\tPrecision\t\tF1 score\t\t')
+            log_to_file.append('Roof type: {0}'.format(roof_type))
+            log_to_file.append('Total roofs\tDetections\tRecall\tPrecision\tF1 score\t')
 
-        self.scores['total_true_pos']
-        self.scores['total_false_pos']
-        self.scores['total_detections_pos']
+            detection_num = self.detections.total_detection_num[roof_type]
+            cur_type_roofs = self.scores['total_roofs'][roof_type]
+            if detection_num > 0:
+                recall = float(self.scores['total_true_pos'][roof_type]) / cur_type_roofs 
+                precision = float(self.scores['total_true_pos'][roof_type]) / detection_num
+                F1 = 2.*precision*recall/(precision+recall)
+            else:
+                recall = precision = F1 = 0
 
-            
+            log_to_file.append('{0}\t\t{1}\t\t{2}\t\t{3}\t\t{4}\n'.format(cur_type_roofs, detection_num, recall, precision,F1)) 
+           
         log_to_file.append('\n\n\n')
-
+        log = '\n'.join(log_to_file)
+        print log
         with open(self.out_folder+'report.txt', 'a') as report:
-            report.write(log_to_file)
-
-        #pickle the evaluation
-        with open(self.output_folder+'evaluation.pickle', 'wb') as f:
-            pickle.dump(evaluation, f)
+            report.write(log)
 
 
-    def score_img(self, rows=1200, cols=2000, img_name):
+    def score_img(self, img_name, rows=1200, cols=2000):
         '''Find best overlap between each roof in an img and the detections,
         according the VOC score
         '''
         voc_scores = list()
-        true_pos = 0
-        false_pos = 0
+        true_pos = defaultdict(int)
+        false_pos = defaultdict(int) 
+        detections = dict()
+        detections['metal'] = self.detections.get_img_detections_specific_type('metal', img_name)
+        detections['thatch'] = self.detections.get_img_detections_specific_type('thatch', img_name)
+
         for roof in self.roofs[img_name]:
             best_voc_score = -1
             roof_area = roof.width*roof.height
-                    
+            roof_type = roof.roof_type
+
             roof_mask = np.zeros((rows, cols)) 
-            for (x,y,w,h) in self.detections[img_name]:                           #for each patch found
+            for (x,y,w,h) in detections[roof_type]:                           #for each patch found
                 roof_mask[roof.ymin:roof.ymin+roof.height, roof.xmin:roof.xmin+roof.width] = 1   #the roof
                 roof_mask[y:y+h, x:x+w] = 0        #detection
                 roof_missed = Evaluation.sum_mask(roof_mask)
@@ -130,23 +140,23 @@ class Evaluation(object):
                     x_true, y_true, w_true, h_true = x,y,w,h
 
             voc_scores.append(best_voc_score)
+
             if (best_voc_score >= self.VOC_threshold):
-                true_pos += 1
-            else:
-                false_pos += 1
+                true_pos[roof.roof_type] += 1
 
-        recall = true_pos / len(self.roofs[img_name])
-        precision = true_pos / len(self.detections[img_name])
-        self.scores[img_name]['precision'] = precision
-        self.scores[img_name]['recall'] = recall
-        self.scores[img_name]['voc_scores'] = voc_scores
+        for roof_type in self.roof_types:
+            false_pos[roof.roof_type] = len(detections[roof_type])-true_pos[roof_type] 
+            print '*****'+roof_type+'*****'
+            roofs_num = len([roof for roof in self.roofs[img_name] if roof.roof_type == roof_type])
+            print roofs_num
+            print 'True pos: {0}'.format(true_pos[roof_type])
+            print 'False pos: {0}'.format(false_pos[roof_type])
+            self.scores['total_true_pos'][roof_type]+= true_pos[roof_type]
+            self.scores['total_false_pos'][roof_type] += false_pos[roof_type]
+            self.scores['total_detections'][roof_type] += len(self.detections.get_img_detections_specific_type(roof_type, img_name))
+            self.scores['total_roofs'][roof_type] += roofs_num 
 
-        self.scores['total_true_pos'] += true_pos
-        self.scores['total_false_pos'] += false_neg
-        self.scores['total_detections_pos'] += len(self.detections[img_name])
-        self.scores['total_roofs'] += len(self.roofs[img_name])
-
-   @staticmethod
+    @staticmethod
     def get_patch_mask(img_name=None, detections=None, rows=1200, cols=2000):
         '''Mark the area of a detection as True, everything else as False
         '''
@@ -162,7 +172,7 @@ class Evaluation(object):
         area_covered = np.sum(patch_area)
         return patch_mask, float(area_covered)/(rows*cols) 
 
-   @staticmethod
+    @staticmethod
     def get_detection_contours(patch_path, img_name):
         im_gray = cv2.imread(patch_path, cv2.CV_LOAD_IMAGE_GRAYSCALE)
         (thresh, im_bw) = cv2.threshold(im_gray, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
@@ -218,4 +228,5 @@ class Evaluation(object):
         img = self.mark_roofs_on_img(img, img_name, roof_list)
         cv2.imwrite(self.out_folder+'_'+img_name, img)
 
-    
+
+

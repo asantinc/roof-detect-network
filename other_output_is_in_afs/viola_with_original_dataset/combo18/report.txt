@@ -1,0 +1,16 @@
+metal detectors: 	metal_original_singlesize_equalized_augm1_num1055_w30_h30_FA0.4_LBPthatch_detector: 	
+Detections:		907
+metal		>0.9		>0.75		>0.4		>0.2		Missed
+any
+Roofs		22		24		24		13		7
+Recall:		0.2444		0.5111		0.7778		0.9222		1.0000
+Precis:		0.0243		0.0507		0.0772		0.0915		0.0992
+F.Alarm:	0.9757		0.9493		0.9228		0.9085		0.9008
+single
+Roofs		20		20		20		18		15
+Recall:		0.2151		0.4301		0.6452		0.8387		1.0000
+Precis:		0.0221		0.0441		0.0662		0.0860		0.1025
+F.Alarm:	0.9779		0.9559		0.9338		0.9140		0.8975
+
+
+

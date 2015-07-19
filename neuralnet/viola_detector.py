@@ -1,13 +1,10 @@
 import os
 import subprocess
 import pdb
-import getopt
-import sys
 import math
 from collections import defaultdict
 import pickle
 import csv
-
 
 import numpy as np
 import cv2
@@ -18,7 +15,6 @@ import get_data
 from get_data import Roof
 import experiment_settings as settings
 from timer import Timer
-import viola_helpers
 
 from reporting import Evaluation, Detections
 
@@ -28,13 +24,13 @@ class ViolaDetector(object):
             in_path=None, 
             detector_names=None, 
             out_path=settings.VIOLA_OUT,
-            out_folder_name=None
+            out_folder_name=None,
             save_imgs=False,
             scale=1.05,
             old_detector=True,
             ):
         assert in_path is not None
-        self.img_names = [img_name for f in os.listdir(in_path) if f.endswith('.jpg')]
+        self.img_names = [f for f in os.listdir(in_path) if f.endswith('.jpg')]
         self.scale = scale
         self.save_imgs = save_imgs
 
@@ -45,12 +41,12 @@ class ViolaDetector(object):
 
         assert out_folder_name is not None
         self.out_folder = out_path+out_folder_name
-        if not os.path.isdir(self.output_folder):
+        if not os.path.isdir(self.out_folder):
             subprocess.check_call('mkdir {0}'.format(self.out_folder), shell=True)
         print 'Will output evaluation to: {0}'.format(self.out_folder)
 
         self.evaluation = Evaluation(out_folder=self.out_folder, detections=self.viola_detections, 
-                    in_path=self.in_path, img_names=self.img_names, detector_names=detector_names))
+                    in_path=self.in_path, img_names=self.img_names, detector_names=detector_names)
 
 
     def setup_detectors(self, detector_names=None, old_detector=False):
@@ -74,15 +70,15 @@ class ViolaDetector(object):
         '''Compare detections to ground truth roofs for set of images in a folder
         '''
         for i, img_name in enumerate(self.img_names):
-            print 'Processing image {0}/{1}\t{2}'.format(i, len(img_names), img_name)
+            print 'Processing image {0}/{1}\t{2}'.format(i, len(self.img_names), img_name)
             self.detect_roofs(img_name=img_name, reject_levels=reject_levels, level_weights=level_weights, scale=scale)
-            self.evaluation.score(img_name)
+            self.evaluation.score_img(img_name)
         self.evaluation.print_report()
-        open(self.output_folder+'DONE', 'w').close() 
+        open(self.out_folder+'DONE', 'w').close() 
 
 
     def detect_roofs(self, img_name=None, reject_levels=1.3, level_weights=5, scale=None):
-        img = cv2.imread(self.in_path+img_path, flags=cv2.IMREAD_COLOR)
+        img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         gray = cv2.equalizeHist(gray)
 
@@ -95,7 +91,7 @@ class ViolaDetector(object):
             for i, detector in enumerate(self.roof_detectors[roof_type]):
                 print 'Detecting with detector: '+str(i)
                 with Timer() as t: 
-                    detected_roofs = detector.detectMultiScale(gray, scaleFactor=self.scale, minNeighbors=5)
+                    detected_roofs = detector.detectMultiScale(gray, scaleFactor=2, minNeighbors=5)
                 print 'Time: {0}'.format(t.secs)
                 self.viola_detections.total_time += t.secs
                 #group_detected_roofs, weights = cv2.groupRectangles(np.array(detected_roofs).tolist(), 0, 5)
@@ -106,7 +102,7 @@ class ViolaDetector(object):
 
 
 class NeuralViolaDetector(ViolaDetector):
-    def __init__(self.):
+    def __init__(self):
         super(NeuralViolaDetector, self).__init__()
 
 
@@ -203,17 +199,5 @@ class NeuralViolaDetector(ViolaDetector):
         return true_pos, false_pos 
 
 
-
-    def mark_detections_on_img(self, img, img_name):
-        '''Return an image with the detections and the ground truth roofs marked with rectangles
-        '''
-        for i, roof_type in enumerate(self.viola_detections.roof_types):
-            for (x,y,w,h) in (self.viola_detections.get_img_detections_specific_type(roof_type, img_name)):
-                if i%1 == 0:
-                    color=(0,0,255)
-                else:
-                    color=(255,0,0)
-                cv2.rectangle(img,(x,y),(x+w,y+h), color, 2)
-        return img
 
 
