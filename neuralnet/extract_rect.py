@@ -1,11 +1,12 @@
 import numpy as np
 import cv2
 import pdb
+import os
 
 from get_data import DataLoader
 
 def order_points(pts):
-	# reorder sot that the first entry in the list is the top-left,
+	# reorder so that the first entry in the list is the top-left,
 	# the second entry is the top-right, the third is the
 	# bottom-right, and the fourth is the bottom-left
 	rect = np.zeros((4, 2), dtype = "float32")
@@ -13,7 +14,6 @@ def order_points(pts):
 	# the top-left point will have the smallest sum, whereas
 	# the bottom-right point will have the largest sum
 	s = pts.sum(axis = 1)
-	pdb.set_trace()
 	rect[0] = pts[np.argmin(s)]
 	rect[2] = pts[np.argmax(s)]
  
@@ -28,7 +28,7 @@ def order_points(pts):
 	return rect
 
 
-def four_point_transform(image, pts):
+def four_point_transform(image, pts, rectify=False):
 	# obtain a consistent order of the points and unpack them
 	# individually
 	rect = order_points(pts)
@@ -59,9 +59,7 @@ def four_point_transform(image, pts):
 		[maxWidth - 1, maxHeight - 1],
 		[0, maxHeight - 1]], dtype = "float32")
  
- 	pdb.set_trace()
 	# compute the perspective transform matrix and then apply it
-	pdb.set_trace()
 	M = cv2.getPerspectiveTransform(rect, dst)
 	warped = cv2.warpPerspective(image, M, (maxWidth, maxHeight))
  
@@ -69,12 +67,47 @@ def four_point_transform(image, pts):
 	return warped
 
 
+def four_point_transform_rectify(image, pts):
+	# obtain a consistent order of the points and unpack them
+	# individually
+	rect = order_points(pts)
+	(tl, tr, br, bl) = rect
+ 
+	widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
+	widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
+	maxWidth = max(int(widthA), int(widthB))
+ 
+	heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
+	heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
+	maxHeight = max(int(heightA), int(heightB))
+ 
+	dst = np.array([
+		[0, 0],
+		[maxWidth - 1, 0],
+		[maxWidth - 1, maxHeight - 1],
+		[0, maxHeight - 1]], dtype = "float32")
+ 
+	# compute the perspective transform matrix and then apply it
+	M = cv2.getPerspectiveTransform(rect, dst)
+	warped = cv2.warpPerspective(image, M, (maxWidth, maxHeight))
+
+ 
+	# return the warped image
+	return warped
+
+
 if __name__ == '__main__':
-	img = cv2.imread('../data/inhabited/0001.jpg')
-	loader = DataLoader()
-	polygons = loader.get_roofs_new_dataset('0001_new.xml', img_name='0001.jpg')
-	for polygon in polygons:
-		warped = four_point_transform(img, np.array(polygon, dtype = "float32"))
-		# show the original and warped images
-		cv2.imshow("Warped", warped)
-		cv2.waitKey(0)
+	out_path = '../data/rectified_patches/'
+	for img_name in os.listdir('../data/inhabited/'):
+		if img_name.endswith('.jpg'):
+			img = cv2.imread('../data/inhabited/'+img_name)
+			polygons = DataLoader().get_roofs_new_dataset('../bounding_inhabited/'+img_name[:-3]+'xml')
+			for i, polygon in enumerate(polygons):
+				print polygon
+				pdb.set_trace()
+				warped = four_point_transform(img, np.array(polygon, dtype = "float32"))
+				# show the original and warped images
+				cv2.imwrite(out_path+str(i)+'_'+img_name)
+
+
+
