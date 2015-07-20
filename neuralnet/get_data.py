@@ -279,6 +279,35 @@ class DataLoader(object):
         return roof_list
 
 
+    def get_roofs_new_dataset(self, xml_file, img_name=''):
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+        polygon_list = list()
+        
+        for child in root:
+            if child.tag == 'object':
+                for grandchild in child:
+                    #get positions of bounding box
+                    if grandchild.tag == 'polygon':
+                        polygon = list() #list of four points
+
+                        for coordinates in grandchild:
+                            if coordinates.tag == 'pt':
+                                for point in coordinates:
+                                    pos = int(float(point.text))
+                                    pos = pos if pos >= 0 else 0
+                                    if point.tag == 'x':
+                                        x = pos
+                                    elif point.tag == 'y':
+                                        y = pos
+                                polygon.append((x,y))
+                        if len(polygon) == 4:
+                            polygon_list.append(polygon)
+        return polygon_list
+
+
+
+
     def get_roof_imgs(self, roof_list, img_path, padding):
         try:
             img = cv2.imread(img_path)
@@ -651,11 +680,10 @@ class DataLoader(object):
 if __name__ == '__main__':
     #loader = DataLoader(labels_path='labels.csv', out_path='../data/testing_json/', in_path=settings.JSON_IMGS)
     #loader.produce_json_roofs(json_file='../data/images-new/labels.json')
-
-    loader = DataLoader()
-#    loader.get_train_test_valid_all( original_data_only=True)
+    #loader.get_train_test_valid_all( original_data_only=True)
      
     #loader = DataLoader()
     #loader.get_negative_patches(10000, '../data/neural_training/negatives/labels.csv', out_path='../data/neural_training/negatives/') 
 
     #loader.neural_training_positive_full_roofs()
+    pass

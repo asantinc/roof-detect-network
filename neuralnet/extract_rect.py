@@ -1,9 +1,11 @@
 import numpy as np
 import cv2
- 
+import pdb
+
+from get_data import DataLoader
+
 def order_points(pts):
-	# initialzie a list of coordinates that will be ordered
-	# such that the first entry in the list is the top-left,
+	# reorder sot that the first entry in the list is the top-left,
 	# the second entry is the top-right, the third is the
 	# bottom-right, and the fourth is the bottom-left
 	rect = np.zeros((4, 2), dtype = "float32")
@@ -11,6 +13,7 @@ def order_points(pts):
 	# the top-left point will have the smallest sum, whereas
 	# the bottom-right point will have the largest sum
 	s = pts.sum(axis = 1)
+	pdb.set_trace()
 	rect[0] = pts[np.argmin(s)]
 	rect[2] = pts[np.argmax(s)]
  
@@ -56,9 +59,22 @@ def four_point_transform(image, pts):
 		[maxWidth - 1, maxHeight - 1],
 		[0, maxHeight - 1]], dtype = "float32")
  
+ 	pdb.set_trace()
 	# compute the perspective transform matrix and then apply it
+	pdb.set_trace()
 	M = cv2.getPerspectiveTransform(rect, dst)
 	warped = cv2.warpPerspective(image, M, (maxWidth, maxHeight))
  
 	# return the warped image
 	return warped
+
+
+if __name__ == '__main__':
+	img = cv2.imread('../data/inhabited/0001.jpg')
+	loader = DataLoader()
+	polygons = loader.get_roofs_new_dataset('0001_new.xml', img_name='0001.jpg')
+	for polygon in polygons:
+		warped = four_point_transform(img, np.array(polygon, dtype = "float32"))
+		# show the original and warped images
+		cv2.imshow("Warped", warped)
+		cv2.waitKey(0)
