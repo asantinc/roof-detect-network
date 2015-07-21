@@ -14,11 +14,12 @@ from sklearn import cross_validation
 from sklearn.utils import shuffle
 from sklearn.cross_validation import LeaveOneLabelOut
 
-import experiment_settings as settings #getting constants
 import json
 from pprint import pprint
+from extract_rect import four_point_transform
+import utils
 
-TEST = 0.20
+
 
 class Roof(object):
     '''Roof class containing info about its location in an image
@@ -128,6 +129,49 @@ class DataAugmentation(object):
                         roof_img = DataAugmentation.rotateImage(roof_img, clockwise=True)
                     cv2.imwrite('{0}_flip3.jpg'.format(img_path), roof_img)
             
+    @staticmethod
+    def flip_pad_save_metal_rect(img_path, equalize=True):
+        for i in range(4):
+            try:        
+                img = cv2.imread(in_path, flags=cv2.IMREAD_COLOR)
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                if equalize:
+                    gray = cv2.equalizeHist(gray)
+            except IOError:
+                print 'Cannot open '+img_path
+            else:
+                pad_rand = random.random()
+                if pad_rand < 0.2:
+                    padding = 2 
+                elif pad_rand < 0.4:
+                    padding = 3 
+                elif pad_rand < 0.6:
+                    padding = 4
+                elif pad_rand < 0.8:
+                    padding = 6
+                else:
+                    padding = 8 
+                roof = DataAugmentation.add_padding(roof, padding, in_path)
+                roof_img = np.copy(gray[roof.ymin:roof.ymin+roof.height,roof.xmin:roof.xmin+roof.width])
+
+                if i == 0:
+                    cv2.imwrite('{0}_flip0.jpg'.format(img_path), roof_img)
+                if i == 1:
+                    roof_img = cv2.flip(roof_img,flipCode=0)
+                    if roof_img.shape[0] > roof_img.shape[1]:
+                        roof_img = DataAugmentation.rotateImage(roof_img, clockwise=True)
+                    cv2.imwrite('{0}_flip1.jpg'.format(img_path), roof_img)
+                elif i == 2:
+                    roof_img = cv2.flip(roof_img,flipCode=1)
+                    if roof_img.shape[0] > roof_img.shape[1]:
+                        roof_img = DataAugmentation.rotateImage(roof_img, clockwise=True)
+                    cv2.imwrite('{0}_flip2.jpg'.format(img_path), roof_img)
+                else:
+                    roof_img = cv2.flip(roof_img,flipCode=-1)
+                    if roof_img.shape[0] > roof_img.shape[1]:
+                        roof_img = DataAugmentation.rotateImage(roof_img, clockwise=True)
+                    cv2.imwrite('{0}_flip3.jpg'.format(img_path), roof_img)
+ 
 
     @staticmethod
     def rotateImage(img, clockwise=True):
@@ -167,7 +211,7 @@ class DataAugmentation(object):
 class DataLoader(object):
     def __init__(self, labels_path=None, out_path=None, in_path=None):
         self.total_patch_no = 0
-        self.step_size = settings.PATCH_W/2
+        self.step_size = float(utils.PATCH_W)/2
 
         self.labels_path = labels_path
         self.out_path = out_path
@@ -194,8 +238,8 @@ class DataLoader(object):
                             xmin=int(float(r['x'])), xmax=int(float(r['x'])),
                             ymin=int(float(r['y'])), ymax=int(float(r['y'])))
 
-                padding = (settings.PATCH_W)/2
-                roof = DataAugmentation.add_padding(roof, padding, settings.JSON_IMGS+img_name)
+                padding = float(utils.PATCH_W)/2
+                roof = DataAugmentation.add_padding(roof, padding, utils.JSON_IMGS+img_name)
                 roof_dict[str(img_name)].append(roof)
 
         return roof_dict
@@ -279,8 +323,14 @@ class DataLoader(object):
         return roof_list
 
 
-    def get_roofs_new_dataset(self, xml_file, img_name=''):
-        tree = ET.parse(xml_file)
+
+    def get_roof_patches_from_rectified_dataset(self, xml_path=utils.RECTIFIED_COORDINATES, xml_name=None, img_path=None):
+        assert xml_name is not None
+        assert img_path is not None
+        xml_path = xml_path+xml_name
+
+        #EXTRACT THE POLYGONS FROM THE XML
+        tree = ET.parse(xml_path)
         root = tree.getroot()
         polygon_list = list()
         
@@ -303,8 +353,19 @@ class DataLoader(object):
                                 polygon.append((x,y))
                         if len(polygon) == 4:
                             polygon_list.append(polygon)
-        return polygon_list
 
+        #EXTRACT THE RECTIFIED ROOF PATCH FROM THE IMG, RETURN THE ROOF PATCHES
+        try:
+            img = cv2.imread(img_path, flags=cv2.IMREAD_COLOR)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            gray_equalized = cv2.equalizeHist(gray)
+        except IOError as e:
+            print e
+            sys.exit(-1)
+        roof_patches = list()
+        for i, polygon in enumerate(polygon_list):
+			roof_patches.append(four_point_transform(gray_equalized, np.array(polygon, dtype = "float32")))
+        return roof_patches 
 
 
 
@@ -335,7 +396,7 @@ class DataLoader(object):
         assert xmin > -1 and ymin > -1
         with open(self.labels_path, 'a') as labels_file:
             try:
-                patch = img[ymin:(ymin+settings.PATCH_H), xmin:(xmin+settings.PATCH_W)]
+                patch = img[ymin:(ymin+utils.PATCH_H), xmin:(xmin+utils.PATCH_W)]
                 cv2.imwrite(self.out_path+str(self.total_patch_no)+str(extension), patch)
             except (IndexError, IOError, KeyError, ValueError) as e:
                 print e
@@ -348,7 +409,7 @@ class DataLoader(object):
     def save_patch_scaled(self, roof=None, img=None, extension='.jpg'):
         '''Save a downscaled image of a roof that is too large as is to fit within the PATCH_SIZE 
         '''
-        roof_type = settings.METAL if roof.roof_type=='metal' else settings.THATCH
+        roof_type = utils.METAL if roof.roof_type=='metal' else utils.THATCH
 
         h, w = roof.get_roof_size()
         #TODO: this might not be accurate: it doesn't make sense to scale up/down depending on...
@@ -361,20 +422,8 @@ class DataLoader(object):
         with open(self.labels_path, 'a') as labels_file:
             try:
                 patch = img[ymin:ymax, xmin:xmax]
-                patch_scaled = misc.imresize(patch, (settings.PATCH_H, settings.PATCH_W))
+                patch_scaled = misc.imresize(patch, (utils.PATCH_H, utils.PATCH_W))
                 misc.imsave(self.out_path+str(self.total_patch_no)+extension, patch_scaled)
-                
-                #save an image showing where the patch was taken for debugging
-                if settings.DEBUG:
-                    #save a scaled version
-                    mask_size = settings.PATCH_H
-                    img_copy = np.array(img, copy=True)
-                    img_copy[ymin:ymax, xmin:xmax, 0:1] = 255
-                    img_copy[ymin:ymax, xmin:xmax, 1:3] = 0
-                    misc.imsave(settings.DELETE_PATH+str(self.total_patch_no)+'_DEL_scaled.jpg', img_copy)
-
-                    patch = img[ymin:ymax, xmin:xmax]
-                    misc.imsave(settings.DELETE_PATH+str(self.total_patch_no)+'_DEL_NOTscaled.jpg', patch)
 
             except (IndexError, IOError, KeyError, ValueError) as e:
                 print e
@@ -387,24 +436,15 @@ class DataLoader(object):
     def get_horizontal_patches(self, img=None, roof=None, y_pos=-1):
         '''Get patches along the width of a roof for a given y_pos (i.e. a given height in the image)
         '''
-        roof_type = settings.METAL if roof.roof_type=='metal' else settings.THATCH
+        roof_type = utils.METAL if roof.roof_type=='metal' else utils.THATCH
 
         h, w = roof.get_roof_size()
-        hor_patches = ((w - settings.PATCH_W) // self.step_size) + 1  #hor_patches = w/settings.PATCH_W
+        hor_patches = ((w - utils.PATCH_W) // self.step_size) + 1  #hor_patches = w/utils.PATCH_W
 
 
         for horizontal in range(int(hor_patches)):
             x_pos = roof.xmin+(horizontal*self.step_size)
             self.save_patch(img= img, xmin=x_pos, ymin=y_pos, roof_type=roof_type)
-
-
-    def overlap_percent(self, roof_list):
-        '''Return the percent of overlap between the current patch and a roof bounding box
-        Parameters:
-        roof_list: list of Roofs
-            roofs in current image
-        '''
-        raise ValueError
 
 
     def produce_roof_patches(self, img_path=None, img_id=-1, roof=None):
@@ -433,12 +473,12 @@ class DataLoader(object):
             print 'Cannot open '+img_path
 
         else:
-            roof_type = settings.METAL if roof.roof_type=='metal' else settings.THATCH
+            roof_type = utils.METAL if roof.roof_type=='metal' else utils.THATCH
 
-            ybottom = (roof.ycentroid-(settings.PATCH_H/2) < 0)
-            ytop = (roof.ycentroid+(settings.PATCH_H/2)>img.shape[0])
-            xbottom = ((roof.xcentroid-(settings.PATCH_W/2)) < 0) 
-            xtop = ((roof.xcentroid+(settings.PATCH_W/2))>img.shape[1])
+            ybottom = (roof.ycentroid-(utils.PATCH_H/2) < 0)
+            ytop = (roof.ycentroid+(utils.PATCH_H/2)>img.shape[0])
+            xbottom = ((roof.xcentroid-(utils.PATCH_W/2)) < 0) 
+            xtop = ((roof.xcentroid+(utils.PATCH_W/2))>img.shape[1])
 
             if ybottom or xbottom or ytop or xtop:
                 #could not produce any patches
@@ -448,15 +488,15 @@ class DataLoader(object):
             h, w = roof.get_roof_size()
 
             #get a patch at the center
-            self.save_patch(img= img, xmin=(roof.xcentroid-(settings.PATCH_W/2)), 
-                            ymin=(roof.ycentroid-(settings.PATCH_H/2)), roof_type=roof_type)
+            self.save_patch(img= img, xmin=(roof.xcentroid-(utils.PATCH_W/2)), 
+                            ymin=(roof.ycentroid-(utils.PATCH_H/2)), roof_type=roof_type)
 
             # if roof is too large, get multiple equally sized patches from it, and a scaled down patch also
-            if w > settings.PATCH_W or h > settings.PATCH_H:
+            if w > utils.PATCH_W or h > utils.PATCH_H:
                 x_pos = roof.xmin
                 y_pos = roof.ymin
 
-                vert_patches = ((h - settings.PATCH_H) // self.step_size) + 1  #vert_patches = h/settings.PATCH_H
+                vert_patches = ((h - utils.PATCH_H) // self.step_size) + 1  #vert_patches = h/utils.PATCH_H
 
                 #get patches along roof height
                 for vertical in range(int(vert_patches)):
@@ -465,8 +505,8 @@ class DataLoader(object):
                     self.get_horizontal_patches(img=img, roof=roof, y_pos=y_pos)
 
                 #get patches from the last row also
-                if (h % settings.PATCH_W>0) and (h > settings.PATCH_H):
-                    leftover = h-(vert_patches*settings.PATCH_H)
+                if (h % utils.PATCH_W>0) and (h > utils.PATCH_H):
+                    leftover = h-(vert_patches*utils.PATCH_H)
                     y_pos = y_pos-leftover
                     self.get_horizontal_patches(img=img, roof=roof, y_pos=y_pos)
 
@@ -478,7 +518,7 @@ class DataLoader(object):
         '''Save negative patches to a folder
         '''
         print 'Getting the negative patches....\n'
-        img_names = DataLoader.get_img_names_from_path(path=settings.UNINHABITED_PATH)
+        img_names = DataLoader.get_img_names_from_path(path=utils.UNINHABITED_PATH)
         
         self.labels_path = label_file
         self.out_path = out_path if out_path is not None else self.out_path
@@ -491,26 +531,26 @@ class DataLoader(object):
             for p in range(negative_patches):
                 #get random ymin, xmin, but ensure the patch will fall inside of the image
                 try:
-                    img = cv2.imread(settings.UNINHABITED_PATH+img_path)
+                    img = cv2.imread(utils.UNINHABITED_PATH+img_path)
                 except IOError:
                     print 'Cannot open '+img_path
                 else:
                     h, w, _ = img.shape
-                    w_max = w - settings.PATCH_W
-                    h_max = h - settings.PATCH_H
+                    w_max = w - utils.PATCH_W
+                    h_max = h - utils.PATCH_H
                     xmin = random.randint(0, w_max)
                     ymin = random.randint(0, h_max)
 
                     #save patch
-                    self.save_patch(img=img, xmin=xmin, ymin=ymin, roof_type=settings.NON_ROOF) 
+                    self.save_patch(img=img, xmin=xmin, ymin=ymin, roof_type=utils.NON_ROOF) 
         
         
 
 #######################################################################
 ## Get roofs from training set and save positive patches to the neural training folder
 #######################################################################
-    def neural_training_positive_full_roofs(self, pad=0, out_path=settings.TRAINING_NEURAL_POS, in_path=settings.TRAINING_PATH):
-        '''Uses images in settings/INHABITED_PATH or ../data/testing_new_source and the corresponding xml file to get roofs with padding and saves them to an 
+    def neural_training_positive_full_roofs(self, pad=0, out_path=None, in_path=None):
+        '''Uses images in utils/INHABITED_PATH or ../data/testing_new_source and the corresponding xml file to get roofs with padding and saves them to an 
         output folder. 
         If negatives is True, is also includes negatives.
         Aside from the images, it saves: a file with labels to indicate each roof type and a pickled dump of all the roof info
@@ -526,6 +566,7 @@ class DataLoader(object):
         out_path:
             Where roofs should be saved to
         '''
+        raise ValueError('what should in and out paths be? Before it was in_path=TRAINING_PATH and out_path=utils.TRAINING_NEURAL_POS')
         img_names = DataLoader.get_img_names_from_path(path=in_path)
         all_labels = list()
         all_roofs = list()
@@ -559,14 +600,14 @@ class DataLoader(object):
 
 
     def get_padded_roofs(self, img=None, pad=0, roof_list=None, all_roofs=None, all_labels=None):
-        '''Get roofs using bounding boxes. Add padding. Resize the patch to match the size of a settings.PATCH
+        '''Get roofs using bounding boxes. Add padding. Resize the patch to match the size of a utils.PATCH
         '''
         for roof in roof_list:
-            roof_type = settings.METAL if roof.roof_type=='metal' else settings.THATCH
+            roof_type = utils.METAL if roof.roof_type=='metal' else utils.THATCH
 
             #get the right padding
-            pad_h = settings.PATCH_H if roof.height< settings.PATCH_H else roof.height 
-            pad_w = settings.PATCH_W if roof.width < settings.PATCH_W else roof.width
+            pad_h = utils.PATCH_H if roof.height< utils.PATCH_H else roof.height 
+            pad_w = utils.PATCH_W if roof.width < utils.PATCH_W else roof.width
             pad_left = pad_right = pad_top = pad_bottom = pad
            
             #Adapt the padding to make sure we don't go off image
@@ -585,7 +626,7 @@ class DataLoader(object):
             #get the patch, resize it and append it to list
             patch = img[roof.ymin-pad_bottom:roof.ymin+pad_h+pad_top,
                         roof.xmin-pad_left:roof.xmin+pad_w+pad_right]
-            resized_patch = cv2.resize(patch, (settings.PATCH_H, settings.PATCH_W), interpolation=cv2.INTER_AREA) 
+            resized_patch = cv2.resize(patch, (utils.PATCH_H, utils.PATCH_W), interpolation=cv2.INTER_AREA) 
             all_roofs.append(resized_patch)
             all_labels.append(roof_type)
 
@@ -594,7 +635,7 @@ class DataLoader(object):
 
     def produce_json_roofs(self, json_file=None):
         #Get the filename 
-        img_names = DataLoader.get_img_names_from_path(path=settings.JSON_IMGS, extension='.png')
+        img_names = DataLoader.get_img_names_from_path(path=utils.JSON_IMGS, extension='.png')
         roof_dict = self.get_roofs_json(json_file)
         
         with open(self.labels_path, 'w') as label_file:
@@ -618,9 +659,9 @@ class DataLoader(object):
         groups = list()
                 
         #get list of images in source/inhabted and source/inhabited_2
-        train_imgs = [settings.INHABITED_1+img for img in DataLoader.get_img_names_from_path(path =settings.INHABITED_1)]
+        train_imgs = [utils.INHABITED_1+img for img in DataLoader.get_img_names_from_path(path =utils.INHABITED_1)]
         if original_data_only == False:
-            train_2 = [settings.INHABITED_2+img for img in DataLoader.get_img_names_from_path(path =settings.INHABITED_2)]
+            train_2 = [utils.INHABITED_2+img for img in DataLoader.get_img_names_from_path(path =utils.INHABITED_2)]
             train_imgs = train_imgs + train_2
 
         #shuffle for randomness
@@ -640,17 +681,17 @@ class DataLoader(object):
                                                                                                             train_imgs, total_metal, total_thatch)
         valid_imgs, test_imgs, test_metal, test_thatch, valid_metal, valid_thatch = self.get_50_percent(roof_dict, train_imgs_left, metal_left_over, thatch_left_over)
 
-        train_path = settings.ORIGINAL_TRAINING_PATH if original_data_only else settings.TRAINING_PATH
-        valid_path = settings.ORIGINAL_VALIDATION_PATH if original_data_only else settings.VALIDATION_PATH
-        testing_path = settings.ORIGINAL_TESTING_PATH if original_data_only else settings.TESTING_PATH
+        train_path = utils.ORIGINAL_TRAINING_PATH if original_data_only else utils.TRAINING_PATH
+        valid_path = utils.ORIGINAL_VALIDATION_PATH if original_data_only else utils.VALIDATION_PATH
+        testing_path = utils.ORIGINAL_TESTING_PATH if original_data_only else utils.TESTING_PATH
         for files, dest in zip([train_imgs, valid_imgs, test_imgs], [train_path, valid_path, testing_path]):
             for img in files:
                 print 'Saving file {0} to {1}'.format(img, dest)
                 subprocess.check_call('cp {0} {1}'.format(img, dest), shell=True)
                 subprocess.check_call('cp {0} {1}'.format(img[:-3]+'xml', dest), shell=True)
 
-        with open('/afs/inf.ed.ac.uk/group/ANC/s0839470/original_dataset_train_test_valid/data_stats.txt' , 'w') as r:
-        #with open('../data/original_dataset_train_test_valid/data_stats.txt', 'w') as r:
+        out_path = '../data_original/' if original_data_only else '../data/'
+        with open(out_path+'data_stats.txt' , 'w') as r:
             r.write('\tTrain\tValid\tTest\n')
             r.write('Metal\t{0}\t{1}\t{2}\n'.format(train_metal, valid_metal, test_metal))
             r.write('Thatch\t{0}\t{1}\t{2}\n'.format(train_thatch, valid_thatch, test_thatch))
@@ -678,12 +719,21 @@ class DataLoader(object):
 
 
 if __name__ == '__main__':
-    #loader = DataLoader(labels_path='labels.csv', out_path='../data/testing_json/', in_path=settings.JSON_IMGS)
+    #loader = DataLoader(labels_path='labels.csv', out_path='../data/testing_json/', in_path=utils.JSON_IMGS)
     #loader.produce_json_roofs(json_file='../data/images-new/labels.json')
     #loader.get_train_test_valid_all( original_data_only=True)
      
     #loader = DataLoader()
     #loader.get_negative_patches(10000, '../data/neural_training/negatives/labels.csv', out_path='../data/neural_training/negatives/') 
-
     #loader.neural_training_positive_full_roofs()
-    pass
+
+    #set up the original training set, using inhabited imgs only
+    DataLoader().get_train_test_valid_all(original_data_only = True) 
+
+
+
+
+
+
+
+

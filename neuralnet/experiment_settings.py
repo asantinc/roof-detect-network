@@ -29,144 +29,6 @@ import load
 import my_net
 import FlipBatchIterator as flip
 
-###################################
-#USED TO SET UP THE TRAINING, VALIDATION AND TESTING SETS
-###################################
-INHABITED_1 = '../data/source/inhabited/' #the positives from the first set provided by John
-INHABITED_2 = '../data/source/inhabited2/'  #second set, provided by Stephen
-
-###################################
-#types of roof
-###################################
-NON_ROOF = 0
-METAL = 1
-THATCH = 2
-#Constants for image size
-IMG_SIZE = 40
-CROP_SIZE = 32
-PATCH_W = PATCH_H = 40
-
-###################################
-#FULL IMAGES: testing, training, validation sets
-###################################
-TESTING_PATH = '../data/testing/'
-VALIDATION_PATH = '../data/validation/'
-TRAINING_PATH = '../data/training/source/'
-
-#PATH TO THE DATA THAT ONLY HAD INHABITED_1 FILES IN IT...I created this because it seems like I'm getting terrible results with the new data
-ORIGINAL_TESTING_PATH = '/afs/inf.ed.ac.uk/group/ANC/s0839470/original_dataset_train_test_valid/testing/' #'../data/original_dataset_train_test_valid/testing'
-ORIGINAL_VALIDATION_PATH = '/afs/inf.ed.ac.uk/group/ANC/s0839470/original_dataset_train_test_valid/validation/'# '../data/original_dataset_train_test_valid/validation'
-ORIGINAL_TRAINING_PATH = '/afs/inf.ed.ac.uk/group/ANC/s0839470/original_dataset_train_test_valid/training/' #'../data/original_dataset_train_test_valid/training'
-ORIGINAL_VIOLA_PATCHES_AUGM = '../data/original_dataset_viola_patches/' #'/afs/inf.ed.ac.uk/group/ANC/s0839470/original_dataset_viola_patches/'
-ORIGINAL_VIOLA_OUTPUT = '../other_output_is_in_afs/viola_with_original_dataset/'
-
-###################################
-#VIOLA TRAINING
-###################################
-#TRAINING_VIOLA_NEG_PATH = '/afs/inf.ed.ac.uk/group/ANC/s0839470/viola_training/negatives_false_pos/' 
-TRAINING_VIOLA_NEG_PATH ='../data/training/viola_training/negatives_false_pos/'
-TRAINING_VIOLA_POS_PATH =   '../data/training/viola_training/positives/' #'/afs/inf.ed.ac.uk/group/ANC/s0839470/viola_training/positives/'
-#TRAINING_VIOLA_POS_AUGM_PATH = '/afs/inf.ed.ac.uk/group/ANC/s0839470/viola_training/positives_augm1/' # '../data/training/viola_training/positives_aumg1/'
-TRAINING_VIOLA_POS_AUGM_PATH = '../data/training/viola_training/positives_augm1/'
-TRAINING_VIOLA_POS_AUGM_FULL_PATH = '../data/training/viola_training/positives_augm1_morepadding/'
-#Viola constants
-BG_FILE = '../viola_jones/bg.txt'
-DAT_PATH = '../viola_jones/all_dat/'
-VEC_PATH = '../viola_jones/vec_files/'
-VIOLA_AUGM_DATA = '../viola_jones/data/'
-
-
-####################################
-#VIOLA DETECTIONS
-####################################
-CASCADE_PATH = '../viola_jones/cascades/'
-VIOLA_OUT = '/afs/inf.ed.ac.uk/group/ANC/s0839470/output/viola/'
-FULLY_CLASSIFIED = .90
-MOSTLY_CLASSIFIED = 0.75
-PARTIALLY_CLASSIFIED = 0.40
-NEAR_MISS = 0.20
-COMBO_PATH = '../viola_jones/detector_combos/'
-
-
-###################################
-#DETECTION WITH SIMPLE TEMPLATES
-###################################
-TEMPLATE_OUT = '../output/templating/'
-
-
-###################################
-#NEURAL TRAINING PATCHES
-###################################
-TRAINING_NEURAL_PATH = '../data/training/neural_training/' #in this folder we also have the false_pos and true_pos from Viola as a pickle file
-TRAINING_NEURAL_POS = '../data/neural_training/positives/'  #where the true positives from training source are 
-TRAINING_NEURAL_NEG = '../data/neural_training/negatives/'  
-
-#Constants for training neural network
-NET_PARAMS_PATH = "../data/net_params/"
-OUT_REPORT = "../output/report/" 
-OUT_HISTORY = "../output/history/"
-OUT_IMAGES = "../output/images/"
-FTRAIN = '../data/training/'
-FTRAIN_LABEL = '../data/training/labels.csv'
-TEST_PATH = '../data/test/'
-
-'''
-TRAIN_PROPORTION = 0.80
-PATCHES_OUT_PATH = '/afs/inf.ed.ac.uk/user/s08/s0839470/roof/data/training/'
-LABELS_PATH = '/afs/inf.ed.ac.uk/user/s08/s0839470/roof/data/training/labels.csv'
-INHABITED_PATH = '../data/source/inhabited/'
-UNINHABITED_PATH = '../data/source/uninhabited/'
-TESTING_NEW_SOURCE = '../data/testing_new_source/'
-JSON_IMGS = '../data/images-new/'
-DELETE_PATH = '../data/delete/'
-NEGATIVE_PATCHES_NUM = 5
-NEGATIVE_PATH = '../data/roof_negatives/'
-TRAIN_NEURAL_VIOLA_EXTRA = '/afs/inf.ed.ac.uk/group/ANC/s0839470/viola_neural_patches/' #extra storage in ANC disk space
-'''
-
-CASCADE_PATH = '../viola_jones/cascades/'
-
-###################################
-#Constants for debugging
-###################################
-VERBOSITY = 1   #varies from 1 to 3
-DEBUG = False
-
-###################################
-#Pipeline
-###################################
-PIPE_PARAMS_PATH = '../data/pipe_params/'
-PIPE_OUT = '../output/pipeline/'
-STEP_SIZE = PATCH_H #used by detection pipeline
-
-
-
-def time_stamped(fname=''):
-    if fname != '':
-        fmt = '{fname}_%m-%d-%H-%M/'
-    else:
-        fmt =  '%m-%d-%H-%M/'
-    return datetime.datetime.now().strftime(fmt).format(fname=fname)
-
-
-def mkdir(out_folder_path=None):
-    assert out_folder_path is not None
-    if not os.path.isdir(out_folder_path):
-        subprocess.check_call('mkdir {0}'.format(out_folder_path), shell=True)
-    else:
-        overwrite = raw_input('Folder exists; overwrite, y or n?')
-        if overwrite == 'n':
-            sys.exit(-1)
-    print 'Will output evaluation to: {0}'.format(out_folder_path)
-
-
-
-def print_debug(to_print, verbosity=1):
-    #Print depending on verbosity level
-  
-    if verbosity <= VERBOSITY:
-        print str(to_print)
-
 
 class Experiment(object):
     def __init__(self, test_path=None, train_path=None, flip=True, preloaded_path=None, 
@@ -231,11 +93,11 @@ class Experiment(object):
 
             output_nonlinearity=lasagne.nonlinearities.softmax,
             preproc_scaler = None, 
-          
+        
             #learning rates
             update_learning_rate=0.01,
             update_momentum=0.9,
-          
+        
             #printing
             net_name=self.net_name,
             on_epoch_finished=on_epoch_finished,
@@ -245,7 +107,7 @@ class Experiment(object):
             batch_iterator_test= flip.CropOnlyBatchIterator(batch_size=128),
             batch_iterator_train=flip.FlipBatchIterator(batch_size=128),
 
-          
+        
             max_epochs=self.epochs,
             verbose=1,
             **layer_params
@@ -258,13 +120,13 @@ class Experiment(object):
         '''
         #save settings to file
         self.printer.log_to_file(self.net, self.__str__(), overwrite=True)
-      
+    
         #fit the network to X_train
         self.net.fit(self.X, self.y)
         self.net.save_weights()
 
         #find predictions for test set
-      
+    
         #raise ValueError('Does this prediction do it with 40x40 crops of 32x32 crops?') 
         #predicted = self.net.predict(self.X_test)
         #self.evaluation(predicted, self.X_train, self.X_test, self.y_train, self.y_test)
@@ -277,7 +139,7 @@ class Experiment(object):
         '''
         #save settings to file
         self.printer.log_to_file(self.net, self.__str__(), overwrite=True)
-      
+    
         #find predictions for test set
         #need to reduce it from 40 pixels down to 32 pixels
         min = (PATCH_H - CROP_SIZE)/2
@@ -292,11 +154,11 @@ class Experiment(object):
         #print evaluation
         self.printer.log_to_file(self.net, confusion_matrix(y_test, predicted), binary=True, title='\n\nConfusion Matrix\n')
         self.printer.log_to_file(self.net, classification_report(y_test, predicted), title='\n\nReport\n')
-      
+    
         #save a plot of the validation and training losses
         #if self.plot_loss:
         self.net.save_loss()
-      
+    
         #display mistakes
         if self.display_mistakes: 
             mistakes = np.array([True if y_test[i]-predicted[i] != 0 else False for i in range(len(y_test))])
@@ -352,9 +214,9 @@ class DataScaler(StandardScaler):
             X = X.reshape(1, X_shape[0]*X_shape[1]*X_shape[2])
         else:
             X = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
-      
+    
         X = super(DataScaler, self).transform(X)
-      
+    
         if single_image:
             X = np.squeeze(X)
             return X.reshape(X_shape[0], X_shape[1], X_shape[2])
@@ -377,7 +239,7 @@ class PrintLogSave(PrintLog):
     def table(self, nn, train_history):
         info = train_history[-1]
         return str(info['epoch'])+'\t'+ str(info['train_loss'])+ '\t'+str(info['valid_loss'])+'\t'+str( info['train_loss'] / info['valid_loss'])+'\t'+str(info['valid_accuracy'])+'\n'
-          
+        
     def log_to_file(self, nn, log, overwrite=False, binary=False, title=''):
         write_type = 'w' if overwrite else 'a'
         file = open(OUT_REPORT+time_stamped(nn.net_name), write_type)
@@ -456,13 +318,13 @@ if __name__ == '__main__':
     #params = get_params_from_file(NET_PARAMS_PATH+raw_input('Parameter file NAME: '))
     param_file = 'params'+raw_input('Enter param file number :')+'.csv'
     params = get_params_from_file(NET_PARAMS_PATH+param_file) 
-  
+
     if params['net_name'] == 0:
         params['net_name'] = time_stamped(param_file)
         print 'Network name is: {0}'.format(params['net_name'])
     if params['roofs_only']:
         params['net_name'] = params['net_name']+'_roofs'
-  
+
 
     to_do = 't'
     #to_do = raw_input('o to optimize, t to train: ')
@@ -476,3 +338,6 @@ if __name__ == '__main__':
         img = cv2.imread("../data/inhabited/0001.jpg")
         experiment.test_image(img)
 
+
+if __name__ == '__main__':
+    pass

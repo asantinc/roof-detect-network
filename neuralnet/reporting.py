@@ -6,7 +6,8 @@ import cv2
 import pickle
 
 from get_data import Roof, DataLoader #for get_roofs
-import experiment_settings as settings
+import utils
+
 
 class Detections(object):
     def __init__(self, roof_types=None):
@@ -67,25 +68,25 @@ class Evaluation(object):
         assert method is not None
         self.method = method
         self.folder_name = folder_name
-        self.datasource = self.set_datasource_name(in_path)
+        #self.datasource = self.set_datasource_name(in_path)
 
-
+    '''
     def set_datasource_name(self, in_path):
-        if in_path == settings.TRAINING_PATH:
+        if in_path == utils.get_path(train==True, TRAINING_PATH:
             return 'train' 
-        elif in_path ==  settings.VALIDATION_PATH:
+        elif in_path ==  utils.VALIDATION_PATH:
             return 'valid'
-        elif in_path == settings.ORIGINAL_TRAINING_PATH:
+        elif in_path == utils.ORIGINAL_TRAINING_PATH:
             return 'origtrain'
-        elif in_path == settings.ORIGINAL_VALIDATION_PATH:
+        elif in_path == utils.ORIGINAL_VALIDATION_PATH:
             return 'origvalid'
-        elif in_path == settings.TESTING_PATH:
+        elif in_path == utils.TESTING_PATH:
             return 'test'
         elif in_path == '../data/small_test/':
             return 'delete'
         else:
             return raw_input('in_path is {0}, what do you want to call the datasource'.format(in_path))
-
+    '''
 
 
     def init_report(self, detector_names):
@@ -175,7 +176,7 @@ class Evaluation(object):
         if self.save_imgs:
             img = None
             try:
-                img = self.mark_roofs_on_img(img_name = img_name, roofs=self.false_positive_coords[img_name], color=(0,0,255))
+                img = self.mark_roofs_on_img(img_name = img_name, roofs=self.false_positive_coords[img_name], color=(0,0,0))
             except KeyError:
                 pass
             img = self.mark_roofs_on_img(img_name=img_name, img=img, roofs=self.roofs[img_name], color=(0,255,0))
@@ -223,11 +224,11 @@ class Evaluation(object):
     def pickle_detections(self):
         self.detections.false_pos = self.true_positive_coords
         self.detections.true_pos = self.false_positive_coords
-        file_name = 'TP{tp}_FP{fp}_{method}_{foldername}_{datasource}.pickle'.format( 
+        file_name = 'TP{tp}_FP{fp}_{method}_{foldername}.pickle'.format( 
                         tp=len(self.true_positive_coords['metal'])+len(self.true_positive_coords['thatch']), 
                         fp=len(self.false_positive_coords['metal'])+len(self.false_positive_coords['thatch']),
-                        method=self.method, foldername=self.folder_name[:-1], datasource=self.datasource)
-        with open(settings.TRAINING_NEURAL_PATH+file_name, 'wb') as f:
+                        method=self.method, foldername=self.folder_name[:-1])
+        with open(utils.TRAINING_NEURAL_PATH+file_name, 'wb') as f:
             pickle.dump(self.detections, f)
 
 

@@ -6,7 +6,7 @@ from numpy import percentile
 import matplotlib.pyplot as plt
 from collections import defaultdict
 
-import experiment_settings as settings
+import utils
 from reporting import Evaluation, Detections
 from timer import Timer
 from get_data import DataLoader
@@ -15,13 +15,13 @@ from scipy import ndimage
 
 
 class TemplateMatcher(object):
-    def __init__(self, out_path=settings.TEMPLATE_OUT, group_detections=True, contour_detections=True, 
-                                    min_neighbors=1, eps=1, in_path=settings.ORIGINAL_TRAINING_PATH):
+    def __init__(self, out_path=utils.get_path(template=True, training=True, input_or_output='output'), group_detections=True, contour_detections=True, 
+                                    min_neighbors=1, eps=1, in_path=utils.get_path(training=True, template=True, input_or_output='input')):
         self.in_path = in_path
 
-        out_folder = settings.time_stamped('') if group_detections == False else settings.time_stamped('grouped_neigh{0}_eps{1}'.format(min_neighbors, eps))
+        out_folder = utils.time_stamped('') if group_detections == False else utils.time_stamped('grouped_neigh{0}_eps{1}'.format(min_neighbors, eps))
         self.out_path = out_path+out_folder
-        settings.mkdir(self.out_path)
+        utils.mkdir(self.out_path)
 
         self.group_detections = group_detections
         self.contour_detections = contour_detections
@@ -34,7 +34,6 @@ class TemplateMatcher(object):
         self.detector_names['thatch'] = '1 template'
         self.evaluation = Evaluation(method='template', folder_name=out_folder, out_path=self.out_path, detections=self.detections, 
                                                 in_path=self.in_path, detector_names=self.detector_names)
-
         self.templates = dict()
 
         self.set_metal_templates()
