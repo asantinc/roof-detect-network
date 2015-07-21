@@ -1,2 +1,0 @@
-metal detectors: 	metal_rectangular_equalized_augm1_num939_w30_h15
-thatch_detector: 	

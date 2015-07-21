@@ -1,0 +1,11 @@
+net_name, 0
+num_layers, 5
+preloaded, 0
+epochs, 50 
+test_percent, 0.20
+non_roofs, 3
+roofs_only, 0
+plot, 1
+log, 1
+plot_loss, 1
+max_roofs, 0
