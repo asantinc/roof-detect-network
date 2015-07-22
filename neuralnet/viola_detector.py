@@ -44,8 +44,7 @@ class ViolaDetector(object):
 
         assert out_folder_name is not None
         self.out_folder = out_path+out_folder_name
-        if not os.path.isdir(self.out_folder):
-            subprocess.check_call('mkdir {0}'.format(self.out_folder), shell=True)
+        utils.mkdir(self.out_folder)
         print 'Will output evaluation to: {0}'.format(self.out_folder)
 
         self.evaluation = Evaluation(method='viola', folder_name=out_folder_name, out_path=self.out_folder, detections=self.viola_detections, 

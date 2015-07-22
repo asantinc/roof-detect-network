@@ -32,7 +32,11 @@ def pickle_neural_true_false_positives():
 
 def get_detectors(combo_f):
     detectors = dict()
-    detector_file = utils.get_path(viola=True, params=True)+'combo'+str(combo_f)+'.csv'
+    if combo_f.startswith('combo'):
+        detector_file = utils.get_path(viola=True, params=True)+str(combo_f)+'.csv'
+    else:
+        detector_file = utils.get_path(viola=True, params=True)+'combo'+str(combo_f)+'.csv'
+
     detectors = defaultdict(list)
     with open(detector_file, 'r') as csvfile:
         r = csv.reader(csvfile, delimiter=',')
@@ -86,8 +90,8 @@ def testing_detectors(group=None, original_dataset=False, all=False, data_fold=u
 
     #need to detect on validation set. To make it easier to digest, initially we also looked at training set
     for detector, combo_f_name in zip(detector_list, combo_f_names):
-        in_path = utils.get_path(viola=True, input_or_output='input', data_fold=data_fold)
-        out_path = utils.get_path(viola=True, input_or_output='output', data_fold=data_fold)
+        in_path = utils.get_path(viola=True, in_or_out=utils.IN, data_fold=data_fold)
+        out_path = utils.get_path(viola=True, in_or_out=utils.OUT, data_fold=data_fold)
 
         if group=='group_rectangles':    
             folder_name = 'group_rect_combo'+combo_f_name+'/'

@@ -5,6 +5,7 @@ from datetime import datetime
 import sys
 import pdb
 import datetime
+import csv
 
 
 ###################################
@@ -22,6 +23,9 @@ TRAINING = 1
 VALIDATION = 2
 TESTING = 3
 SMALL_TEST = 4
+
+IN = 1  #input 
+OUT = 2 #output
 
 ###################################
 #VIOLA TRAINING
@@ -94,8 +98,11 @@ def check_append(path_being_constructed, addition):
         mkdir(out_folder_path=''.join(path_being_constructed), confirm=True) 
 
 
-def get_path(input_or_output=None, params=False, full_dataset=False, 
+def get_path(in_or_out=None, out_folder_name=None, params=False, full_dataset=False, 
                     pipe=False, viola=False, template=False, neural=False, data_fold=None):
+    '''
+    Return path to either input, output or parameter files. If a folder does not exit, ask user for confirmation and create it
+    '''
     path = list()
     if params:
         #PARAMETER FILES
@@ -109,8 +116,8 @@ def get_path(input_or_output=None, params=False, full_dataset=False,
         else:
             raise ValueError('There are no parameter files for templating')
     else:
-        assert input_or_output is not None
-        if input_or_output == 'input':
+        assert in_or_out is not None
+        if in_or_out == IN:
             #INPUT PATH
             if full_dataset==False:
                 check_append(path,'../data_original/')
@@ -131,7 +138,7 @@ def get_path(input_or_output=None, params=False, full_dataset=False,
                 check_append(path,'testing/')
             else:
                 raise ValueError
-        elif input_or_output == 'output':
+        elif in_or_out == OUT:
             #OUTPUT FOLDERS
             check_append(path,'/afs/inf.ed.ac.uk/group/ANC/s0839470/output/')
             if viola:
@@ -158,6 +165,8 @@ def get_path(input_or_output=None, params=False, full_dataset=False,
                 raise ValueError('Even though you requested the path of an output folder, you have to specify if you created the output from training, validation or testing data')
         else:
             raise ValueError('Must specify input or output folder.')
+        if out_folder_name is not None:
+            check_append(path, out_folder_name)
     return ''.join(path)
      
 
@@ -166,6 +175,7 @@ def print_debug(to_print, verbosity=1):
     if verbosity <= VERBOSITY:
         print str(to_print)
 
+
 def get_img_size(path):
     for i, f_name in enumerate(os.listdir(path)):
         img = cv2.imread(path+f_name)
@@ -173,3 +183,26 @@ def get_img_size(path):
         
         if i%20==0:
             pdb.set_trace()
+
+
+def get_params_from_file(path):
+    print 'Getting parameters from {0}'.format(path)
+    parameters = dict()
+    with open(path, 'r') as f:
+        reader = csv.reader(f, delimiter=',')
+        for par in reader:
+            if len(par) == 0:
+                break
+            elif len(par)== 2:
+                parameters[par[0].strip()] = par[1].strip()
+
+            elif len(par) == 3:
+                if par[0].strip() not in parameters:
+                    parameters[par[0].strip()] = dict()
+                parameters[par[0].strip()][par[1].strip()] = par[2].strip() 
+            else:
+                raise ValueError('Cannot process {0}'.format(path))
+    return parameters
+
+
+

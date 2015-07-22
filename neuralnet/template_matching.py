@@ -15,8 +15,9 @@ from scipy import ndimage
 
 
 class TemplateMatcher(object):
-    def __init__(self, out_path=utils.get_path(template=True, training=True, input_or_output='output'), group_detections=True, contour_detections=True, 
-                                    min_neighbors=1, eps=1, in_path=utils.get_path(training=True, template=True, input_or_output='input')):
+    def __init__(self, out_path=utils.get_path(template=True, data_fold=utils.TRAINING, in_or_out=utils.OUT),
+                                    group_detections=True, contour_detections=True, min_neighbors=1, eps=1, 
+                                    in_path=utils.get_path(data_fold=utils.TRAINING, template=True, in_or_out=utils.IN)):
         self.in_path = in_path
 
         out_folder = utils.time_stamped('') if group_detections == False else utils.time_stamped('grouped_neigh{0}_eps{1}'.format(min_neighbors, eps))

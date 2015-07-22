@@ -28,22 +28,22 @@ import datetime
 import load
 import my_net
 import FlipBatchIterator as flip
-
+import utils
 
 class Experiment(object):
-    def __init__(self, test_path=None, train_path=None, flip=True, preloaded_path=None, 
+    def __init__(self, test_path=None, train_path=None, flip=True, preloaded_path=None, pipeline=False, 
                     print_out=True, preloaded=False, test_percent=.20, non_roofs=2, 
                     roofs_only=False,log=True, plot_loss=True, plot=True, epochs=50, net_name=None, num_layers=None, max_roofs=None):
+        self.pipeline = pipeline
         self.num_layers = num_layers
         self.net_name = net_name
+
         self.epochs = epochs
-        self.preloaded = preloaded
         self.test_percent = test_percent
         self.non_roofs = non_roofs    #the proportion of non_roofs relative to roofs to be used in data
         self.roofs_only = roofs_only
         self.log = log
         self.plot_loss = True
-        self.printer = PrintLogSave()
         self.flip = flip
         self.test_path = test_path
         self.train_path = train_path
@@ -51,33 +51,33 @@ class Experiment(object):
         print 'Setting up the Neural Net \n'
         self.setup_net(print_out=print_out)
 
-        print 'Loading data \n'
-        self.roof_loader = load.RoofLoader()
-        '''
-        if self.test_path is None and self.train_path is None:
-            self.X_train, self.X_test, self.y_train, self.y_test = self.roof_loader.load(test_percent=self.test_percent, 
-                                                non_roofs=self.non_roofs, roofs_only=self.roofs_only, max_roofs=max_roofs) 
-        else:
-            self.X_train, self.X_test, self.y_train, self.y_test = self.roof_loader.load_from_separate_folders(non_roofs=non_roofs) 
-            self.non_roofs = non_roofs 
-        '''
-        self.X, self.y = self.roof_loader.neural_load_training(non_roofs=non_roofs)
-        print self.X.shape, self.y.shape
-        print 'Data is loaded \n'
+        #preload weights if a path to weights was provided
+        self.preloaded_path = None
+        if preloaded_path is not None:
+            preloaded_path = preloaded_path if preloaded_path.endswith('.pickle') else preloaded_path+'.pickle'
+            self.preloaded_path = utils.get_path(neural=True, params=True)+preloaded_path
+            self.net.load_params_from(self.preloaded_path)      
+            #TODO: need to load the scaler of the data as well as the parameters!!!
 
 
-        #set up the data scaler
-        self.scaler = DataScaler()
-        self.X = self.scaler.fit_transform(self.X)
-        #self.X_test =  self.scaler.transform2(self.X_test)
+        if self.pipeline==False: #if pipeline is true, we don't need to load data, testing patches will be passed in 
+            print 'Loading data \n'
+            self.roof_loader = load.RoofLoader()
 
-        #preload weights
-        if self.preloaded:
-            self.net.load_params_from('saved_weights/'+preloaded_path+'.pickle')      
+            self.X, self.y = self.roof_loader.neural_load_training(non_roofs=non_roofs)
+            print self.X.shape, self.y.shape
+            print 'Data is loaded \n'
+
+            #set up the data scaler
+            self.scaler = DataScaler()
+            self.X = self.scaler.fit_transform(self.X)
+            #self.X_test =  self.scaler.transform2(self.X_test)
+
 
 
     def setup_net(self, print_out=True):
         if print_out:
+            self.printer = PrintLogSave()
             on_epoch_finished = [self.printer]
             on_training_started = [SaveLayerInfo()]
         else:
@@ -88,7 +88,7 @@ class Experiment(object):
         self.net = my_net.MyNeuralNet(
             layers=layers,
             num_layers=self.num_layers,
-            input_shape=(None, 3, CROP_SIZE, CROP_SIZE),
+            input_shape=(None, 3, utils.CROP_SIZE, utils.CROP_SIZE),
             output_num_units=3,
 
             output_nonlinearity=lasagne.nonlinearities.softmax,
@@ -142,9 +142,9 @@ class Experiment(object):
     
         #find predictions for test set
         #need to reduce it from 40 pixels down to 32 pixels
-        min = (PATCH_H - CROP_SIZE)/2
+        min = (utils.PATCH_H - utils.CROP_SIZE)/2
         print self.X_test.shape
-        self.X_test = self.X_test[:, :, min:min+CROP_SIZE, min:min+CROP_SIZE]
+        self.X_test = self.X_test[:, :, min:min+utils.CROP_SIZE, min:min+utils.CROP_SIZE]
         print self.X_test.shape
         predicted = self.net.predict(self.X_test)
         self.evaluation(predicted, self.X_train, self.X_test, self.y_train, self.y_test)
@@ -232,7 +232,7 @@ class DataScaler(StandardScaler):
 
 class PrintLogSave(PrintLog):
     def __call__(self, nn, train_history): 
-        file = open(OUT_HISTORY+nn.net_name, 'a')
+        file = open(utils.get_path(in_or_out=utils.OUT, neural=True, data_fold=utils.TRAINING)+nn.net_name+'_history', 'a')
         file.write(self.table(nn, train_history))
         file.close()
 
@@ -242,7 +242,7 @@ class PrintLogSave(PrintLog):
         
     def log_to_file(self, nn, log, overwrite=False, binary=False, title=''):
         write_type = 'w' if overwrite else 'a'
-        file = open(OUT_REPORT+time_stamped(nn.net_name), write_type)
+        file = open(utils.get_path(in_or_out=utils.OUT, neural=True, data_fold=utils.TRAINING)+nn.net_name, write_type)
         file.write(title)
         if binary:
             print >> file, log
@@ -253,7 +253,7 @@ class PrintLogSave(PrintLog):
 
 class SaveLayerInfo(PrintLayerInfo):
     def __call__(self, nn, train_history):
-        file = open(OUT_REPORT+nn.net_name, 'a')
+        file = open(utils.get_path(in_or_out=utils.OUT, neural=True, data_fold=utils.TRAINING)+nn.net_name, 'a')
         message = self._get_greeting(nn)
         file.write(message)
         file.write("## Layer information")
@@ -314,8 +314,6 @@ def get_params_from_file(file_name):
     return parameters
 
 if __name__ == '__main__':
-    #test_percent, non_roofs, preloaded, num_layers, roofs_only, plot, net_name, epochs = set_parameters()  
-    #params = get_params_from_file(NET_PARAMS_PATH+raw_input('Parameter file NAME: '))
     param_file = 'params'+raw_input('Enter param file number :')+'.csv'
     params = get_params_from_file(NET_PARAMS_PATH+param_file) 
 
@@ -339,5 +337,3 @@ if __name__ == '__main__':
         experiment.test_image(img)
 
 
-if __name__ == '__main__':
-    pass
