@@ -104,7 +104,7 @@ class Experiment(object):
             on_training_started=on_training_started,
 
             #data augmentation
-            batch_iterator_test= flip.CropOnlyBatchIterator(batch_size=128),
+            #batch_iterator_test= flip.CropOnlyBatchIterator(batch_size=128),
             batch_iterator_train=flip.FlipBatchIterator(batch_size=128),
 
         
@@ -127,10 +127,13 @@ class Experiment(object):
 
         #find predictions for test set
     
-        #raise ValueError('Does this prediction do it with 40x40 crops of 32x32 crops?') 
+        raise ValueError('Does this prediction do it with 40x40 crops of 32x32 crops?') 
         #predicted = self.net.predict(self.X_test)
         #self.evaluation(predicted, self.X_train, self.X_test, self.y_train, self.y_test)
 
+
+    def test(self, test_patches): 
+        return self.net.predict(test_patches)
 
     def test_preloaded(self, plot_loss=True, test_case=None):  
         '''Preload weights, classify roofs and write evaluation

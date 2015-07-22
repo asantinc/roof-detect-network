@@ -173,6 +173,7 @@ class RoofLoader(object):
         '''
         Load all the positive training examples for the neural network and labels to a numpy array
         '''
+        raise ValueError("TODO: need to fix these paths")
         train_path = settings.TRAINING_NEURAL_POS if train_path is None else train_path
         neg_path = settings.TRAINING_NEURAL_NEG if neg_path is None else neg_path
         train_labels =  np.loadtxt(open(train_path+'labels.csv',"rb"),delimiter=",")

@@ -84,7 +84,7 @@ def mkdir(out_folder_path=None, confirm=False):
                 sys.exit(-1)
         subprocess.check_call('mkdir {0}'.format(out_folder_path), shell=True)
     else:
-        overwrite = raw_input('Folder exists; overwrite, y or n?')
+        overwrite = raw_input('Folder {0} exists; overwrite, y or n?'.format(out_folder_path))
         if overwrite == 'n':
             sys.exit(-1)
     print 'The following folder has been created: {0}'.format(out_folder_path)
@@ -120,22 +120,22 @@ def get_path(in_or_out=None, out_folder_name=None, params=False, full_dataset=Fa
         if in_or_out == IN:
             #INPUT PATH
             if full_dataset==False:
-                check_append(path,'../data_original/')
+                path.append('../data_original/')
             else:
-                check_append(path,'../data/')
+                path.append('../data/')
             assert data_fold is not None
             if data_fold == TRAINING:
-                check_append(path,'training/')
+                path.append('training/')
                 if neural:
-                    check_append(path,'(neural/')
+                    path.append('(neural/')
                 elif viola:
-                    check_append(path,'viola/')
+                    path.append('viola/')
                 else:
-                    check_append(path,'source/')
+                    path.append('source/')
             elif data_fold==VALIDATION:
-                check_append(path,'validation/')
+                path.append('validation/')
             elif data_fold==TESTING:
-                check_append(path,'testing/')
+                path.append('testing/')
             else:
                 raise ValueError
         elif in_or_out == OUT:
@@ -205,4 +205,47 @@ def get_params_from_file(path):
     return parameters
 
 
+def rotate(image, angle, center=None, scale=1.0):
+    (h, w) = image.shape[:2]
+
+    if center is None:
+        center = (w / 2, h / 2)
+
+    # perform the rotation
+    M = cv2.getRotationMatrix2D(center, angle, scale)
+    rotated = cv2.warpAffine(image, M, (w, h))
+
+    return rotated, M
+
+
+def resize(image, width=None, height=None, inter=cv2.INTER_AREA):
+    # initialize the dimensions of the image to be resized and
+    # grab the image size
+    dim = None
+    (h, w) = image.shape[:2]
+
+    # if both the width and height are None, then return the
+    # original image
+    if width is None and height is None:
+        return image
+
+    # check to see if the width is None
+    if width is None:
+        # calculate the ratio of the height and construct the
+        # dimensions
+        r = height / float(h)
+        dim = (int(w * r), height)
+
+    # otherwise, the height is None
+    else:
+        # calculate the ratio of the width and construct the
+        # dimensions
+        r = width / float(w)
+        dim = (width, int(h * r))
+
+    # resize the image
+    resized = cv2.resize(image, dim, interpolation=inter)
+
+    # return the resized image
+    return resized
 

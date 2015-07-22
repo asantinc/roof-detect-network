@@ -22,14 +22,16 @@ import viola_detector_helpers
 from my_net import MyNeuralNet
 import viola_detector
 import utils
+from reporting import Detections, Evaluation
 
 class Pipeline(object):
     def __init__(self, in_path=None, out_path=None, neural=None, viola=None, pipe=None, out_folder_name=None):
         self.step_size = pipe['step_size'] if pipe['step_size'] is not None else utils.STEP_SIZE
 
         self.in_path = in_path
-        self.in_imgs = [self.in_path+img_name for img_name in os.listdir(self.in_path) if img_name.endswith('jpg')]
-        self.out_path = out_path+out_folder_name
+        self.img_names = [img_name for img_name in os.listdir(self.in_path) if img_name.endswith('jpg')]
+        self.out_path = out_path
+
         #create report file
         self.report_path = self.out_path+'report_pipe.txt'
         open(self.report_path, 'w').close()
@@ -39,13 +41,18 @@ class Pipeline(object):
             self.viola = ViolaDetector(detector_names=viola['detectors'], out_path=out_path, 
                                     in_path=in_path,out_folder_name=out_folder_name,save_imgs=True) 
         else: 
-            None 
+            self.viola = None 
         
         self.experiment = Experiment(pipeline=True, **neural)
-        #self.evaluation = Evaluation()
-        pdb.set_trace()
 
-    def run(self):
+        self.detections_before_neural = Detections()
+        self.detections_after_neural = Detections()
+        self.evaluation_before_neural = Evaluation(detections=self.detections_before_neural, method='pipeline', save_imgs=False, out_path=self.out_path, 
+                                        folder_name=out_folder_name, in_path=self.in_path, detector_names=viola['detectors'])
+        self.evaluation_after_neural = Evaluation(detections=self.detections_after_neural, method='pipeline', save_imgs=True, out_path=self.out_path,
+                                                         folder_name=out_folder_name, in_path=self.in_path, detector_names=viola['detectors'])
+
+    def run_old(self):
         '''
         1. Find contours using Viola and Jones for candidate roofs
         2. Within each contour, use neural network to classify sliding patches
@@ -57,6 +64,7 @@ class Pipeline(object):
         self.all_contours = dict()
         
         for img_name in list(self.in_path):
+            '''
             print 'Pre-processing image: {0}'.format(img_name)
             try:
                 self.image = cv2.imread(self.test_img_path+img_name)
@@ -79,8 +87,88 @@ class Pipeline(object):
                 self.sliding_convolution()
             
             cv2.imwrite(self.out_path+self.img_name+'test.jpg', self.image_detections)     
-
+            '''
     
+    def run(self):
+        '''
+        1. Find proposals using ViolaJones
+        2. Within each contour, use neural network to classify sliding patches
+            2.b actually, probably resize the window and classify it
+        3. Net returns a list of the roof coordinates of each type - saved in roof_coords
+        '''
+        for img_name in self.img_names:
+            proposal_patches, proposal_coords = self.find_viola_proposals(img_name=img_name)
+            metal_detections = list()
+            thatch_detections = list()
+            self.detections_before_neural.set_detections(img_name=img_name, detection_list=proposal_coords)  
+            self.evaluation_before_neural.score_img(img_name)
+
+            for roof_type in ['metal', 'thatch']: 
+                #classify with net
+                if proposal_patches[roof_type].shape[0] > 1:
+                    temp_detections = self.experiment.test(proposal_patches[roof_type])
+                    #filter according to classification         
+                    for detection, roof_type in zip(proposal_coords[roof_type],temp_detections):
+                        if roof_type == 0:
+                            continue
+                        elif roof_type == 1:
+                            metal_detections.append(detection)
+                        elif roof_type == 2:
+                            thatch_detections.append(detection)
+            self.detections_after_neural.set_detections(img_name=img_name, detection_list= {'metal':metal_detections, 'thatch': thatch_detections})  
+            self.evaluation_after_neural.score_img(img_name)
+
+        self.evaluation_before_neural.print_report()
+        self.evaluation_after_neural.print_report()
+
+        #mark roofs on image
+        #evaluate predictions
+            #filter the thatched and metal roofs
+            #compare the predictions made by viola and by viola+neural network
+
+    def save_img_detections(self, img_name, proposal_coords, predictions):
+        img = cv2.imread(self.in_path+img_name)
+        roofs = DataLoader().get_roofs(self.in_path+img_name[:-3]+'xml', img_name)
+        for roof in roofs:
+            cv2.rectangle(img, (roof.xmin, roof.ymin), (roof.xmin+roof.width, roof.ymin+roof.height), (0,255,0), 2)
+        for (x,y,w,h), accept in zip(proposal_coords['metal'], predictions[img_name]['metal']):
+            color = (0,0,0) if accept==1 else (0,0,255) 
+            cv2.rectangle(img, (x,y), (x+w, y+h), color, 2) 
+        cv2.imwrite(self.out_path+img_name, img)
+
+
+    def find_viola_proposals(self, img_name=None, group=None, reject_levels=1.3, level_weights=5, scale=None, min_neighbors=1, eps=2):
+        '''Call viola to find coordinated of candidate roofs. 
+        Extract those patches from the image, tranform them so they can be fed to neural network.
+        Return both the coordinates and the patches.
+        '''
+        #def detect_roofs(self, img_name=None, group=None, reject_levels=1.3, level_weights=5, scale=None, min_neighbors=1, eps=2):
+        proposal_coords, img = self.viola.detect_roofs(img_name=img_name, group=group, reject_levels=reject_levels, 
+                            level_weights=level_weights, scale=scale, min_neighbors=min_neighbors, eps=eps)
+
+        #cv2 and lasagne deal with images differently
+        img = np.asarray(img, dtype='float32')/255
+        img = img.transpose(2, 0, 1)
+
+        all_proposal_patches = dict()
+
+        for roof_type in ['metal', 'thatch']: 
+            patches = np.empty((len(proposal_coords[roof_type]), img.shape[0], utils.CROP_SIZE, utils.CROP_SIZE)) 
+
+            for i, (x,y,w,h) in enumerate(proposal_coords[roof_type]):
+                #resize it down to crop size so it can be fed to neural network
+                patch = np.copy(img[:, y:y+h, x:x+w])               
+                dst = np.empty((3, utils.CROP_SIZE, utils.CROP_SIZE), dtype='float32')
+                dst[0,:,:] = cv2.resize(patch[0, :,:], (utils.CROP_SIZE, utils.CROP_SIZE), dst=dst[0,:,:], fx=0, fy=0, interpolation=cv2.INTER_AREA) 
+                dst[1,:,:] = cv2.resize(patch[1, :,:], (utils.CROP_SIZE, utils.CROP_SIZE), dst=dst[1,:,:], fx=0, fy=0, interpolation=cv2.INTER_AREA) 
+                dst[2,:,:] = cv2.resize(patch[2, :,:], (utils.CROP_SIZE, utils.CROP_SIZE), dst=dst[2,:,:], fx=0, fy=0, interpolation=cv2.INTER_AREA) 
+                patches[i, :,:,:] = np.asarray(dst, dtype='float32')
+
+            all_proposal_patches[roof_type] = patches
+        return all_proposal_patches, proposal_coords
+
+
+
     def process_viola(self, rows, cols, img_path=None, verbose=False):
         #Find candidate roof contours using Viola for all types of roof
         #returns list with as many lists of detections as the detectors we have passed
@@ -168,7 +256,7 @@ def setup_neural_viola_params(parameters):
     #set up neural parameters
     neural_params = parameters['neural']
     neural_params['num_layers'] = int(float(neural_params['preloaded_path'][4:5]))
-    neural_params['net_name'] = neural_params['preloaded_path']+'_metal'+parameters['viola']['metal_combo']+'_thatch'+parameters['viola']['thatch_combo']
+    neural_params['net_name'] = neural_params['preloaded_path'][:-(len('.pickle'))]+'_metal'+parameters['viola']['metal_combo']+'_thatch'+parameters['viola']['thatch_combo']+'/'
 
     #set up viola parameters
     viola_params = dict()

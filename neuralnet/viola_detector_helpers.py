@@ -92,7 +92,6 @@ def testing_detectors(group=None, original_dataset=False, all=False, data_fold=u
     for detector, combo_f_name in zip(detector_list, combo_f_names):
         in_path = utils.get_path(viola=True, in_or_out=utils.IN, data_fold=data_fold)
         out_path = utils.get_path(viola=True, in_or_out=utils.OUT, data_fold=data_fold)
-
         if group=='group_rectangles':    
             folder_name = 'group_rect_combo'+combo_f_name+'/'
         elif group=='group_bounding':

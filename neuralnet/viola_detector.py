@@ -43,7 +43,8 @@ class ViolaDetector(object):
         self.in_path = in_path
 
         assert out_folder_name is not None
-        self.out_folder = out_path+out_folder_name
+        #self.out_folder = out_path+out_folder_name
+        self.out_folder = out_path
         utils.mkdir(self.out_folder)
         print 'Will output evaluation to: {0}'.format(self.out_folder)
 
@@ -58,8 +59,7 @@ class ViolaDetector(object):
         assert detector_names is not None 
         self.roof_detectors = defaultdict(list)
         self.detector_names = detector_names
-        print detector_names
-        pdb.set_trace()
+
         if old_detector:
             self.roof_detectors['metal'] = [cv2.CascadeClassifier('../viola_jones/cascades/'+path) for path in detector_names['metal']]
             self.roof_detectors['thatch'] = [cv2.CascadeClassifier('../viola_jones/cascades/'+path) for path in detector_names['thatch']]
@@ -68,7 +68,8 @@ class ViolaDetector(object):
             for roof_type in ['metal', 'thatch']:
                 for path in detector_names[roof_type]: 
                     if path.startswith('cascade'):
-                        self.roof_detectors[roof_type].append(cv2.CascadeClassifier('../viola_jones/'+path+'/cascade.xml'))
+                        start = '../viola_jones/rectified/' if '_rect_' in path else '../viola_jones/'
+                        self.roof_detectors[roof_type].append(cv2.CascadeClassifier(start+path+'/cascade.xml'))
                     else:
                         self.roof_detectors[roof_type].append(cv2.CascadeClassifier('../viola_jones/cascade_'+path+'/cascade.xml'))
 
@@ -85,36 +86,38 @@ class ViolaDetector(object):
 
 
     def detect_roofs(self, img_name=None, group=None, reject_levels=1.3, level_weights=5, scale=None, min_neighbors=1, eps=2):
+        try:
+            img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            gray = cv2.equalizeHist(gray)
+        except IOError as e:
+            print e
+            sys.exit(-1)
+        else:
+            self.scale = scale if scale is not None else self.scale
 
-        img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        gray = cv2.equalizeHist(gray)
-
-        self.scale = scale if scale is not None else self.scale
-
-        #get detections in the image
-        self.total_detection_time = 0
-        detected_roofs = defaultdict(list)
-        for roof_type in self.roof_detectors.keys():
-            for i, detector in enumerate(self.roof_detectors[roof_type]):
-                print 'Detecting with detector: '+str(i)
-                checking =  detector.empty()
-                print roof_type, checking
-                with Timer() as t: 
-                    detected_roofs[roof_type].extend(detector.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=3))
-                print 'Time: {0}'.format(t.secs)
-                self.viola_detections.total_time += t.secs
-                #group_detected_roofs, weights = cv2.groupRectangles(np.array(detected_roofs).tolist(), 0, 5)
-                print 'DETECTED {0} roofs'.format(len(detected_roofs))
-            if group == 'group_rectangles':
-                detected_roofs[roof_type], weights = cv2.groupRectangles(np.array(detected_roofs[roof_type]).tolist(), min_neighbors, eps)
-            elif group ==  'group_bounding':
-                detected_roofs[roof_type] = self.evaluation.get_bounding_rects(img_name=img_name, rows=1200, 
-                            cols=2000, detections=detected_roofs[roof_type]) 
-            else:
-                pass
-        self.viola_detections.set_detections(img_name=img_name, detection_list=detected_roofs)
-
-
+            #get detections in the image
+            self.total_detection_time = 0
+            detected_roofs = defaultdict(list)
+            for roof_type in self.roof_detectors.keys():
+                for i, detector in enumerate(self.roof_detectors[roof_type]):
+                    print 'Detecting with detector: '+str(i)
+                    checking =  detector.empty()
+                    print roof_type, checking
+                    with Timer() as t: 
+                        detected_roofs[roof_type].extend(detector.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=3))
+                    print 'Time: {0}'.format(t.secs)
+                    self.viola_detections.total_time += t.secs
+                    #group_detected_roofs, weights = cv2.groupRectangles(np.array(detected_roofs).tolist(), 0, 5)
+                    print 'DETECTED {0} roofs'.format(len(detected_roofs[roof_type]))
+                if group == 'group_rectangles':
+                    detected_roofs[roof_type], weights = cv2.groupRectangles(np.array(detected_roofs[roof_type]).tolist(), min_neighbors, eps)
+                elif group ==  'group_bounding':
+                    detected_roofs[roof_type] = self.evaluation.get_bounding_rects(img_name=img_name, rows=1200, 
+                                cols=2000, detections=detected_roofs[roof_type]) 
+                else:
+                    pass
+            self.viola_detections.set_detections(img_name=img_name, detection_list=detected_roofs)
+            return detected_roofs, img
 
 
