@@ -30,91 +30,6 @@ def pickle_neural_true_false_positives():
     viola.get_neural_training_data(save_false_pos = True, roof_type=roof_type, detector_name='combo'+combo_f) 
 
 
-def get_detectors(combo_f):
-    detectors = dict()
-    if combo_f.startswith('combo'):
-        detector_file = utils.get_path(viola=True, params=True)+str(combo_f)+'.csv'
-    else:
-        detector_file = utils.get_path(viola=True, params=True)+'combo'+str(combo_f)+'.csv'
-
-    detectors = defaultdict(list)
-    with open(detector_file, 'r') as csvfile:
-        r = csv.reader(csvfile, delimiter=',')
-        for line in r:
-            if len(line) < 2:
-                continue
-            if line[0] == 'metal':
-                detectors['metal'].append(line[1].strip())
-            elif line[0] == 'thatch':
-                detectors['thatch'].append(line[1].strip())
-            else:
-                raise ValueError("Unknown detector type {0}".format(line[0]))
-    return detectors
-
-
-def get_all_combos():
-    path = utils.get_path(viola=True, params=True) 
-    detector_list = list()
-    combo_f_names = list()
-
-    for f_name in os.listdir(path):
-        if os.path.isfile(path+f_name) and f_name.startswith('combo') and ('equalized') in f_name:
-            combo_f = f_name[5:7]
-            if combo_f.endswith('.'):
-                combo_f = combo_f[:1]
-            
-            detector_list.append(get_detectors(combo_f))
-            combo_f_names.append(combo_f)
-    return detector_list, combo_f_names 
-
-
-def testing_detectors(group=None, original_dataset=False, all=False, data_fold=utils.VALIDATION):
-    '''Test either a single detector or all detectors in the combo files
-    '''
-    #TESTING ONLY ONE DETECTOR that must be passed in as an argument  
-    if all == False:
-        combo_f = None
-        try:
-            opts, args = getopt.getopt(sys.argv[1:], "c:")
-        except getopt.GetoptError:
-            sys.exit(2)
-        for opt, arg in opts:
-            if opt == '-c':
-                combo_f = arg
-        assert combo_f is not None
-        detectors = get_detectors(combo_f)
-        detector_list = [detectors]
-        combo_f_names = [combo_f]
-    else:#get all detector combos
-        detector_list, combo_f_names =  get_all_combos()
-
-    #need to detect on validation set. To make it easier to digest, initially we also looked at training set
-    for detector, combo_f_name in zip(detector_list, combo_f_names):
-        in_path = utils.get_path(viola=True, in_or_out=utils.IN, data_fold=data_fold)
-        out_path = utils.get_path(viola=True, in_or_out=utils.OUT, data_fold=data_fold)
-        if group=='group_rectangles':    
-            folder_name = 'group_rect_combo'+combo_f_name+'/'
-        elif group=='group_bounding':
-            folder_name = 'group_bound_combo'+combo_f_name+'/'
-        else:
-            folder_name = 'combo'+combo_f_name+'/'
-
-        viola = ViolaDetector(out_folder_name=folder_name, out_path=out_path, in_path=in_path, 
-                                                detector_names=detector, save_imgs=False, old_detector = False)
-        viola.detect_roofs_in_img_folder(group=group, reject_levels=0.5, level_weights=2, scale=1.05)
-
-
-def check_cascade_status():
-    '''Check the status of all of the cascades
-    '''
-    casc_path = '../viola_jones/'
-    for f_name in os.listdir(casc_path):
-        if os.path.isdir(casc_path+f_name) and f_name.startswith('cascade_'):
-            if os.path.isfile(casc_path+f_name+'/cascade.xml'):
-                print '{0}\t\t\t done'.format(f_name)
-            else:
-                print '{0}\t\t\t MISSING'.format(f_name)
-
 
 def set_up_basic_combos():
     '''Set up combo with a single detector per combo
@@ -178,7 +93,98 @@ def set_up_basic_combos():
                     print 'Only one detector found: {0}'.format(detectors)
 
 
+def get_detectors(combo_f):
+    detectors = dict()
+    if combo_f.startswith('combo'):
+        detector_file = utils.get_path(viola=True, params=True)+str(combo_f)+'.csv'
+    else:
+        detector_file = utils.get_path(viola=True, params=True)+'combo'+str(combo_f)+'.csv'
+
+    detectors = defaultdict(list)
+    with open(detector_file, 'r') as csvfile:
+        r = csv.reader(csvfile, delimiter=',')
+        for line in r:
+            if len(line) < 2:
+                continue
+            if line[0] == 'metal':
+                detectors['metal'].append(line[1].strip())
+            elif line[0] == 'thatch':
+                detectors['thatch'].append(line[1].strip())
+            else:
+                raise ValueError("Unknown detector type {0}".format(line[0]))
+    return detectors
+
+
+def get_all_combos():
+    path = utils.get_path(viola=True, params=True) 
+    detector_list = list()
+    combo_f_names = list()
+
+    for f_name in os.listdir(path):
+        if os.path.isfile(path+f_name) and f_name.startswith('combo') and ('equalized') in f_name:
+            combo_f = f_name[5:7]
+            if combo_f.endswith('.'):
+                combo_f = combo_f[:1]
+            
+            detector_list.append(get_detectors(combo_f))
+            combo_f_names.append(combo_f)
+    return detector_list, combo_f_names 
+
+
+def check_cascade_status():
+    '''Check the status of all of the cascades
+    '''
+    casc_path = '../viola_jones/'
+    for f_name in os.listdir(casc_path):
+        if os.path.isdir(casc_path+f_name) and f_name.startswith('cascade_'):
+            if os.path.isfile(casc_path+f_name+'/cascade.xml'):
+                print '{0}\t\t\t done'.format(f_name)
+            else:
+                print '{0}\t\t\t MISSING'.format(f_name)
+
+
+
+
+def testing_detectors(detector_params=None, original_dataset=True, all=False, save_imgs=True, data_fold=utils.VALIDATION):
+    '''Test either a single detector or all detectors in the combo files
+    '''
+    #TESTING ONLY ONE DETECTOR that must be passed in as an argument  
+    if all == False:
+        combo_f = None
+        try:
+            opts, args = getopt.getopt(sys.argv[1:], "c:")
+        except getopt.GetoptError:
+            sys.exit(2)
+        for opt, arg in opts:
+            if opt == '-c':
+                combo_f = arg
+        assert combo_f is not None
+        detectors = get_detectors(combo_f)
+        detector_list = [detectors]
+        combo_f_names = [combo_f]
+    else:#get all detector combos
+        detector_list, combo_f_names =  get_all_combos()
+
+    #for each detector, do detection in a different folder
+    for detector, combo_f_name in zip(detector_list, combo_f_names):
+        #define in and out paths
+        in_path = utils.get_path(viola=True, in_or_out=utils.IN, data_fold=data_fold)
+        #name the output_folder
+        folder_name = ['combo'+combo_f_name]
+        for k, v in detector_params.iteritems():
+            folder_name.append('{0}{1}'.format(k,v))
+        folder_name = '_'.join(folder_name)
+
+        out_path = utils.get_path(out_folder_name=folder_name, viola=True, in_or_out=utils.OUT, data_fold=data_fold)
+
+        viola = ViolaDetector(out_path=out_path, in_path=in_path, folder_name = folder_name, save_imgs=save_imgs,  
+                                                detector_names=detector,  **detector_params)
+        viola.detect_roofs_in_img_folder()
+
+
 
 if __name__ == '__main__':
-    testing_detectors(all=False, original_dataset=True, data_fold=utils.TESTING)
+    #group can be None, group_rectangles, group_bounding
+    detector_params = {'min_neighbors':3, 'scale':1.08,'group': None, 'rotate':True} 
+    testing_detectors(detector_params=detector_params, save_imgs=True, data_fold=utils.VALIDATION, all=False, original_dataset=True)
     

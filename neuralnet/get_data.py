@@ -324,9 +324,12 @@ class DataLoader(object):
 
 
 
-    def get_roof_patches_from_rectified_dataset(self, xml_path=utils.RECTIFIED_COORDINATES, xml_name=None, img_path=None):
+    def get_roof_patches_from_rectified_dataset(self, coordinates_only=False, xml_path=utils.RECTIFIED_COORDINATES, xml_name=None, img_path=None):
+        '''
+        Return roof patches from the dataset that has roofs properly bounded
+        If coordinated_only is True, return only the coordinates instead of the patches
+        '''
         assert xml_name is not None
-        assert img_path is not None
         xml_path = xml_path+xml_name
 
         #EXTRACT THE POLYGONS FROM THE XML
@@ -354,18 +357,22 @@ class DataLoader(object):
                         if len(polygon) == 4:
                             polygon_list.append(polygon)
 
-        #EXTRACT THE RECTIFIED ROOF PATCH FROM THE IMG, RETURN THE ROOF PATCHES
-        try:
-            img = cv2.imread(img_path, flags=cv2.IMREAD_COLOR)
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            gray_equalized = cv2.equalizeHist(gray)
-        except IOError as e:
-            print e
-            sys.exit(-1)
-        roof_patches = list()
-        for i, polygon in enumerate(polygon_list):
-			roof_patches.append(four_point_transform(gray_equalized, np.array(polygon, dtype = "float32")))
-        return roof_patches 
+        if coordinates_only:
+            return polygon_list
+        else:
+            #EXTRACT THE RECTIFIED ROOF PATCH FROM THE IMG, RETURN THE ROOF PATCHES
+            assert img_path is not None
+            try:
+                img = cv2.imread(img_path, flags=cv2.IMREAD_COLOR)
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                gray_equalized = cv2.equalizeHist(gray)
+            except IOError as e:
+                print e
+                sys.exit(-1)
+            roof_patches = list()
+            for i, polygon in enumerate(polygon_list):
+                roof_patches.append(four_point_transform(gray_equalized, np.array(polygon, dtype = "float32")))
+            return roof_patches 
 
 
 

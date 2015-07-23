@@ -60,6 +60,11 @@ class Evaluation(object):
         for img_name in self.img_names:
             self.roofs[img_name] = DataLoader().get_roofs(self.in_path+img_name[:-3]+'xml', img_name)
 
+        self.correct_roofs = dict()
+        self.correct_roofs_angled = dict()
+        for img_name in self.img_names:
+            self.correct_roofs[img_name] = DataLoader().get_roof_patches_from_rectified_dataset(coordinates_only=True, xml_name=img_name[:-3]+'xml')
+
         self.out_path = out_path
         if detector_names is not None:
             self.init_report(detector_names)
@@ -124,7 +129,6 @@ class Evaluation(object):
         detections = {'metal': self.detections.get_img_detections_specific_type('metal', img_name),
                         'thatch': self.detections.get_img_detections_specific_type('thatch', img_name)}
 
-        print false_pos
         for roof in self.roofs[img_name]:
             best_voc_score = -1
             roof_area = roof.width*roof.height
@@ -176,10 +180,10 @@ class Evaluation(object):
         if self.save_imgs:
             img = None
             try:
-                img = self.mark_roofs_on_img(img_name = img_name, roofs=self.false_positive_coords[img_name], color=(0,0,0))
+                img = self.mark_roofs_on_img(img_name = img_name, roofs=self.false_positive_coords[img_name], color=(0,0,255))
             except KeyError:
                 pass
-            img = self.mark_roofs_on_img(img_name=img_name, img=img, roofs=self.roofs[img_name], color=(0,255,0))
+            img = self.mark_roofs_on_img(img_name=img_name, img=img, roofs=self.roofs[img_name], color=(0,0,0))
             temp_img = None
             try:
                 temp_img = self.mark_roofs_on_img(img_name=img_name, img=img, roofs=self.true_positive_coords[img_name], color=(0,255,0))
@@ -309,5 +313,108 @@ class Evaluation(object):
         img = self.mark_roofs_on_img(img, img_name, roof_list)
         cv2.imwrite(self.out_path+'_'+img_name, img)
 
+
+    def score_img_rectified(self, img_name, rotated_images): #rows=1200, cols=2000):
+        '''Find best overlap between each roof in an img and the detections,
+        according the VOC score
+        '''
+        voc_scores = list()
+        #start with all detections as false pos; as we find matches, we increase the true_pos, decrese the false_pos numbers
+        false_pos = {'metal': len(self.detections.get_img_detections_specific_type('metal', img_name)), 
+                            'thatch': len(self.detections.get_img_detections_specific_type('thatch', img_name))}
+        true_pos = defaultdict(int) 
+        detections = {'metal': self.detections.get_img_detections_specific_type('metal', img_name),
+                        'thatch': self.detections.get_img_detections_specific_type('thatch', img_name)}
+
+                    
+        for roof in self.correct_roofs[img_name]:
+            best_voc_score = -1
+            #roof_type = roof.roof_type
+            #TODO: currently only metal is supported...
+            roof_type = 'metal'
+
+            if roof_type == 'thatch':
+                #TODO: need to fix this
+                print 'SKIPPING THACHT'
+                continue
+
+            for angle in detections[roof_type].keys():
+                img_rotated = rotated_images[angle]
+                angled_roof = list()
+                for point in roof:
+                    #TODO need to pass in the size of the rotated image to do a proper rotation
+                    angled = utils.rotate_point(point, img_rotated, angle)
+                    angled_roof.append(angled)
+
+                try:
+                    x_true, y_true, w_true, h_true = -1, -1, -1, -1                
+                    for (x,y,w,h) in detections[roof_type][angle]:                           #for each patch found
+                        matching_mask = np.zeros(img_rotated.shape[:2], dtype='uint8')
+                        cv2.fillConvexPoly(matching_mask, np.array(angled_roof), 1)
+                        roof_area = Evaluation.sum_mask(matching_mask)
+
+                        matching_mask[y:y+h, x:x+w] = 0        #detection
+                        roof_missed = Evaluation.sum_mask(matching_mask)
+                        
+                        intersection_area = roof_area-roof_missed
+                        detection_area = w*h
+                        union_area = (roof_area+(detection_area) )-intersection_area
+                        voc_score = float(intersection_area)/union_area
+
+                        if voc_score > best_voc_score:
+                            if x_true != -1:#put prev detection in false pos: score was lower and  we can only detect a roof once
+                                self.false_positive_coords[img_name].append((x_true, y_true, w_true, h_true))
+                            best_voc_score = voc_score
+                            #rotate back so we can display it properly in the non-rotated image
+                            y_true, x_true = utils.rotate_point((y, x), img_rotated, -angle)
+                            w_true, h_true = w, h
+
+                        else:
+                            y, x = utils.rotate_point((y,x), img_rotated, -angle)
+                            self.false_positive_coords[img_name].append((x, y, w, h))
+                            
+                    voc_scores.append(best_voc_score)
+                except ValueError as e:
+                    print e
+
+            if (best_voc_score >= self.VOC_threshold):
+                true_pos[roof_type] += 1
+                false_pos[roof_type] -= 1
+                self.true_positive_coords[img_name].append((x_true, y_true, w_true, h_true))
+
+        for roof_type in self.roof_types:
+            false_pos[roof_type] = len(detections[roof_type])-true_pos[roof_type] 
+            print '*****'+roof_type+'*****'
+            roofs_num = len([roof for roof in self.roofs[img_name] if roof.roof_type == roof_type])
+            print roofs_num
+            print 'True pos: {0}'.format(true_pos[roof_type])
+            print 'False pos: {0}'.format(false_pos[roof_type])
+            self.scores['total_true_pos'][roof_type]+= true_pos[roof_type]
+            self.scores['total_false_pos'][roof_type] += false_pos[roof_type]
+            self.scores['total_detections'][roof_type] += len(self.detections.get_img_detections_specific_type(roof_type, img_name))
+            self.scores['total_roofs'][roof_type] += roofs_num 
+
+        self.save_images(img_name)
+
+
+
+    def save_images(self, img_name):
+        '''Displays the ground truth, along with the true and false positives for a given image
+        '''
+        if self.save_imgs:
+            img = None
+            try:
+                img = self.mark_roofs_on_img(img_name = img_name, roofs=self.false_positive_coords[img_name], color=(0,0,255))
+            except KeyError:
+                pass
+            img = self.mark_roofs_on_img(img_name=img_name, img=img, roofs=self.roofs[img_name], color=(0,0,0))
+            temp_img = None
+            try:
+                temp_img = self.mark_roofs_on_img(img_name=img_name, img=img, roofs=self.true_positive_coords[img_name], color=(0,255,0))
+            except KeyError:
+                pass
+            if temp_img is not None:
+                img = temp_img
+            cv2.imwrite(self.out_path+img_name[:-4]+'TP_FP_.jpg', img)
 
 

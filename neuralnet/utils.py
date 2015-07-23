@@ -6,7 +6,10 @@ import sys
 import pdb
 import datetime
 import csv
-
+import math
+import cv2
+import numpy as np
+import warnings
 
 ###################################
 #types of roof
@@ -26,6 +29,8 @@ SMALL_TEST = 4
 
 IN = 1  #input 
 OUT = 2 #output
+
+VIOLA_ANGLES = [0, 45, 90, 135]
 
 ###################################
 #VIOLA TRAINING
@@ -166,7 +171,10 @@ def get_path(in_or_out=None, out_folder_name=None, params=False, full_dataset=Fa
         else:
             raise ValueError('Must specify input or output folder.')
         if out_folder_name is not None:
-            check_append(path, out_folder_name)
+            if out_folder_name.endswith('/'):
+                check_append(path, out_folder_name)
+            else:
+                check_append(path, out_folder_name+'/')
     return ''.join(path)
      
 
@@ -251,6 +259,7 @@ def resize(image, width=None, height=None, inter=cv2.INTER_AREA):
 
 
 def rotate_point(pos, img, theta):
+    warnings.warn('rotate_point assumes image is size 1200,2000, but this may not always be the case')
     theta = math.radians(theta)
 
     #translation: how much the image has moved
@@ -264,7 +273,6 @@ def rotate_point(pos, img, theta):
     #rotate the point
     p_x = math.cos(theta) * (px-ox) - math.sin(theta) * (py-oy) + ox
     p_y = math.sin(theta) * (px-ox) + math.cos(theta) * (py-oy) + oy
-    print p_y, p_x
     return int(p_y), int(p_x)
 
 
@@ -285,13 +293,89 @@ def rotate_image(image, angle):
   diagonal = int(math.sqrt(pow(image.shape[0], 2) + pow(image.shape[1], 2)))
   offset_x = (diagonal - image.shape[0])/2
   offset_y = (diagonal - image.shape[1])/2
+  #dst_image = np.zeros((diagonal, diagonal, 3), dtype='uint8')
+  dst_image = np.zeros((diagonal, diagonal), dtype='uint8')
+  image_center = (diagonal/2, diagonal/2)
+
+  R = cv2.getRotationMatrix2D(image_center, angle, 1.0)
+  #dst_image[offset_x:(offset_x + image.shape[0]), \
+  #          offset_y:(offset_y + image.shape[1]), \
+  #          :] = image
+  dst_image[offset_x:(offset_x + image.shape[0]), offset_y:(offset_y + image.shape[1])] = image
+  dst_image = cv2.warpAffine(dst_image, R, (diagonal, diagonal), flags=cv2.INTER_LINEAR)
+  # Calculate the rotated bounding rect
+  x0 = offset_x
+  x1 = offset_x + image.shape[0]
+  x2 = offset_x
+  x3 = offset_x + image.shape[0]
+
+  y0 = offset_y
+  y1 = offset_y
+  y2 = offset_y + image.shape[1]
+  y3 = offset_y + image.shape[1]
+
+  corners = np.zeros((3,4))
+  corners[0,0] = x0
+  corners[0,1] = x1
+  corners[0,2] = x2
+  corners[0,3] = x3
+  corners[1,0] = y0
+  corners[1,1] = y1
+  corners[1,2] = y2
+  corners[1,3] = y3
+  corners[2:] = 1
+
+  c = np.dot(R, corners)
+
+  x = int(c[0,0])
+  y = int(c[1,0])
+  left = x
+  right = x
+  up = y
+  down = y
+
+  for i in range(4):
+    x = int(c[0,i])
+    y = int(c[1,i])
+    if (x < left): left = x
+    if (x > right): right = x
+    if (y < up): up = y
+    if (y > down): down = y
+  h = down - up
+  w = right - left
+
+  #cropped = np.zeros((w, h, 3), dtype='uint8')
+  cropped = np.zeros((w, h), dtype='uint8')
+  #cropped[:, :, :] = dst_image[left:(left+w), up:(up+h), :]
+  cropped[:, :] = dst_image[left:(left+w), up:(up+h)]
+  return cropped
+
+def rotate_image_RGB(image, angle):
+  '''Rotate image "angle" degrees.
+
+  How it works:
+    - Creates a blank image that fits any rotation of the image. To achieve
+      this, set the height and width to be the image's diagonal.
+    - Copy the original image to the center of this blank image
+    - Rotate using warpAffine, using the newly created image's center
+      (the enlarged blank image center)
+    - Translate the four corners of the source image in the enlarged image
+      using homogenous multiplication of the rotation matrix.
+    - Crop the image according to these transformed corners
+  '''
+
+  diagonal = int(math.sqrt(pow(image.shape[0], 2) + pow(image.shape[1], 2)))
+  offset_x = (diagonal - image.shape[0])/2
+  offset_y = (diagonal - image.shape[1])/2
   dst_image = np.zeros((diagonal, diagonal, 3), dtype='uint8')
+  #dst_image = np.zeros((diagonal, diagonal), dtype='uint8')
   image_center = (diagonal/2, diagonal/2)
 
   R = cv2.getRotationMatrix2D(image_center, angle, 1.0)
   dst_image[offset_x:(offset_x + image.shape[0]), \
             offset_y:(offset_y + image.shape[1]), \
             :] = image
+  #dst_image[offset_x:(offset_x + image.shape[0]), offset_y:(offset_y + image.shape[1])] = image
   dst_image = cv2.warpAffine(dst_image, R, (diagonal, diagonal), flags=cv2.INTER_LINEAR)
   # Calculate the rotated bounding rect
   x0 = offset_x
@@ -335,8 +419,11 @@ def rotate_image(image, angle):
   w = right - left
 
   cropped = np.zeros((w, h, 3), dtype='uint8')
+  #cropped = np.zeros((w, h), dtype='uint8')
   cropped[:, :, :] = dst_image[left:(left+w), up:(up+h), :]
+  #cropped[:, :] = dst_image[left:(left+w), up:(up+h)]
   return cropped
+
 
 
 if __name__ == '__main__':
