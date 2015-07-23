@@ -62,11 +62,6 @@ class ViolaDetector(object):
         self.roof_detectors = defaultdict(list)
         self.detector_names = detector_names
 
-        #if old_detector:
-        #    self.roof_detectors['metal'] = [cv2.CascadeClassifier('../viola_jones/cascades/'+path) for path in detector_names['metal']]
-        #    self.roof_detectors['thatch'] = [cv2.CascadeClassifier('../viola_jones/cascades/'+path) for path in detector_names['thatch']]
-
-        #else:
         for roof_type in ['metal', 'thatch']:
             for path in detector_names[roof_type]: 
                 if path.startswith('cascade'):
@@ -81,15 +76,14 @@ class ViolaDetector(object):
         '''
         for i, img_name in enumerate(self.img_names):
             print 'Processing image {0}/{1}\t{2}'.format(i, len(self.img_names), img_name)
-            _, _, rotated_images = self.detect_roofs(img_name)
-            self.evaluation.score_img_rectified(img_name, rotated_images)
+            self.detect_roofs(img_name)
+            self.evaluation.score_img_rectified(img_name)
         self.evaluation.print_report()
         open(self.out_folder+'DONE', 'w').close() 
 
 
-#, img_name=None, group=None, reject_levels=1.3, level_weights=5, scale=None, min_neighbors=1, eps=2
+
     def detect_roofs(self, img_name):
-        #rotated_images = dict()
         try:
             img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -98,41 +92,29 @@ class ViolaDetector(object):
             print e
             sys.exit(-1)
         else:
-            self.total_detection_time = 0
-            detected_roofs = defaultdict(list)
-
-            for roof_type in self.roof_detectors.keys():
-                detected_roofs[roof_type] = defaultdict(list)
-                for i, detector in enumerate(self.roof_detectors[roof_type]):
-
-                    #ANGLE ROTATIONS AND DETECTIONS
+            for roof_type, detectors in self.roof_detectors.iteritems():
+                for i, detector in enumerate(detectors):
                     for angle in self.angles:
-                        #separate detections by angle
 
                         print 'Detecting with detector: '+str(i)
                         print 'ANGLE '+str(angle)
-
                         with Timer() as t: 
-                            if angle == 0:
-                                temp_detections = detector.detectMultiScale(gray, scaleFactor=self.scale, minNeighbors=self.min_neighbors )
-                                final_detections = temp_detections
-                                rotated_image = gray 
-                                
+                            if angle > 0:
+                                rotated_image = utils.rotate_image(gray, angle)
                             else:
-                                rotated_img = utils.rotate_image(gray, angle)
-                                temp_detections =  detector.detectMultiScale(rotated_img, scaleFactor=self.scale, minNeighbors=self.min_neighbors)
-                                final_detections = self.transform_points(temp_detections, rotated_img, angle)
+                                rotated_image = gray
+                            detections = [[500, 800, 100, 300],[400, 100, 100, 200]]
+                            #detections = detector.detectMultiScale(rotated_image, scaleFactor=self.scale, minNeighbors=self.min_neighbors )
 
-                            detected_roofs[roof_type][angle].extend(final_detections)
                         print 'Time detection: {0}'.format(t.secs)
                         self.viola_detections.total_time += t.secs
-                        print 'DETECTED {0} roofs'.format(len(detected_roofs[roof_type][angle]))
-                        self.viola_detections.set_detections(img_name=img_name, angle=angle, detection_list=detected_roofs, img=rotated_img)
+                        self.viola_detections.set_detections(eval_remove=self.evaluation, 
+                                            roof_type=roof_type, img_name=img_name, angle=angle, detection_list=detections, img=rotated_image)
 
-                        if DEBUG:
-                            #you need to use the temp_detections because they contain the right coordinates on the rotated image
+                        if DEBUG and angle>0:
                             rgb_rotated = utils.rotate_image_RGB(img, angle)
-                            self.mark_save_current_rotation(img_name, rgb_rotated, temp_detections, angle)
+                            self.mark_save_current_rotation(img_name, rgb_rotated, detections, angle, out_folder='test')
+                            sys.exit(0)
 
                         #GROUPING
                         # TODO: fix the grouping
@@ -149,12 +131,18 @@ class ViolaDetector(object):
 
                 self.viola_detections.total_time += t.secs
 
-            return detected_roofs, img #, rotated_images
 
 
-    def mark_save_current_rotation(self, img_name, img, detections, angle):
-        img = self.evaluation.mark_roofs_on_img(img_name=img_name, img=img, roofs=detections, color=(0,0,255))
-        cv2.imwrite('{0}_angle{1}.jpg'.format(self.out_folder+img_name[:-4], angle), img)
+    def mark_save_current_rotation(self, img_name, img, detections, angle, out_folder=None):
+        out_folder = self.out_folder if out_folder is None else out_folder
+        polygons = np.zeros((4, 4, 2))
+        pdb.set_trace()
+        for i, d in enumerate(detections):
+            polygons[i, :] = utils.convert_rect_to_polygon(d)
+        img = self.evaluation.mark_roofs_on_img(img_name=img_name, img=img, roofs=polygons, color=(0,0,255))
+        path = '{0}_angle{1}.jpg'.format(out_folder+img_name[:-4], angle)
+        print path
+        cv2.imwrite(path, img)
         
 
 

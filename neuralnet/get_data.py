@@ -16,7 +16,6 @@ from sklearn.cross_validation import LeaveOneLabelOut
 
 import json
 from pprint import pprint
-from extract_rect import four_point_transform
 import utils
 
 
@@ -371,7 +370,7 @@ class DataLoader(object):
                 sys.exit(-1)
             roof_patches = list()
             for i, polygon in enumerate(polygon_list):
-                roof_patches.append(four_point_transform(gray_equalized, np.array(polygon, dtype = "float32")))
+                roof_patches.append(utils.four_point_transform(gray_equalized, np.array(polygon, dtype = "float32")))
             return roof_patches 
 
 
