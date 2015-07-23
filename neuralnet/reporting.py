@@ -18,23 +18,73 @@ class Detections(object):
         self.imgs = set()
         self.roof_types = ['metal', 'thatch'] if roof_types is None else roof_types
         for roof_type in self.roof_types:
-            self.detections[roof_type] = defaultdict(list)
+            self.detections[roof_type] = dict()
 
-    def set_detections(self, img_name=None, detection_list = None):
+
+    def set_detections(self, img_name=None, angle=None, detection_list=None, img=None):
+        '''@param img is the rotated image
+        '''
+        assert (rows > 0 and cols > 0) or (angle is None) or (angle == 0) 
         assert img_name is not None
         assert detection_list is not None
-        for roof_type, detections in detection_list.iteritems():            
-            self.total_detection_num[roof_type] += len(detection_list[roof_type])
-            self.detections[roof_type][img_name] = detection_list[roof_type]    
+        angle = angle if angle is not None else 0
 
-        self.detections_list.extend(detection_list[roof_type])
+        #ensure we have a place to store detections for all angles for the current image/rooftype
+        for roof_type in self.roof_types:
+            if img_name not in self.detections[roof_type]:
+                self.detections[roof_type][img_name] = defaultdict(list)
 
-    def get_img_detections_specific_type(self, roof_type, img_name):
-        return self.detections[roof_type][img_name] 
+        for roof_type, detections in detection_list.iteritems():
+            #update the detection count for this roof type
+            self.total_detection_num[roof_type] += len(detections)
+            for x, y, w, h in detections:
+                #translate the detection to a polygon
+                p1, p2, p3, p4 = (y, x), (y, x+w), (y+h, x), (y+h, x+w)
+
+                if angle > 0:
+                    #transform it
+                    p1 = utils.rotate_point(p1, img, -angle)
+                    p2 = utils.rotate_point(p2, img, -angle)
+                    p3 = utils.rotate_point(p3, img, -angle)
+                    p4 = utils.rotate_point(p4, img, -angle)
+
+                polygon_detected = (p1, p2, p3, p4)
+                self.detections[roof_type][img_name][angle].append((polygon_detected))
+
+        # for roof_type, detections in detection_list.iteritems():            
+        #     self.total_detection_num[roof_type] += len(detection_list[roof_type])
+        #     self.detections[roof_type][img_name] = detection_list[roof_type]    
+
+        # self.detections_list.extend(detection_list[roof_type])
 
 
-    def get_img_detections_any_type(self, img_name):
-        return self.detections[self.roof_types[0]][img_name]+self.detections[self.roof_types[1]][img_name]        
+    def get_detections(self, img_name=None, angle=None, roof_type=None):
+        assert img_name is not None
+        detections = list()
+
+        if roof_type is None:   #any roof_type
+
+            if angle is None:
+                #return all detections regardless of angle or rooftype
+                for roof_type in self.roof_types:
+                    for angle in self.detections[roof_type][img_name].keys():
+                        detections.extend(self.detections[roof_type][img_name][angle])
+
+            else:
+                #return detections for some angle
+                for roof_type in self.roof_types:
+                    detections.extend(self.detections[roof_type][img_name][angle])
+
+        else:   #specific roof_type
+            if angle is None:
+                #return detections for this roof type
+                for angle in self.detections[roof_type][img_name].keys():
+                    detections.extend(self.detections[roof_type][img_name][angle])
+            else:
+                #turn detections for this roof type AND angle
+                detections = self.detections[roof_type][img_name][angle]
+
+        return detections
 
 
 class Evaluation(object):
@@ -123,11 +173,11 @@ class Evaluation(object):
         '''
         voc_scores = list()
         #start with all detections as false pos; as we find matches, we increase the true_pos, decrese the false_pos numbers
-        false_pos = {'metal': len(self.detections.get_img_detections_specific_type('metal', img_name)), 
+        false_pos = {'metal': len(self.detections.get_detections(roof_type='metal', img_name=img_name)), 
                             'thatch': len(self.detections.get_img_detections_specific_type('thatch', img_name))}
         true_pos = defaultdict(int) 
-        detections = {'metal': self.detections.get_img_detections_specific_type('metal', img_name),
-                        'thatch': self.detections.get_img_detections_specific_type('thatch', img_name)}
+        detections = {'metal': self.detections.get_detections(roof_type='metal', img_name=img_name),
+                        'thatch': self.detections.get_detections(roof_type='thatch', img_name=img_name)}
 
         for roof in self.roofs[img_name]:
             best_voc_score = -1
@@ -314,17 +364,17 @@ class Evaluation(object):
         cv2.imwrite(self.out_path+'_'+img_name, img)
 
 
-    def score_img_rectified(self, img_name, rotated_images): #rows=1200, cols=2000):
+    def score_img_rectified(self, img_name): 
         '''Find best overlap between each roof in an img and the detections,
         according the VOC score
         '''
         voc_scores = list()
         #start with all detections as false pos; as we find matches, we increase the true_pos, decrese the false_pos numbers
-        false_pos = {'metal': len(self.detections.get_img_detections_specific_type('metal', img_name)), 
-                            'thatch': len(self.detections.get_img_detections_specific_type('thatch', img_name))}
+        false_pos = {'metal': len(self.detections.get_detections('metal', img_name)), 
+                            'thatch': len(self.detections.get_detections('thatch', img_name))}
         true_pos = defaultdict(int) 
-        detections = {'metal': self.detections.get_img_detections_specific_type('metal', img_name),
-                        'thatch': self.detections.get_img_detections_specific_type('thatch', img_name)}
+        detections = {'metal': self.detections.get_detections('metal', img_name),
+                        'thatch': self.detections.get_detections('thatch', img_name)}
 
                     
         for roof in self.correct_roofs[img_name]:
@@ -339,26 +389,26 @@ class Evaluation(object):
                 continue
 
             for angle in detections[roof_type].keys():
-                img_rotated = rotated_images[angle]
-                angled_roof = list()
-                for point in roof:
-                    #TODO need to pass in the size of the rotated image to do a proper rotation
-                    angled = utils.rotate_point(point, img_rotated, angle)
-                    angled_roof.append(angled)
+                detections = get_detections(self, img_name=img_name, angle=angle, roof_type=roof_type)
+                #img_rotated = rotated_images[angle]
 
                 try:
                     x_true, y_true, w_true, h_true = -1, -1, -1, -1                
-                    for (x,y,w,h) in detections[roof_type][angle]:                           #for each patch found
-                        matching_mask = np.zeros(img_rotated.shape[:2], dtype='uint8')
-                        cv2.fillConvexPoly(matching_mask, np.array(angled_roof), 1)
-                        roof_area = Evaluation.sum_mask(matching_mask)
+                    for detection in detections[roof_type][angle]:                           #for each patch found
+                        #binary mask of the original image, non-rotated
+                        matching_mask = np.zeros((1200, 2000), dtype='uint8')
 
-                        matching_mask[y:y+h, x:x+w] = 0        #detection
+                        #mark the rectified roof with 1's
+                        cv2.fillConvexPoly(matching_mask, np.array(roof), 1)
+                        roof_area = Evaluation.sum_mask(matching_mask)
+                        #subtract the detection
+                        cv2.fillConvexPoly(matching_mask, np.array(detection), 0)
+
+                        #calculate how much of the roof was detected
                         roof_missed = Evaluation.sum_mask(matching_mask)
-                        
                         intersection_area = roof_area-roof_missed
                         detection_area = w*h
-                        union_area = (roof_area+(detection_area) )-intersection_area
+                        union_area = (roof_area + (detection_area)) - intersection_area
                         voc_score = float(intersection_area)/union_area
 
                         if voc_score > best_voc_score:
