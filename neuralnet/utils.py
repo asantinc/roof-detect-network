@@ -281,22 +281,22 @@ def rotate_point(pos, img_rot, theta, dst_img_rows=1200, dst_img_cols=2000):
     return int(p_x), int(p_y)
 
 
-def rotate_point_no_translate(pos, img_rot, theta, dst_img_rows=1200, dst_img_cols=2000):
-    '''
-    Pos: point to be rotated, in (x,y) order
-    img_rot: image around whose center the point should be rotated
-    dst_img_rows, dst_img_cols: the shape of the image to which we are sendind the point
-    '''
-    theta = math.radians(theta)
+# def rotate_point_no_translate(pos, img_rot, theta, dst_img_rows=1200, dst_img_cols=2000):
+#     '''
+#     Pos: point to be rotated, in (x,y) order
+#     img_rot: image around whose center the point should be rotated
+#     dst_img_rows, dst_img_cols: the shape of the image to which we are sendind the point
+#     '''
+#     theta = math.radians(theta)
 
-    #translation: how much the image has moved
-    oy, ox = tuple(np.array(img_rot.shape[:2])/2)
-    px, py = pos
+#     #translation: how much the image has moved
+#     oy, ox = tuple(np.array(img_rot.shape[:2])/2)
+#     px, py = pos
 
-    #rotate the point
-    p_x = math.cos(theta) * (px-ox) - math.sin(theta) * (py-oy) + ox
-    p_y = math.sin(theta) * (px-ox) + math.cos(theta) * (py-oy) + oy
-    return int(p_y), int(p_x)
+#     #rotate the point
+#     p_x = math.cos(theta) * (px-ox) - math.sin(theta) * (py-oy) + ox
+#     p_y = math.sin(theta) * (px-ox) + math.cos(theta) * (py-oy) + oy
+#     return int(p_y), int(p_x)
 
 
 def rotate_image(image, angle):
@@ -509,6 +509,7 @@ def four_point_transform(image, pts, rectify=False):
 	# return the warped image
 	return warped
 
+
 def convert_rect_to_polygon(rect):
     x, y, w, h = rect
     p1, p2, p3, p4 = (x, y), (x, y+h), (x+w, y), (x+w, y+h)
@@ -524,30 +525,25 @@ def rotate_polygon(polygon, img, angle):
     rot_polygon = np.empty((polygon.shape))
     for i, pnt in enumerate(polygon):
         rot_polygon[i, :] = rotate_point(pnt, img, angle)
-        print pnt
-        print rot_polygon[i, :]
-    #pdb.set_trace()
-    #reordered_rot_polygon = order_points(rot_polygon) 
-    reordered_rot_polygon=rot_polygon
+    #reordered_rot_polygon = order_points(rot_polygon)--> this messes points up
+    reordered_rot_polygon = rot_polygon
     return reordered_rot_polygon
 
 
-def draw_polygon(polygon, img):
+def draw_polygon(polygon, img, fill=False, color=(0,0,255)):
     w, h = img.shape[:2]
-    #polygon = order_points(polygon)
+    #polygon = order_points(polygon) --> this was causing trouble
     if polygon.shape[0] == 4:
         for pnt in polygon:
             x, y = pnt
             if (x<0) or (x>w) or (y<0) or (y>h):
-                #pdb.set_trace()
                 print 'Polygon falls off the image'
-                print polygon
-                #return
-        #pdb.set_trace()
+
         polygon = np.array(polygon, dtype='int32')
-        cv2.polylines(img, [polygon], 1, (0,0,255), 5)
-        #pdb.set_trace()
-        #cv2.fillConvexPoly(img, polygon, 2)
+        if fill:
+            cv2.fillConvexPoly(img, polygon, 0)
+        else:
+            cv2.polylines(img, [polygon], 1, color, 5)
     else:
         raise ValueError('draw_polygon was given a non-square polygon')
 
@@ -555,18 +551,6 @@ def draw_polygon(polygon, img):
 
 if __name__ == '__main__':
     img = cv2.imread('../data/inhabited/0001.jpg')
-
-    # angle = 90
-    # rimg = rotate_image_RGB(img, angle)
-    # pnt_1 = (700,900)
-    # cv2.line(rimg, pnt_1, (pnt_1[0]+1,pnt_1[1]+1), (0,255,0), 10) 
-    # cv2.imwrite('../../delete/rotated_1.jpg', rimg)
-
-    # img_normal = cv2.imread('../data/inhabited/0001.jpg')
-    # px_1, py_1 = rotate_point(pnt_1, rimg, angle)
-    # cv2.line(img_normal, (px_1,py_1), (px_1+1,py_1+1), (0,0,255), 10) 
-    # cv2.imwrite('../../delete/rotated_2.jpg', img_normal)
-
 
     # RECTANGLE
     for angle in [45, 90, 135]:
@@ -579,29 +563,14 @@ if __name__ == '__main__':
                 rect_1 = (posx, posy, 50, 70)
                 #get polygon
                 polygon_1 = convert_rect_to_polygon(rect_1)
-                polygon_1 = np.array(polygon_1, dtype='int32')
-                cv2.polylines(rimg, [polygon_1], 1, (0,255,0), 5)
+
+                draw_polygon(polygon_1, rimg)
                 cv2.imwrite('../../delete/A_rotated_{0}_{1}_{2}_3.jpg'.format(angle, posx, posy), rimg)
 
                 img_normal = cv2.imread('../data/inhabited/0001.jpg')
                 polygon_2 = rotate_polygon(polygon_1, rimg, angle)
 
-                draw_polygon(polygon_2, img_normal)
+                draw_polygon(polygon_2, img_normal, fill=True)
                 cv2.imwrite('../../delete/A_rotated_{0}_{1}_{2}_4.jpg'.format(angle, posx, posy), img_normal)
-
-
-      #TEST: draw a rect with 
-
-    # polygon_1 = rotate_polygon(polygon, rimg, angle)
-    # polygon_1 = np.array(polygon_1, dtype='int32')
-    # print polygon_1
-    # cv2.polylines(img_normal, [polygon_1], 1, (0,0,0), 5)
-
-    # for point in polygon:
-    #   #rotate it
-    #   rot_point = rotate_point(point, rimg, angle)
-    #   cv2.line(img_normal, rot_point, (rot_point[0]+1,rot_point[1]+1), (0,0,255), 10) 
-    # cv2.imwrite('../../delete/rotated_test_FIXED.jpg', img_normal)
-
 
 
