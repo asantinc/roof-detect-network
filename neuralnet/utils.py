@@ -31,6 +31,7 @@ IN = 1  #input
 OUT = 2 #output
 
 VIOLA_ANGLES = [0, 45, 90, 135]
+VOC_threshold = 0.5 
 
 ###################################
 #VIOLA TRAINING
@@ -72,6 +73,9 @@ DEBUG = False
 STEP_SIZE = PATCH_H #used by detection pipeline
 
 
+########################################
+# PATH CONSTRUCTION
+########################################
 
 def time_stamped(fname=''):
     if fname != '':
@@ -93,6 +97,7 @@ def mkdir(out_folder_path=None, confirm=False):
         if overwrite == 'n':
             sys.exit(-1)
     print 'The following folder has been created: {0}'.format(out_folder_path)
+
 
 def check_append(path_being_constructed, addition):
     path_being_constructed.append(addition)
@@ -132,7 +137,7 @@ def get_path(in_or_out=None, out_folder_name=None, params=False, full_dataset=Fa
             if data_fold == TRAINING:
                 path.append('training/')
                 if neural:
-                    path.append('(neural/')
+                    path.append('neural/')
                 elif viola:
                     path.append('viola/')
                 else:
@@ -141,6 +146,8 @@ def get_path(in_or_out=None, out_folder_name=None, params=False, full_dataset=Fa
                 path.append('validation/')
             elif data_fold==TESTING:
                 path.append('testing/')
+            elif data_fold==SMALL_TEST:
+                path.append('small_test/')
             else:
                 raise ValueError
         elif in_or_out == OUT:
@@ -183,15 +190,9 @@ def print_debug(to_print, verbosity=1):
     if verbosity <= VERBOSITY:
         print str(to_print)
 
-
-def get_img_size(path):
-    for i, f_name in enumerate(os.listdir(path)):
-        img = cv2.imread(path+f_name)
-        print img.shape[0], img.shape[1]
-        
-        if i%20==0:
-            pdb.set_trace()
-
+########################################
+# Getting parameters 
+########################################
 
 def get_params_from_file(path):
     print 'Getting parameters from {0}'.format(path)
@@ -212,6 +213,10 @@ def get_params_from_file(path):
                 raise ValueError('Cannot process {0}'.format(path))
     return parameters
 
+ 
+########################
+# Image rotation
+########################
 
 def rotate(image, angle, center=None, scale=1.0):
     (h, w) = image.shape[:2]
@@ -226,8 +231,12 @@ def rotate(image, angle, center=None, scale=1.0):
     return rotated, M
 
 
+def sum_mask(array):
+    '''Sum all ones in a binary array
+    '''
+    return np.sum(np.sum(array, axis=0), axis=0)
 
-########################
+
 def rotate_image(image, angle):
   '''Rotate image "angle" degrees.
 
@@ -378,7 +387,7 @@ def rotate_image_RGB(image, angle):
 
 
 #######################
-# COVERSIONS
+# CONVERSIONS
 #######################
 
 def order_points(pts):
@@ -427,7 +436,7 @@ def convert_detections_to_polygons(detections):
 # Perspective transform
 #######################
 
-def four_point_transform(image, pts, rectify=False):
+def four_point_transform(image, pts):
 	# obtain a consistent order of the points and unpack them
 	# individually
 	rect = order_points(pts)
@@ -504,14 +513,29 @@ def rotate_polygon(polygon, img, angle):
     return reordered_rot_polygon
 
 
-def rotate_detection_polygons(detections, img, angle):
+def rotate_detection_polygons(detections, img, angle, dst_img_shape, remove_off_img=False):
     '''Rotate all detections that are already in the form of polygons
     for a given angle and an original image around whose center we rotate
     '''
     rotated_polygons = np.zeros((detections.shape[0], 4, 2))
-    for i, detection in enumerate(detections):
-        rotated_polygons[i, :] = rotate_polygon(detection, img, angle)
-    return rotated_polygons
+    accepted_number = 0
+    h, w = dst_img_shape
+
+    for detection in detections:
+        accept_polygon=True
+        rotated_pol = rotate_polygon(detection, img, angle)
+
+        #remove points that fall off the image
+        if remove_off_img == True:
+            for pnt in rotated_pol:
+                x, y = pnt
+                if (x<0) or (y<0) or (x>w) or (y>h):
+                    accept_polygon = False        
+                    continue
+        if accept_polygon:
+            rotated_polygons[accepted_number, :] = rotate_polygon(detection, img, angle)
+            accepted_number += 1
+    return rotated_polygons[:accepted_number,:] 
 
 
 ########################
