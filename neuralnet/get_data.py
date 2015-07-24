@@ -357,7 +357,7 @@ class DataLoader(object):
                             polygon_list.append(polygon)
 
         if coordinates_only:
-            return polygon_list
+            return np.array(polygon_list)
         else:
             #EXTRACT THE RECTIFIED ROOF PATCH FROM THE IMG, RETURN THE ROOF PATCHES
             assert img_path is not None

@@ -65,8 +65,9 @@ class ViolaDetector(object):
         for roof_type in ['metal', 'thatch']:
             for path in detector_names[roof_type]: 
                 if path.startswith('cascade'):
-                    start = '../viola_jones/rectified/' if '_rect_' in path else '../viola_jones/'
+                    start = '../viola_jones/cascades/' 
                     self.roof_detectors[roof_type].append(cv2.CascadeClassifier(start+path+'/cascade.xml'))
+                    assert self.roof_detectors[roof_type][-1].empty() == False
                 else:
                     self.roof_detectors[roof_type].append(cv2.CascadeClassifier('../viola_jones/cascade_'+path+'/cascade.xml'))
 
@@ -82,7 +83,6 @@ class ViolaDetector(object):
         open(self.out_folder+'DONE', 'w').close() 
 
 
-
     def detect_roofs(self, img_name):
         try:
             img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
@@ -95,48 +95,67 @@ class ViolaDetector(object):
             for roof_type, detectors in self.roof_detectors.iteritems():
                 for i, detector in enumerate(detectors):
                     for angle in self.angles:
-
                         print 'Detecting with detector: '+str(i)
                         print 'ANGLE '+str(angle)
+
                         with Timer() as t: 
-                            if angle > 0:
-                                rotated_image = utils.rotate_image(gray, angle)
-                            else:
-                                rotated_image = gray
-                            detections = [[500, 800, 100, 300],[400, 100, 100, 200]]
-                            #detections = detector.detectMultiScale(rotated_image, scaleFactor=self.scale, minNeighbors=self.min_neighbors )
-
+                            rotated_image = utils.rotate_image(gray, angle) if angle>0 else gray
+                            detections = self.detect_and_rectify(detector, rotated_image, angle) 
+                            if self.group is not None:
+                                pass
+                                #detections = self.group(detections)
                         print 'Time detection: {0}'.format(t.secs)
+
                         self.viola_detections.total_time += t.secs
-                        self.viola_detections.set_detections(eval_remove=self.evaluation, 
-                                            roof_type=roof_type, img_name=img_name, angle=angle, detection_list=detections, img=rotated_image)
+                        self.viola_detections.set_detections(roof_type=roof_type, img_name=img_name, 
+                                angle=angle, detection_list=detections, img=rotated_image)
 
-                        if DEBUG and angle>0:
-                            rgb_rotated = utils.rotate_image_RGB(img, angle)
-                            self.mark_save_current_rotation(img_name, rgb_rotated, detections, angle, out_folder='test')
-                            sys.exit(0)
+                        if DEBUG:
+                            rgb_to_write = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
+                            utils.draw_detections(detections, rgb_to_write)
+                            cv2.imwrite('{0}{1}_{2}.jpg'.format(self.out_folder, img_name[:-4], angle), rgb_to_write)
 
-                        #GROUPING
-                        # TODO: fix the grouping
-                        # with Timer() as t:
-                        #     if self.group == 'group_rectangles':
-                        #         raise ValueError('We need to consider the angles here also')
-                        #         detected_roofs[roof_type][angle], weights = cv2.groupRectangles(np.array(detected_roofs[roof_type]).tolist(), min_neighbors, eps)
-                        #     elif self.group ==  'group_bounding':
-                        #         raise ValueError('We need to consider the angles here also')
-                        #         detected_roofs[roof_type][angle] = self.evaluation.get_bounding_rects(img_name=img_name, rows=1200, 
-                        #                     cols=2000, detections=detected_roofs[roof_type]) 
-                        #     else:
-                        #         pass
 
-                self.viola_detections.total_time += t.secs
+    def detect_and_rectify(self, detector, image, angle):
+        #do the detection
+        detections = detector.detectMultiScale(image, scaleFactor=self.scale, minNeighbors=self.min_neighbors)
+        #convert to proper coordinate system
+        polygons = utils.convert_detections_to_polygons(detections)
+        if DEBUG:
+            pass
+            #we can save the detections in the rotated image here
+        #rotate back to original image coordinates
+        if angle > 0:
+            rectified_detections = utils.rotate_detection_polygons(polygons, image, angle)
+        else:
+            rectified_detections = polygons
+        return rectified_detections
+
+
+
+    def group_detections(self, detections):
+        pass
+        #GROUPING
+        # TODO: fix the grouping
+        # with Timer() as t:
+        #     if self.group == 'group_rectangles':
+        #         raise ValueError('We need to consider the angles here also')
+        #         detected_roofs[roof_type][angle], weights = cv2.groupRectangles(np.array(detected_roofs[roof_type]).tolist(), 
+        #                                                    min_neighbors, eps)
+        #     elif self.group ==  'group_bounding':
+        #         raise ValueError('We need to consider the angles here also')
+        #         detected_roofs[roof_type][angle] = self.evaluation.get_bounding_rects(img_name=img_name, rows=1200, 
+        #                     cols=2000, detections=detected_roofs[roof_type]) 
+        #     else:
+        #         pass
+
+        #self.viola_detections.total_time += t.secs
 
 
 
     def mark_save_current_rotation(self, img_name, img, detections, angle, out_folder=None):
         out_folder = self.out_folder if out_folder is None else out_folder
-        polygons = np.zeros((4, 4, 2))
-        pdb.set_trace()
+        polygons = np.zeros((len(detections), 4, 2))
         for i, d in enumerate(detections):
             polygons[i, :] = utils.convert_rect_to_polygon(d)
         img = self.evaluation.mark_roofs_on_img(img_name=img_name, img=img, roofs=polygons, color=(0,0,255))
@@ -156,4 +175,43 @@ class ViolaDetector(object):
 
 
 
+def main(detector_params=None, original_dataset=True, save_imgs=True, data_fold=utils.VALIDATION):
+    combo_f = None
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "c:n:")
+    except getopt.GetoptError:
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-c':
+            combo_f = arg
+        if opt == '-t':
+            training_set = True
+    assert combo_f is not None
+    detectors = get_detectors(combo_f)
+    detector_list = [detectors]
+    combo_f_names = [combo_f]
 
+    #for each detector, do detection in a different folder
+    for detector, combo_f_name in zip(detector_list, combo_f_names):
+        data_fold = data_fold if training_set == False else utils.TRAINING
+        in_path = utils.get_path(viola=True, in_or_out=utils.IN, data_fold=data_fold)
+
+        #name the output_folder
+        folder_name = ['combo'+combo_f_name]
+        for k, v in detector_params.iteritems():
+            folder_name.append('{0}{1}'.format(k,v))
+        folder_name = '_'.join(folder_name)
+
+        out_path = utils.get_path(out_folder_name=folder_name, viola=True, in_or_out=utils.OUT, data_fold=data_fold)
+
+        viola = ViolaDetector(out_path=out_path, in_path=in_path, folder_name = folder_name, save_imgs=save_imgs,  
+                                                detector_names=detector,  **detector_params)
+        viola.detect_roofs_in_img_folder()
+
+
+
+if __name__ == '__main__':
+    #group can be None, group_rectangles, group_bounding
+    detector_params = {'min_neighbors':3, 'scale':1.08,'group': None, 'rotate':True} 
+    main(detector_params=detector_params, save_imgs=True, data_fold=utils.VALIDATION, original_dataset=True)
+ 

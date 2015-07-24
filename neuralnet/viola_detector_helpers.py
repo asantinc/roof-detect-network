@@ -1,4 +1,3 @@
-from viola_detector import ViolaDetector 
 from reporting import Evaluation, Detections
 import getopt
 import sys
@@ -10,6 +9,7 @@ import utils
 
 
 def pickle_neural_true_false_positives():
+    #OLD needs to be deleted probably
     #Getting patches for neural network
     try:
         opts, args = getopt.getopt(sys.argv[1:], "c:")
@@ -145,46 +145,4 @@ def check_cascade_status():
 
 
 
-def testing_detectors(detector_params=None, original_dataset=True, all=False, save_imgs=True, data_fold=utils.VALIDATION):
-    '''Test either a single detector or all detectors in the combo files
-    '''
-    #TESTING ONLY ONE DETECTOR that must be passed in as an argument  
-    if all == False:
-        combo_f = None
-        try:
-            opts, args = getopt.getopt(sys.argv[1:], "c:")
-        except getopt.GetoptError:
-            sys.exit(2)
-        for opt, arg in opts:
-            if opt == '-c':
-                combo_f = arg
-        assert combo_f is not None
-        detectors = get_detectors(combo_f)
-        detector_list = [detectors]
-        combo_f_names = [combo_f]
-    else:#get all detector combos
-        detector_list, combo_f_names =  get_all_combos()
-
-    #for each detector, do detection in a different folder
-    for detector, combo_f_name in zip(detector_list, combo_f_names):
-        #define in and out paths
-        in_path = utils.get_path(viola=True, in_or_out=utils.IN, data_fold=data_fold)
-        #name the output_folder
-        folder_name = ['combo'+combo_f_name]
-        for k, v in detector_params.iteritems():
-            folder_name.append('{0}{1}'.format(k,v))
-        folder_name = '_'.join(folder_name)
-
-        out_path = utils.get_path(out_folder_name=folder_name, viola=True, in_or_out=utils.OUT, data_fold=data_fold)
-
-        viola = ViolaDetector(out_path=out_path, in_path=in_path, folder_name = folder_name, save_imgs=save_imgs,  
-                                                detector_names=detector,  **detector_params)
-        viola.detect_roofs_in_img_folder()
-
-
-
-if __name__ == '__main__':
-    #group can be None, group_rectangles, group_bounding
-    detector_params = {'min_neighbors':3, 'scale':1.08,'group': None, 'rotate':True} 
-    testing_detectors(detector_params=detector_params, save_imgs=True, data_fold=utils.VALIDATION, all=False, original_dataset=True)
-    
+   

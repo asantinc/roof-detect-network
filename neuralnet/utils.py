@@ -226,79 +226,8 @@ def rotate(image, angle, center=None, scale=1.0):
     return rotated, M
 
 
-def resize(image, width=None, height=None, inter=cv2.INTER_AREA):
-    # initialize the dimensions of the image to be resized and
-    # grab the image size
-    dim = None
-    (h, w) = image.shape[:2]
 
-    # if both the width and height are None, then return the
-    # original image
-    if width is None and height is None:
-        return image
-
-    # check to see if the width is None
-    if width is None:
-        # calculate the ratio of the height and construct the
-        # dimensions
-        r = height / float(h)
-        dim = (int(w * r), height)
-
-    # otherwise, the height is None
-    else:
-        # calculate the ratio of the width and construct the
-        # dimensions
-        r = width / float(w)
-        dim = (width, int(h * r))
-
-    # resize the image
-    resized = cv2.resize(image, dim, interpolation=inter)
-
-    # return the resized image
-    return resized
-
-
-def rotate_point(pos, img_rot, theta, dst_img_rows=1200, dst_img_cols=2000):
-    '''
-    Pos: point to be rotated, in (x, y) order
-    img_rot: image around whose center the point should be rotated
-    dst_img_rows, dst_img_cols: the shape of the image to which we are sendind the point
-    '''
-    warnings.warn('!!!! rotate_point assumes image is size 1200,2000, but this may not always be the case. You should pass in the size of the image')
-    theta = math.radians(theta)
-
-    #translation: how much the image has moved
-    oy, ox = tuple(np.array(img_rot.shape[:2])/2)
-    off_y, off_x = (oy-600), (ox-1000)
-
-    #reposition the point and the center: move it back 
-    oy, ox = 600, 1000
-    px, py = pos[0]-off_x, pos[1]-off_y
-
-    #rotate the point
-    p_x = math.cos(theta) * (px-ox) - math.sin(theta) * (py-oy) + ox
-    p_y = math.sin(theta) * (px-ox) + math.cos(theta) * (py-oy) + oy
-    return int(p_x), int(p_y)
-
-
-# def rotate_point_no_translate(pos, img_rot, theta, dst_img_rows=1200, dst_img_cols=2000):
-#     '''
-#     Pos: point to be rotated, in (x,y) order
-#     img_rot: image around whose center the point should be rotated
-#     dst_img_rows, dst_img_cols: the shape of the image to which we are sendind the point
-#     '''
-#     theta = math.radians(theta)
-
-#     #translation: how much the image has moved
-#     oy, ox = tuple(np.array(img_rot.shape[:2])/2)
-#     px, py = pos
-
-#     #rotate the point
-#     p_x = math.cos(theta) * (px-ox) - math.sin(theta) * (py-oy) + ox
-#     p_y = math.sin(theta) * (px-ox) + math.cos(theta) * (py-oy) + oy
-#     return int(p_y), int(p_x)
-
-
+########################
 def rotate_image(image, angle):
   '''Rotate image "angle" degrees.
 
@@ -448,6 +377,10 @@ def rotate_image_RGB(image, angle):
   return cropped
 
 
+#######################
+# COVERSIONS
+#######################
+
 def order_points(pts):
 	# reorder so that the first entry in the list is the top-left,
 	# the second entry is the top-right, the third is the
@@ -470,6 +403,29 @@ def order_points(pts):
 	# return the ordered coordinates
 	return rect
 
+
+def convert_rect_to_polygon(rect):
+    '''Convert rect in the form (x, y, w, h) to an array with 4 (x, y) coordinates 
+    '''
+    x, y, w, h = rect
+    p1, p2, p3, p4 = (x, y), (x, y+h), (x+w, y), (x+w, y+h)
+    polygon = order_points(np.array([p1, p2, p3, p4]))
+    return polygon
+
+
+def convert_detections_to_polygons(detections):
+    '''Covert (x,y,w,h) to (p1, p2, p3, p4) where each point is in the order (x, y)
+    '''
+    polygons = np.zeros((detections.shape[0], 4, 2))
+    for i, d in enumerate(detections):
+        polygons[i, :] = convert_rect_to_polygon(d)
+    return polygons
+
+
+
+########################
+# Perspective transform
+#######################
 
 def four_point_transform(image, pts, rectify=False):
 	# obtain a consistent order of the points and unpack them
@@ -509,17 +465,35 @@ def four_point_transform(image, pts, rectify=False):
 	# return the warped image
 	return warped
 
+#########################
+# ROTATIONS
+#########################
 
-def convert_rect_to_polygon(rect):
-    x, y, w, h = rect
-    p1, p2, p3, p4 = (x, y), (x, y+h), (x+w, y), (x+w, y+h)
-    polygon = order_points(np.array([p1, p2, p3, p4]))
-    return polygon
+def rotate_point(pos, img_rot, theta, dst_img_rows=1200, dst_img_cols=2000):
+    '''
+    Pos: point to be rotated, in (x, y) order
+    img_rot: image around whose center the point should be rotated
+    dst_img_rows, dst_img_cols: the shape of the image to which we are sendind the point
+    '''
+    warnings.warn('!!!! rotate_point assumes image is size 1200,2000, but this may not always be the case. You should pass in the size of the image')
+    theta = math.radians(theta)
+
+    #translation: how much the image has moved
+    oy, ox = tuple(np.array(img_rot.shape[:2])/2)
+    off_y, off_x = (oy-600), (ox-1000)
+
+    #reposition the point and the center: move it back 
+    oy, ox = 600, 1000
+    px, py = pos[0]-off_x, pos[1]-off_y
+
+    #rotate the point
+    p_x = math.cos(theta) * (px-ox) - math.sin(theta) * (py-oy) + ox
+    p_y = math.sin(theta) * (px-ox) + math.cos(theta) * (py-oy) + oy
+    return int(p_x), int(p_y)
 
 
 def rotate_polygon(polygon, img, angle):
-    '''
-    Rotate each of the points of a polygon
+    '''Rotate each of the points of a polygon
     img: the image center around which we will be rotating
     '''
     rot_polygon = np.empty((polygon.shape))
@@ -530,22 +504,44 @@ def rotate_polygon(polygon, img, angle):
     return reordered_rot_polygon
 
 
+def rotate_detection_polygons(detections, img, angle):
+    '''Rotate all detections that are already in the form of polygons
+    for a given angle and an original image around whose center we rotate
+    '''
+    rotated_polygons = np.zeros((detections.shape[0], 4, 2))
+    for i, detection in enumerate(detections):
+        rotated_polygons[i, :] = rotate_polygon(detection, img, angle)
+    return rotated_polygons
+
+
+########################
+# DRAWING
+########################
+
 def draw_polygon(polygon, img, fill=False, color=(0,0,255)):
     w, h = img.shape[:2]
     #polygon = order_points(polygon) --> this was causing trouble
     if polygon.shape[0] == 4:
+        '''
         for pnt in polygon:
             x, y = pnt
             if (x<0) or (x>w) or (y<0) or (y>h):
                 print 'Polygon falls off the image'
-
+        '''
         polygon = np.array(polygon, dtype='int32')
         if fill:
-            cv2.fillConvexPoly(img, polygon, 0)
+            #color in this case must be an integer, not a tuple
+            cv2.fillConvexPoly(img, polygon, color)
         else:
             cv2.polylines(img, [polygon], 1, color, 5)
     else:
         raise ValueError('draw_polygon was given a non-square polygon')
+
+
+
+def draw_detections(polygon_list, img, fill=False, color=(0, 0, 255)):
+    for polygon in polygon_list:
+        draw_polygon(polygon, img, fill=fill, color=color )
 
 
 
