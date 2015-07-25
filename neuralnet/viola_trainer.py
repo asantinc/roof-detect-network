@@ -13,9 +13,8 @@ import cv
 from scipy import misc, ndimage #load images
 
 import get_data
-from get_data import DataAugmentation
 import experiment_settings as settings
-
+from timer import Timer
 
 class ViolaTrainer(object):
     @staticmethod
@@ -23,7 +22,7 @@ class ViolaTrainer(object):
         cascades = list()
         roof_type = roof_type
         if vec_files is None:    
-            vec_files = get_data.DataLoader().get_img_names_from_path(path=settings.VEC_PATH, extension='.vec') 
+            vec_files = get_data.DataLoader().get_img_names_from_path(path=utils.VEC_PATH, extension='.vec') 
         for vec_file in vec_files:
             vec_type = vec_file[:5] if roof_type == 'metal' else vec_file[:6]
             if (roof_type is None or vec_type  == roof_type):
@@ -64,7 +63,7 @@ class ViolaTrainer(object):
                     subprocess.check_call(train_cmd, shell=True)
                 except Exception as e:
                     print e
-        return cascades
+        return cascade_folder 
 
 
 def main(max_false_alarm=0.2, feature_type=None):
@@ -89,9 +88,10 @@ def main(max_false_alarm=0.2, feature_type=None):
         t = raw_input('Type of roof: ' )
         roof_type = 'metal' if t=='m' else 'thatch'
     vecs = [v]
-    ViolaTrainer.train_cascade(vec_files=vecs, max_false_alarm_rate=max_false_alarm, feature_type=feature_type, roof_type=roof_type)
-
+    with Timer() as t:
+        folder_path = ViolaTrainer.train_cascade(vec_files=vecs, max_false_alarm_rate=max_false_alarm, feature_type=feature_type, roof_type=roof_type)
+    open('{0}training_secs_{1}'.format(folder_path, t.secs)).close()
 
 
 if __name__ == '__main__':
-    main(max_false_alarm=0.4, feature_type='haar')
+    main(max_false_alarm=0.4, feature_type='LBP')

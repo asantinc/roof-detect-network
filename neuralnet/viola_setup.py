@@ -15,11 +15,14 @@ from get_data import DataLoader
 from augmentation import DataAugmentation
 import utils
 
+'''
+ViolaDataSetup is used to:
+    - setup the training patches for viola
+    - produce the corresponding .dat and .vec files
+The .vec files are needed to train a cascade from the ViolaTrainer class
+'''
 
 class ViolaDataSetup(object):
-#######################################################
-##### FINAL METHOD USED TO PRODUCE PATCHES FOR VIOLA
-#######################################################
     @staticmethod
     def setup_negative_samples():
         '''Write file with info about location of negative examples
@@ -153,17 +156,20 @@ class ViolaDataSetup(object):
 ## FINAL CODE USED BELOW
 ########################################
 
-def main():
-    ViolaDataSetup.setup_negative_samples() 
-    ViolaDataSetup.setup_augmented_patches()
-    thatch_dat, metal_dat = ViolaDataSetup.dat_file()
+def main(data_reset=False):
+    thatch_dat = 'thatch.dat'
+    metal_dat = 'metal.dat'
 
-    ViolaDataSetup.vec_file_single(dat_file=thatch_dat)
+    if data_reset:
+        ViolaDataSetup.setup_negative_samples() 
+        ViolaDataSetup.setup_augmented_patches()
+        thatch_dat, metal_dat = ViolaDataSetup.dat_file()
+
     ViolaDataSetup.vec_file_single(dat_file=metal_dat)
-
+    ViolaDataSetup.vec_file_single(dat_file=thatch_dat)
 
 
 if __name__ == '__main__':
-    main()
+    main(data_reset=False)
 
 

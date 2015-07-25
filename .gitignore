@@ -15,4 +15,5 @@ viola_jones/data/
 *.lprof
 *.*.swn
 *.*swo
-
+viola_jones/old/
+viola_jones/data/*
