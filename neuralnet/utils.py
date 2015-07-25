@@ -542,30 +542,35 @@ def rotate_detection_polygons(detections, img, angle, dst_img_shape, remove_off_
 # DRAWING
 ########################
 
-def draw_polygon(polygon, img, fill=False, color=(0,0,255)):
+def draw_polygon(polygon, img, fill=False, color=(0,0,255), thickness=2, number=None):
+    '''
+    Draw a filled or unfilled polygon
+    If number is provided, we number the roof
+    '''
     w, h = img.shape[:2]
     #polygon = order_points(polygon) --> this was causing trouble
     if polygon.shape[0] == 4:
-        '''
-        for pnt in polygon:
-            x, y = pnt
-            if (x<0) or (x>w) or (y<0) or (y>h):
-                print 'Polygon falls off the image'
-        '''
         polygon = np.array(polygon, dtype='int32')
         if fill:
             #color in this case must be an integer, not a tuple
             cv2.fillConvexPoly(img, polygon, color)
         else:
-            cv2.polylines(img, [polygon], 1, color, 5)
+            cv2.polylines(img, [polygon], 1, color, thickness)
+
+        if number is not None:
+            top_left, _,_,_ = order_points(polygon)
+            x, y = top_left
+            text =  'roof {0}'.format(number)
+            cv2.putText(img, text, (int(x), int(y-10)), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2) 
     else:
         raise ValueError('draw_polygon was given a non-square polygon')
 
 
 
-def draw_detections(polygon_list, img, fill=False, color=(0, 0, 255)):
-    for polygon in polygon_list:
-        draw_polygon(polygon, img, fill=fill, color=color )
+def draw_detections(polygon_list, img, fill=False, color=(0, 0, 255), number=False, thickness=2):
+    for i, polygon in enumerate(polygon_list):
+        num = i if number else None
+        draw_polygon(polygon, img, fill=fill, color=color, number=num, thickness=thickness)
 
 
 

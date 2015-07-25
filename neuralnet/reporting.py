@@ -97,10 +97,13 @@ class Detections(object):
 
 
 class Evaluation(object):
-    def __init__(self, method=None, folder_name=None, save_imgs=True, out_path=None, detections=None, in_path=None, detector_names=None):
+    def __init__(self, output_patches=False,method=None, folder_name=None, save_imgs=True, out_path=None, detections=None, in_path=None, detector_names=None):
         self.save_imgs = save_imgs
-
+          
         self.VOC_threshold = utils.VOC_threshold #threshold to assign a detection as a true positive
+        self.voc_output_patch_threshold = 0.10
+        self.output_patches = output_patches
+
         self.detections = detections    #detection class
 
         self.in_path = in_path          #the path from which the images are taken
@@ -168,18 +171,20 @@ class Evaluation(object):
 
             for d, detection in enumerate(detections[roof_type]):                           #for each patch found
                 voc_score = self.get_VOC_score(roof=roof, detection=detection)
+                if (voc_score > self.VOC_threshold) and (voc_score > best_voc_score):#this may be a true pos, if there's not other better detection
+                    best_voc_score = voc_score
+                    best_detection = d 
 
-                if (voc_score > self.VOC_threshold):
-                    bad_detection_logical[roof_type][d] = 0 #we already know that this wasn't a bad detection, since we passed the threshold
+                if self.output_patches:
+                    if (voc_score > self.voc_output_patch_threshold):
+                        bad_detection_logical[roof_type][d] = 0 #we already know that this wasn't a bad detection, since we passed the threshold
 
-                    if (voc_score > best_voc_score):#this may be a true pos, if there's not other better detection
-                        best_voc_score = voc_score
-                        best_detection = d 
             false_pos_logical[roof_type][best_detection] = 0 #this detection is not a false positive, its true positive
 
         self.update_scores(img_name, detections, false_pos_logical, bad_detection_logical)
         self.save_images(img_name)
 
+       
 
     def update_scores(self, img_name, detections, false_pos_logical, bad_detection_logical):
         for roof_type in ['thatch', 'metal']:

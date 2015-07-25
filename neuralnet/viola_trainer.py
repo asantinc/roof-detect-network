@@ -67,7 +67,7 @@ class ViolaTrainer(object):
         return cascades
 
 
-def train_cascade(max_false_alarm=0.2, feature_type=None):
+def main(max_false_alarm=0.2, feature_type=None):
     #TRAINING CASCADE
     assert feature_type is not None
     no_details = True
@@ -94,4 +94,4 @@ def train_cascade(max_false_alarm=0.2, feature_type=None):
 
 
 if __name__ == '__main__':
-    train_cascade(max_false_alarm=0.4, feature_type='haar')
+    main(max_false_alarm=0.4, feature_type='haar')
