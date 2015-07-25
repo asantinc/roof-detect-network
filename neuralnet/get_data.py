@@ -55,8 +55,10 @@ class DataLoader(object):
 
         patches = list()
         for i, polygon in enumerate(polygon_list):
+            print polygon
             patches.append(utils.four_point_transform(img, np.array(polygon, dtype = "float32")))
-        
+            print polygon
+            pdb.set_trace()
         return patches
 
 
@@ -202,9 +204,8 @@ class DataLoader(object):
 
 
 if __name__ == '__main__':
-    pass
-
-
+    pass    
+            
 
 
 

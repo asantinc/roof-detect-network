@@ -391,6 +391,35 @@ def rotate_image_RGB(image, angle):
 # CONVERSIONS
 #######################
 
+def check_proper_rect(rect):
+  ''' Checks that none of the points of a rectangle are equal to each other
+  '''
+  if (rect[0] == rect[1]) or (rect[0] == rect[2]) or (rect[0] == rect[3])
+      (rect[1] == rect[2]) or (rect[1] == rect[3]) or (rect[2] == rect[3]):
+      return False
+  else:
+      return True
+
+def recalculate_rect(pts):
+  # If reorder pnts has failed...
+  # we try to reorder based on which are the min_x and min_y coordinates
+  rect = np.zeros((4, 2), dtype = "float32")
+
+  y_coords = pts[:, 1]
+  x_coords = pts[:, 1]
+
+  rect[0] = pts[np.argmin(y_coords)]
+  rect[2] = pts[np.argmax(y_coords)]
+  rect[1] = pts[np.argmax(x_coords)]
+  rect[3] = pts[np.argmin(x_coords)]
+
+  if check_proper(rect) == False:
+    raise ValueError("The rectangle could not be ordered correctly {0}".format(rect))
+
+  print "Rect was fixed"
+  return rect
+
+
 def order_points(pts):
 	# reorder so that the first entry in the list is the top-left,
 	# the second entry is the top-right, the third is the
@@ -411,6 +440,10 @@ def order_points(pts):
 	rect[3] = pts[np.argmax(diff)]
  
 	# return the ordered coordinates
+  if check_proper(rect) == False:
+    print 'Trying to fix rect'
+    print rect
+    rect = recalculate_rect(pts)
 	return rect
 
 
@@ -576,27 +609,5 @@ def draw_detections(polygon_list, img, fill=False, color=(0, 0, 255), number=Fal
 
 
 if __name__ == '__main__':
-    img = cv2.imread('../data/inhabited/0001.jpg')
-
-    # RECTANGLE
-    for angle in [45, 90, 135]:
-    #for angle in  [45]:
-        for posx in [100, 200, 500, 700, 1000, 1300, 1800]:
-        #for posx in [500]:
-            for posy in [100, 200, 500, 700, 1000, 1200]:
-            #for posy in [1200]:
-                rimg = rotate_image_RGB(img, angle)
-                rect_1 = (posx, posy, 50, 70)
-                #get polygon
-                polygon_1 = convert_rect_to_polygon(rect_1)
-
-                draw_polygon(polygon_1, rimg)
-                cv2.imwrite('../../delete/A_rotated_{0}_{1}_{2}_3.jpg'.format(angle, posx, posy), rimg)
-
-                img_normal = cv2.imread('../data/inhabited/0001.jpg')
-                polygon_2 = rotate_polygon(polygon_1, rimg, angle)
-
-                draw_polygon(polygon_2, img_normal, fill=True)
-                cv2.imwrite('../../delete/A_rotated_{0}_{1}_{2}_4.jpg'.format(angle, posx, posy), img_normal)
 
 
