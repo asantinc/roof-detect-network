@@ -394,8 +394,12 @@ def rotate_image_RGB(image, angle):
 def check_proper_rect(rect):
   ''' Checks that none of the points of a rectangle are equal to each other
   '''
-  if (rect[0] == rect[1]) or (rect[0] == rect[2]) or (rect[0] == rect[3])
-      (rect[1] == rect[2]) or (rect[1] == rect[3]) or (rect[2] == rect[3]):
+  if (((rect[0][0] == rect[1][0]) and (rect[0][1] == rect[1][1])) 
+          or ((rect[0][0] == rect[2][0]) and (rect[0][1] == rect[2][1]) ) 
+          or ((rect[0][0] == rect[3][0]) and (rect[0][1] == rect[3][1]))
+          or ((rect[1][0] == rect[2][0]) and (rect[1][1] == rect[2][1])) 
+        or ((rect[1][0] == rect[3][0]) and (rect[1][1] == rect[3][1]))
+        or ((rect[2][0] == rect[3][0]) and (rect[2][1] == rect[3][1])) ):
       return False
   else:
       return True
@@ -406,14 +410,14 @@ def recalculate_rect(pts):
   rect = np.zeros((4, 2), dtype = "float32")
 
   y_coords = pts[:, 1]
-  x_coords = pts[:, 1]
+  x_coords = pts[:, 0]
 
   rect[0] = pts[np.argmin(y_coords)]
   rect[2] = pts[np.argmax(y_coords)]
   rect[1] = pts[np.argmax(x_coords)]
   rect[3] = pts[np.argmin(x_coords)]
 
-  if check_proper(rect) == False:
+  if check_proper_rect(rect) == False:
     raise ValueError("The rectangle could not be ordered correctly {0}".format(rect))
 
   print "Rect was fixed"
@@ -440,10 +444,11 @@ def order_points(pts):
 	rect[3] = pts[np.argmax(diff)]
  
 	# return the ordered coordinates
-  if check_proper(rect) == False:
-    print 'Trying to fix rect'
-    print rect
-    rect = recalculate_rect(pts)
+        if check_proper_rect(rect) == False:
+            print 'Trying to fix rect'
+            print pts
+            print rect
+            rect = recalculate_rect(pts)
 	return rect
 
 
@@ -475,7 +480,6 @@ def four_point_transform(image, pts):
 	# individually
 	rect = order_points(pts)
 	(tl, tr, br, bl) = rect
- 
 	# compute the width of the new image, which will be the
 	# maximum distance between bottom-right and bottom-left
 	# x-coordiates or the top-right and top-left x-coordinates
@@ -609,5 +613,5 @@ def draw_detections(polygon_list, img, fill=False, color=(0, 0, 255), number=Fal
 
 
 if __name__ == '__main__':
-
+    pass
 

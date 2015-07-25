@@ -6,7 +6,7 @@ import pdb
 import cv2
 import pickle
 
-from get_data import Roof, DataLoader #for get_roofs
+from get_data import DataLoader #for get_roofs
 import utils
 
 
@@ -110,18 +110,14 @@ class Evaluation(object):
         self.img_names = [f for f in listdir(self.in_path) if f.endswith('.jpg')]
         self.roof_types = ['metal', 'thatch'] 
 
-        self.roofs = dict()
-        for img_name in self.img_names:
-            self.roofs[img_name] = DataLoader().get_roofs(self.in_path+img_name[:-3]+'xml', img_name)
-
         self.correct_roofs = dict()
-        self.correct_roofs_angled = dict()
+        for roof_type in ['metal', 'thatch']:
+            self.correct_roofs[roof_type] = dict()
         for img_name in self.img_names:
-            self.correct_roofs[img_name] = DataLoader().get_roof_patches_from_rectified_dataset(coordinates_only=True, 
-                                                                                                xml_name=img_name[:-3]+'xml')
-        #TODO: the data loader only returns metal roofs
-            self.detections.update_roof_num(self.correct_roofs[img_name], 'metal')
-            self.detections.update_roof_num([], 'thatch')
+            for roof_type in ['metal', 'thatch']:
+                self.correct_roofs[roof_type][img_name] = DataLoader.get_polygons(roof_type=roof_type, 
+                                                            xml_name=img_name[:-3]+'xml' , xml_path=self.in_path)
+                self.detections.update_roof_num(self.correct_roofs[roof_type][img_name], roof_type)
 
         self.out_path = out_path
         if detector_names is not None:
@@ -155,31 +151,31 @@ class Evaluation(object):
         according the VOC score
         '''
         #start with all detections as false pos; as we find matches, we increase the true_pos, decrese the false_pos numbers
-        detections = {'metal': self.detections.get_detections(roof_type='metal', img_name=img_name),
-                        'thatch': self.detections.get_detections(roof_type='thatch', img_name=img_name)}
+        detections = dict() 
         false_pos_logical = dict()
         bad_detection_logical = dict()
-        for roof_type in ['thatch', 'metal']:
+            
+        for roof_type in ['metal', 'thatch']:
+            detections[roof_type] = self.detections.get_detections(roof_type=roof_type, img_name=img_name)
             false_pos_logical[roof_type] = np.ones(len(detections[roof_type]), dtype=bool)
             bad_detection_logical[roof_type] = np.ones(len(detections[roof_type]), dtype=bool)
 
-        for roof in self.correct_roofs[img_name]:
-            #TODO: when we have thatch roofs, this should also depend on thatch
-            roof_type = 'metal'
-            best_voc_score = -1 
-            best_detection = -1 
+            for roof in self.correct_roofs[roof_type][img_name]:
+                best_voc_score = -1 
+                best_detection = -1 
 
-            for d, detection in enumerate(detections[roof_type]):                           #for each patch found
-                voc_score = self.get_VOC_score(roof=roof, detection=detection)
-                if (voc_score > self.VOC_threshold) and (voc_score > best_voc_score):#this may be a true pos, if there's not other better detection
-                    best_voc_score = voc_score
-                    best_detection = d 
+                for d, detection in enumerate(detections[roof_type]):                           #for each patch found
+                    voc_score = self.get_VOC_score(roof=roof, detection=detection)
+                    if (voc_score > self.VOC_threshold) and (voc_score > best_voc_score):#this may be a true pos
+                        best_voc_score = voc_score
+                        best_detection = d 
 
-                if self.output_patches:
-                    if (voc_score > self.voc_output_patch_threshold):
-                        bad_detection_logical[roof_type][d] = 0 #we already know that this wasn't a bad detection, since we passed the threshold
+                    if self.output_patches:
+                        if (voc_score > self.voc_output_patch_threshold):
+                            bad_detection_logical[roof_type][d] = 0 #we already know that this wasn't a bad detection
 
-            false_pos_logical[roof_type][best_detection] = 0 #this detection is not a false positive, its true positive
+                if best_detection != -1:
+                    false_pos_logical[roof_type][best_detection] = 0 #this detection is not a false positive
 
         self.update_scores(img_name, detections, false_pos_logical, bad_detection_logical)
         self.save_images(img_name)
@@ -199,6 +195,9 @@ class Evaluation(object):
             self.detections.update_bad_detections(bad_detections=bad_d, roof_type=roof_type, img_name=img_name) 
             good_d = detects[np.invert(bad_detection_logical[roof_type])]
             self.detections.update_good_detections(good_detections=good_d, roof_type=roof_type, img_name=img_name) 
+
+            print 'False pos: {0}'.format(len(false_d))
+            print 'True pos: {0}'.format(len(pos_d))
 
 
     def get_VOC_score(self, rows=1200, cols=2000, roof=None, detection=None):
@@ -271,7 +270,7 @@ class Evaluation(object):
             sys.exit(-1)
         for roof_type in ['metal', 'thatch']:
             utils.draw_detections(self.detections.false_positives[roof_type][img_name], img, color=(0, 0, 255))
-            utils.draw_detections(self.correct_roofs[img_name], img, color=(0, 0, 0))
+            utils.draw_detections(self.correct_roofs[roof_type][img_name], img, color=(0, 0, 0))
             utils.draw_detections(self.detections.true_positives[roof_type][img_name], img, color=(0, 255, 0))
 
         cv2.imwrite(self.out_path+img_name[:-4]+'_TP_FP_.jpg', img)

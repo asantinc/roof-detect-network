@@ -13,8 +13,6 @@ import cv2
 import cv
 from scipy import misc, ndimage #load images
 
-import get_data
-from get_data import Roof
 import utils
 from timer import Timer
 
@@ -192,8 +190,7 @@ class ViolaDetector(object):
                 bad_d = self.viola_detections.bad_detections[roof_type][img_name]
                 for path, detections in zip([path_true, path_false], [good_d, bad_d]):
                     img_debug = np.copy(img) #this is where we write the detections we're extraction. One image per roof type
-                    #TODO: correct roofs should also be indexed by roof_type
-                    utils.draw_detections(self.evaluation.correct_roofs[img_name], img_debug, color=(0, 0, 0), thickness=2)
+                    utils.draw_detections(self.evaluation.correct_roofs[roof_type][img_name], img_debug, color=(0, 0, 0), thickness=2)
 
                     for i, detection in enumerate(detections):
                         #extract the patch, rotate it to a horizontal orientation, save it
@@ -222,7 +219,7 @@ def main(detector_params=None, original_dataset=True, save_imgs=True, data_fold=
             combo_f_name = arg
 
     assert combo_f_name is not None
-    detector = viola_detector_helpers.get_detectors(combo_f)
+    detector = viola_detector_helpers.get_detectors(combo_f_name)
 
     viola = False if data_fold == utils.TRAINING else True
     in_path = utils.get_path(viola=viola, in_or_out=utils.IN, data_fold=data_fold)

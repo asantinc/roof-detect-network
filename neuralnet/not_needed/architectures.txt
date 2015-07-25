@@ -1,0 +1,49 @@
+*************************
+	NEURAL NETWORK
+*************************
+Number of layers:
+1. SKlearn based logistic regression with graylevel and RGB patches
+2. 1 Conv&Pool, 2 Conv&Pool, 3 Conv&Pool, 3+2 Fully connected with 500 neurons
+
+NEXT:
+Increase the amount of non-roof training data: try with different proportions
+
+Other changes:
+- Amount of testing: increase the test_percent, see how it is affected
+- Use larger filters?
+- Make larger patches?
+- Try rescaling instead of cutting into patches?
+
+
+*************************
+	 Viola and Jones
+*************************
+Need to experiment with params
+- Also add color features?
+
+NEXT:
+1. Separate a couple of images for testing...
+
+PARAMETERS:
+1. Increase number of negatives (IN PROGRESS)
+2. Increase the angle of rotation --> maybe build separate classifiers where the max direction is always the same?
+3. What about the scale factor??? It seems like you're picking up only some roofs. You're ignoring smaller ones?
+
+
+
+**************************
+Questions
+**************************
+----------
+Viola and jones
+----------
+Using a test set with viola and jones: a little tricky... with neural network I had more patches for training and testing??? Maybe
+Currently training on all, seeing if it captures
+
+2. More data: either John or the other research team
+
+3. OpenCV 2.0.0 is installed, but when I run Viola and Jones it gives me an error. Also I try to import theano in the 'good' machines and it won't work
+
+
+
+
