@@ -71,30 +71,6 @@ class RoofLoader(object):
             f_path = settings.FTRAIN+str(f_number)+'.jpg'                
             shutil.copyfile(f_path, '../data/reduced_training/'+str(f_number)+'.jpg' )
 
-    '''
-    class DataScaler(StandardScaler):
-    #Subclass of sklearn.StandardScaler that reshapes data as needed and then calls super to do scaling
-    #
-    def fit_transform(self, X):
-        X_shape = X.shape
-        X = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
-        X = super(DataScaler, self).fit_transform(X)
-        return X.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
-
-    def transform2(self, X):
-        X_shape = X.shape
-        X = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
-        X = super(DataScaler, self).transform(X)
-        return X.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
-
-    def inverse_transform(self, X): 
-        X_shape = X.shape
-        X = X.reshape(X_shape[0], X_shape[1]*X_shape[2]*X_shape[3])
-        X = super(DataScaler, self).inverse_transform(X)
-        return X.reshape(X_shape[0], X_shape[1], X_shape[2], X_shape[3])
-    '''
-
-
 
     def display_images(self, X, labels=[], indeces=[0], file_names=[]):
         '''

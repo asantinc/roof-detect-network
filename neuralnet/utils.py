@@ -38,6 +38,7 @@ VOC_threshold = 0.5
 ###################################
 #Viola constants
 RECTIFIED_COORDINATES = '../data/source/bounding_inhabited/'
+UNINHABITED_PATH = '../data/source/uninhabited/'
 BG_FILE = '../viola_jones/bg.txt'
 DAT_PATH = '../viola_jones/all_dat/'
 VEC_PATH = '../viola_jones/vec_files/'
