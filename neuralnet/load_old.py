@@ -5,19 +5,103 @@ import cv2
 import pdb
 import numpy as np
 
+import matplotlib.pyplot as plt
 import sklearn.utils
 from sklearn import cross_validation
 from sklearn.preprocessing import StandardScaler
 
-import utils 
-
+import experiment_settings as settings
+from timer import do_cprofile
 
 class RoofLoader(object):
+    def roof_type(self, y):
+        if y == 1:
+            return 'Metal'
+        elif y == 2:
+            return 'Thatch'
+        elif y == 0:
+            return 'No roof'
+
+
+    def load(self, max_roofs=None, roofs_only=False, test_percent=0.10, non_roofs=1):
+        """OLD VERSION
+        Load the data to a numpy array, return dataset divided into training and testing sets
+
+        Parameters:
+        roofs_only: If roofs_only is true we discard the non-roofs from the data
+        non_roofs: the proportion of non_roofs relative to roof patches to include in the dataset
+        """
+        #get the labels   
+        labels_list = np.loadtxt(open(settings.FTRAIN_LABEL,"rb"),delimiter=",")
+        labels_dict = dict(labels_list)
+        
+        data_stats = np.bincount(labels_dict.values())
+        total_roofs = data_stats[1]+data_stats[2]
+        print 'DATA STATS:' 
+        print data_stats
+        
+        #the non_roofs always come after, we take the roof labels and the proportion of non-roofs we want
+        labels_list = labels_list[:(total_roofs+(non_roofs*total_roofs))]
+        if max_roofs is None:
+            max_roofs = len(labels_list)
+
+        X, labels = self.load_images(labels_list[:max_roofs], max_roofs)
+        labels = np.array(labels, dtype=np.int32)
+        
+        X, labels = sklearn.utils.shuffle(X, labels, random_state=42)  # shuffle train data    
+
+        #remove the non_roofs
+        if roofs_only:
+            roof = (labels[:]>0)
+            labels = labels[roof]
+            X = X[roof]
+            labels[labels[:]==2] = 0 
+        
+        self.X_train, self.X_test, self.labels_train, self.labels_test = cross_validation.train_test_split(X, labels, test_size=test_percent, random_state=0)
+        return self.X_train, self.X_test, self.labels_train, self.labels_test
+
+
+    def reduce_label_numbers(self):
+        labels_list = np.loadtxt(open(settings.FTRAIN_LABEL,"rb"),delimiter=",")       
+        #the non_roofs always come after, we take the roof labels and the proportion of non-roofs we want
+        labels_list = labels_list[:130000]
+
+        for f_name, roof_type in labels_list:
+            f_number = int(f_name)
+            f_path = settings.FTRAIN+str(f_number)+'.jpg'                
+            shutil.copyfile(f_path, '../data/reduced_training/'+str(f_number)+'.jpg' )
+
+
+    def display_images(self, X, labels=[], indeces=[0], file_names=[]):
+        '''
+        Display the images indicated by indeces that are contained in X
+        '''
+        for i in indeces:
+            if len(labels)==len(X):
+                print self.roof_type(labels[i])
+            if len(X.shape) == 2:
+                if X.shape[1] > settings.IMG_SIZE:
+                    x = np.reshape(X[i, :], (settings.IMG_SIZE, settings.IMG_SIZE))
+            elif len(X.shape) == 3:
+                x = X[i,:,:]
+            else:
+                x = np.squeeze(X[i,:,:,:])
+                x = np.transpose(x, (1,2,0))*255
+            plt.imshow(x)
+            plt.show()
+
+
+    def display_single(self, other_info=""):
+        print other_info+'\n'
+        plt.imshow(img)
+        plt.show()
+
+    
     def load_images(self, labels_tuples, max_roofs):
         '''
         Load the images into a numpy array X.
         '''
-        X = np.empty((max_roofs,3,utils.PATCH_W, utils.PATCH_H))
+        X = np.empty((max_roofs,3,settings.PATCH_W, settings.PATCH_H))
         file_names = list()
         img_to_remove = list()
         labels = list()
@@ -28,7 +112,7 @@ class RoofLoader(object):
             if i%1000 == 0:
                 print 'Loading image {0}'.format(i)
             f_number = int(f_name)
-            f_path = utils.FTRAIN+str(f_number)+'.jpg'                
+            f_path = settings.FTRAIN+str(f_number)+'.jpg'                
             x = cv2.imread(f_path)
             x = np.asarray(x, dtype='float32')/255
             try:
@@ -55,7 +139,7 @@ class RoofLoader(object):
 # 2. The scaling has already been done in get_data
 # 3. Here we do the division over 255 though
 ###################################################
-#    def neural_load_detections_from_viola(self, in_path=utils.TRAINING_NEURAL_PATH):
+#    def neural_load_detections_from_viola(self, in_path=settings.TRAINING_NEURAL_PATH):
         #Need to load
         # the false positives and true positives for thatch AND metal
 #        raise ValueError() 
@@ -66,8 +150,8 @@ class RoofLoader(object):
         Load all the positive training examples for the neural network and labels to a numpy array
         '''
         raise ValueError("TODO: need to fix these paths")
-        train_path = utils.TRAINING_NEURAL_POS if train_path is None else train_path
-        neg_path = utils.TRAINING_NEURAL_NEG if neg_path is None else neg_path
+        train_path = settings.TRAINING_NEURAL_POS if train_path is None else train_path
+        neg_path = settings.TRAINING_NEURAL_NEG if neg_path is None else neg_path
         train_labels =  np.loadtxt(open(train_path+'labels.csv',"rb"),delimiter=",")
         X_train, y_train = self.get_neural_data(train_labels, train_path)
         
@@ -87,7 +171,7 @@ class RoofLoader(object):
 
 
     def get_neural_data(self, label_tuples, path):
-        X = np.empty((len(label_tuples), 3, utils.PATCH_W, utils.PATCH_H))
+        X = np.empty((len(label_tuples), 3, settings.PATCH_W, settings.PATCH_H))
         labels = list()
         failures = 0
         index = 0
@@ -115,6 +199,7 @@ class RoofLoader(object):
         #remove any failed images
         if failures > 0:
             X = X[:-failures, :,:,:] 
+        
 
         #return the right type
         X = X.astype(np.float32)

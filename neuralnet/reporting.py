@@ -97,7 +97,9 @@ class Detections(object):
 
 
 class Evaluation(object):
-    def __init__(self, output_patches=False,method=None, folder_name=None, save_imgs=True, out_path=None, detections=None, in_path=None, detector_names=None):
+    def __init__(self, check_both_detectors=True, output_patches=False, method=None, 
+                        folder_name=None, save_imgs=True, out_path=None, 
+                        detections=None, in_path=None, detector_names=None):
         self.save_imgs = save_imgs
           
         self.VOC_threshold = utils.VOC_threshold #threshold to assign a detection as a true positive
@@ -154,7 +156,7 @@ class Evaluation(object):
         detections = dict() 
         false_pos_logical = dict()
         bad_detection_logical = dict()
-            
+        
         for roof_type in ['metal', 'thatch']:
             detections[roof_type] = self.detections.get_detections(roof_type=roof_type, img_name=img_name)
             false_pos_logical[roof_type] = np.ones(len(detections[roof_type]), dtype=bool)
@@ -196,8 +198,12 @@ class Evaluation(object):
             good_d = detects[np.invert(bad_detection_logical[roof_type])]
             self.detections.update_good_detections(good_detections=good_d, roof_type=roof_type, img_name=img_name) 
 
+            print '-------- Roof Type: {0} --------'.format(roof_type)
+            print 'True roofs: {0}'.format(len(self.correct_roofs[roof_type][img_name]))
             print 'False pos: {0}'.format(len(false_d))
             print 'True pos: {0}'.format(len(pos_d))
+            print 'Good det: {0}'.format(len(good_d))
+            print 'Bad det: {0}'.format(len(bad_d))
 
 
     def get_VOC_score(self, rows=1200, cols=2000, roof=None, detection=None):

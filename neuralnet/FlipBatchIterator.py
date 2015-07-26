@@ -4,6 +4,7 @@ sys.path.append('~/roof/nolearn/nolearn')
 import numpy as np
 from nolearn.lasagne.base import NeuralNet, _sldict, BatchIterator
 import scipy.ndimage.interpolation
+
 CROP_SIZE = 32
 IMG_SIZE = 40
 

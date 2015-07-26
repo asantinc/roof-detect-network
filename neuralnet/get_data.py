@@ -28,6 +28,16 @@ class DataLoader(object):
         self.out_path = out_path
         self.in_path = in_path
 
+    @staticmethod
+    def get_all_patches_folder(folder_path, grayscale=False):
+        img_names = [f for f in os.listdir(folder_path) if f.endswith('.jpg')]
+        all_patches = dict()
+        for img_name in img_names:
+            all_patches[img_name] = dict()
+            for roof_type in ['metal', 'thatch']:
+                polygons = DataLoader.get_polygons(roof_type=roof_type, xml_path=folder_path, xml_name=img_name[:-3]+'.xml')
+                all_patches[img_name][roof_type] = DataLoader.extract_patches(polygons, img_path=folder_path, grayscale=grayscale)
+        return all_patches 
 
     @staticmethod
     def get_polygons(roof_type=None, xml_name=None, xml_path=None):

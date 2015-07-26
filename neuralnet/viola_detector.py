@@ -32,7 +32,8 @@ class ViolaDetector(object):
             scale=1.1,
             rotate=False, 
             removeOff=True,
-            output_patches=True
+            output_patches=True,
+            check_both_detections=True #checks whether tehre is a match for either roof type with all detectors
             ):
         assert in_path is not None
         self.in_path = in_path
@@ -50,12 +51,13 @@ class ViolaDetector(object):
         self.group = group
         self.angles = utils.VIOLA_ANGLES if rotate else [0]
         self.remove_off_img = removeOff
+        self.check_both_detectors = check_both_detectors
 
         self.viola_detections = Detections()
         self.setup_detectors(detector_names)
 
         self.evaluation = Evaluation(method='viola', folder_name=folder_name, out_path=self.out_folder, detections=self.viola_detections, 
-                    in_path=self.in_path, detector_names=detector_names, output_patches=output_patches)
+                    in_path=self.in_path, detector_names=detector_names, output_patches=output_patches, check_both_detectors=check_both_detectors)
 
 
     def setup_detectors(self, detector_names=None, old_detector=False):
@@ -80,7 +82,7 @@ class ViolaDetector(object):
         '''Compare detections to ground truth roofs for set of images in a folder
         '''
         for i, img_name in enumerate(self.img_names):
-            print 'Processing image {0}/{1}\t{2}'.format(i, len(self.img_names), img_name)
+            print '************************ Processing image {0}/{1}\t{2} ************************'.format(i, len(self.img_names), img_name)
             self.detect_roofs(img_name)
             self.evaluation.score_img_rectified(img_name)
         self.evaluation.print_report()
@@ -100,6 +102,10 @@ class ViolaDetector(object):
             for roof_type, detectors in self.roof_detectors.iteritems():
                 for i, detector in enumerate(detectors):
                     for angle in self.angles:
+
+                        #for thatch we only need one angle
+                        if roof_type == 'thatch' and angle > 0:
+                            continue
                         print 'Detecting with detector: '+str(i)
                         print 'ANGLE '+str(angle)
 
@@ -174,7 +180,7 @@ class ViolaDetector(object):
 
         path_true = general_path+'true/'
         utils.mkdir(path_true)
-        
+         
         path_false = general_path+'false/'
         utils.mkdir(path_false)
 
@@ -204,7 +210,7 @@ class ViolaDetector(object):
                     #write this type of extraction and the roofs to an image
                     extraction_type = 'good' if path == path_true else 'bad'
                     cv2.imwrite('{0}{1}_{2}_extract_{3}.jpg'.format(general_path, img_name[:-4], roof_type, extraction_type), img_debug)
-            return img
+            pdb.set_trace()
 
 
 def main(detector_params=None, original_dataset=True, save_imgs=True, data_fold=utils.VALIDATION):
@@ -245,9 +251,12 @@ if __name__ == '__main__':
         data_fold=utils.TRAINING
     else: 
         data_fold=utils.VALIDATION
-
+    #data_fold=utils.SMALL_TEST
+    
     # removeOff: whether to remove the roofs that fall off the image when rotating (especially the ones on the edge
     #group: can be None, group_rectangles, group_bounding
-    detector_params = {'output_patches': output_patches, 'min_neighbors':3, 'scale':1.08,'group': None, 'rotate':True, 'removeOff':True} 
+    # if check_both_detectors is True we check if either the metal or the thatch detector has found a detection that matches either type of roof 
+    detector_params = {'output_patches': output_patches, 'check_both_detectors':True, 'min_neighbors':3, 'scale':1.08,
+                                                                'group': None, 'rotate':True, 'removeOff':True} 
     main(detector_params=detector_params, save_imgs=True, data_fold=data_fold, original_dataset=True)
  
