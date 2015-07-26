@@ -16,22 +16,20 @@ class Detections(object):
         self.false_positive_num =  defaultdict(int)
         self.true_positive_num =  defaultdict(int)
         self.good_detection_num =  defaultdict(int)
-        self.bad_detection_num =  defaultdict(int)
+        self.bad_detection_num = 0 #we count the metal and thatch false positives together 
         self.roof_num =  defaultdict(int)
-
-        self.roof_types = ['metal', 'thatch']
 
         self.detections = defaultdict(list)
         self.true_positives = dict()
         self.false_positives = dict()
         self.good_detections =dict()#all the detections above the VOC threshold
-        self.bad_detections = dict() #all detections below VOC threshold
-        for roof_type in self.roof_types: # we need this to separate them per image
+        self.bad_detections = defaultdict(list) #there's only one set of bad detections
+        for roof_type in utils.ROOF_TYPES: # we need this to separate them per image
             self.detections[roof_type] = dict()
             self.true_positives[roof_type] = defaultdict(list)
             self.false_positives[roof_type] = defaultdict(list)
             self.good_detections[roof_type] = defaultdict(list)
-            self.bad_detections[roof_type] = defaultdict(list)
+            #self.bad_detections[roof_type] = defaultdict(list)
 
         self.total_time = 0
         self.imgs = set()
@@ -48,9 +46,9 @@ class Detections(object):
         self.good_detections[roof_type][img_name].extend(good_detections)
         self.good_detection_num[roof_type] += len(good_detections)
 
-    def update_bad_detections(self, bad_detections=None, img_name=None, roof_type=None):
-        self.bad_detections[roof_type][img_name].extend(bad_detections)
-        self.bad_detection_num[roof_type] += len(bad_detections)
+    def update_bad_detections(self, bad_detections=None, img_name=None):
+        self.bad_detections[img_name].extend(bad_detections)
+        self.bad_detection_num += len(bad_detections)
 
     def update_roof_num(self, roofs, roof_type):
         self.roof_num[roof_type] += len(roofs)
@@ -74,13 +72,13 @@ class Detections(object):
         if roof_type is None:   #any roof_type
             if angle is None:
                 #return all detections regardless of angle or rooftype
-                for roof_type in self.roof_types:
+                for roof_type in utils.ROOF_TYPES:
                     for angle in self.detections[roof_type][img_name].keys():
                         detections.extend(self.detections[roof_type][img_name][angle])
 
             else:
                 #return detections for some angle
-                for roof_type in self.roof_types:
+                for roof_type in utils.ROOF_TYPES:
                     detections.extend(self.detections[roof_type][img_name][angle])
 
         else:   #specific roof_type
@@ -97,26 +95,27 @@ class Detections(object):
 
 
 class Evaluation(object):
-    def __init__(self, check_both_detectors=True, output_patches=False, method=None, 
+    def __init__(self, output_patches=False, method=None, 
                         folder_name=None, save_imgs=True, out_path=None, 
                         detections=None, in_path=None, detector_names=None):
         self.save_imgs = save_imgs
-          
+        self.output_patches=output_patches
+
         self.VOC_threshold = utils.VOC_threshold #threshold to assign a detection as a true positive
-        self.voc_output_patch_threshold = 0.10
-        self.output_patches = output_patches
+        self.VOC_good_detection_threshold = dict()
+        self.VOC_good_detection_threshold['metal'] = 0.10
+        self.VOC_good_detection_threshold['thatch'] = 0.50
 
         self.detections = detections    #detection class
 
         self.in_path = in_path          #the path from which the images are taken
         self.img_names = [f for f in listdir(self.in_path) if f.endswith('.jpg')]
-        self.roof_types = ['metal', 'thatch'] 
 
         self.correct_roofs = dict()
-        for roof_type in ['metal', 'thatch']:
+        for roof_type in utils.ROOF_TYPES:
             self.correct_roofs[roof_type] = dict()
         for img_name in self.img_names:
-            for roof_type in ['metal', 'thatch']:
+            for roof_type in utils.ROOF_TYPES:
                 self.correct_roofs[roof_type][img_name] = DataLoader.get_polygons(roof_type=roof_type, 
                                                             xml_name=img_name[:-3]+'xml' , xml_path=self.in_path)
                 self.detections.update_roof_num(self.correct_roofs[roof_type][img_name], roof_type)
@@ -152,28 +151,31 @@ class Evaluation(object):
         '''Find best overlap between each roof in an img and the detections,
         according the VOC score
         '''
+        print 'Scoring.....'
         #start with all detections as false pos; as we find matches, we increase the true_pos, decrese the false_pos numbers
         detections = dict() 
         false_pos_logical = dict()
         bad_detection_logical = dict()
         
-        for roof_type in ['metal', 'thatch']:
-            detections[roof_type] = self.detections.get_detections(roof_type=roof_type, img_name=img_name)
-            false_pos_logical[roof_type] = np.ones(len(detections[roof_type]), dtype=bool)
-            bad_detection_logical[roof_type] = np.ones(len(detections[roof_type]), dtype=bool)
+        detections = self.detections.get_detections(img_name=img_name)
+        for roof_type in utils.ROOF_TYPES:
+            print 'Scoring {0}'.format(roof_type)
+            false_pos_logical[roof_type] = np.ones(len(detections), dtype=bool) #[roof_type]
+            bad_detection_logical[roof_type] = np.ones(len(detections), dtype=bool) #[roof_type]
 
             for roof in self.correct_roofs[roof_type][img_name]:
                 best_voc_score = -1 
                 best_detection = -1 
 
-                for d, detection in enumerate(detections[roof_type]):                           #for each patch found
-                    voc_score = self.get_VOC_score(roof=roof, detection=detection)
+                for d, detection in enumerate(detections):  # detections[roof_type]):                           #for each patch found
+                    voc_score = self.get_score(roof=roof, detection=detection)
                     if (voc_score > self.VOC_threshold) and (voc_score > best_voc_score):#this may be a true pos
                         best_voc_score = voc_score
                         best_detection = d 
 
                     if self.output_patches:
-                        if (voc_score > self.voc_output_patch_threshold):
+                        #depending on roof type we consider a different threshold
+                        if (voc_score > self.VOC_good_detection_threshold[roof_type]):
                             bad_detection_logical[roof_type][d] = 0 #we already know that this wasn't a bad detection
 
                 if best_detection != -1:
@@ -185,28 +187,33 @@ class Evaluation(object):
        
 
     def update_scores(self, img_name, detections, false_pos_logical, bad_detection_logical):
-        for roof_type in ['thatch', 'metal']:
-            detects = np.array(detections[roof_type])
+        #a detection is only considered bad if it doesn't match either a metal or a thatch roof
+        detects = np.array(detections)
+        truly_bad_detections = np.logical_and(bad_detection_logical['metal'], bad_detection_logical['thatch']) 
+        bad_d = detects[truly_bad_detections]
+        self.detections.update_bad_detections(bad_detections=bad_d, img_name=img_name) 
+
+        for roof_type in utils.ROOF_TYPES: 
             false_d = detects[false_pos_logical[roof_type]]
             self.detections.update_false_pos(false_pos=false_d, roof_type=roof_type, img_name=img_name) 
             pos_d = detects[np.invert(false_pos_logical[roof_type])]
             self.detections.update_true_pos(true_pos=pos_d, roof_type=roof_type, img_name=img_name) 
             
-            #get the good and bad detections
-            bad_d = detects[bad_detection_logical[roof_type]]
-            self.detections.update_bad_detections(bad_detections=bad_d, roof_type=roof_type, img_name=img_name) 
+            #get good are good for each specific roof type separately, unlike the truly bad detections above 
             good_d = detects[np.invert(bad_detection_logical[roof_type])]
             self.detections.update_good_detections(good_detections=good_d, roof_type=roof_type, img_name=img_name) 
 
             print '-------- Roof Type: {0} --------'.format(roof_type)
-            print 'True roofs: {0}'.format(len(self.correct_roofs[roof_type][img_name]))
+            print 'Roofs: {0}'.format(len(self.correct_roofs[roof_type][img_name]))
             print 'False pos: {0}'.format(len(false_d))
             print 'True pos: {0}'.format(len(pos_d))
             print 'Good det: {0}'.format(len(good_d))
-            print 'Bad det: {0}'.format(len(bad_d))
+        print '---'
+        print 'All Detections: {0}'.format(len(detections))
+        print 'All Bad det: {0}'.format(len(bad_d))
 
 
-    def get_VOC_score(self, rows=1200, cols=2000, roof=None, detection=None):
+    def get_score(self, rows=1200, cols=2000, roof=None, detection=None):
         assert len(roof) == 4 and len(detection) == 4
 
         #First, count the area that was detected
@@ -237,7 +244,7 @@ class Evaluation(object):
         print '*************** FINAL REPORT *****************'
         log_to_file.append('Total Detection Time:\t\t{0}'.format(self.detections.total_time))
 
-        for roof_type in ['metal', 'thatch']:
+        for roof_type in utils.ROOF_TYPES:
             log_to_file.append('Roof type: {0}'.format(roof_type))
             log_to_file.append('Total roofs\tDetections\tRecall\tPrecision\tF1 score\t')
 
@@ -274,7 +281,7 @@ class Evaluation(object):
         except IOError:
             print 'Cannot open {0}'.format(self.in_path+img_name)
             sys.exit(-1)
-        for roof_type in ['metal', 'thatch']:
+        for roof_type in utils.ROOF_TYPES:
             utils.draw_detections(self.detections.false_positives[roof_type][img_name], img, color=(0, 0, 255))
             utils.draw_detections(self.correct_roofs[roof_type][img_name], img, color=(0, 0, 0))
             utils.draw_detections(self.detections.true_positives[roof_type][img_name], img, color=(0, 255, 0))

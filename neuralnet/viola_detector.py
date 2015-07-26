@@ -32,8 +32,7 @@ class ViolaDetector(object):
             scale=1.1,
             rotate=False, 
             removeOff=True,
-            output_patches=True,
-            check_both_detections=True #checks whether tehre is a match for either roof type with all detectors
+            output_patches=True
             ):
         assert in_path is not None
         self.in_path = in_path
@@ -44,6 +43,7 @@ class ViolaDetector(object):
 
         self.img_names = [f for f in os.listdir(in_path) if f.endswith('.jpg')]
         self.save_imgs = save_imgs
+        self.output_patches = output_patches
 
         #parameters for detection 
         self.scale = scale
@@ -51,13 +51,12 @@ class ViolaDetector(object):
         self.group = group
         self.angles = utils.VIOLA_ANGLES if rotate else [0]
         self.remove_off_img = removeOff
-        self.check_both_detectors = check_both_detectors
 
         self.viola_detections = Detections()
         self.setup_detectors(detector_names)
 
         self.evaluation = Evaluation(method='viola', folder_name=folder_name, out_path=self.out_folder, detections=self.viola_detections, 
-                    in_path=self.in_path, detector_names=detector_names, output_patches=output_patches, check_both_detectors=check_both_detectors)
+                    in_path=self.in_path, detector_names=detector_names, output_patches=output_patches)
 
 
     def setup_detectors(self, detector_names=None, old_detector=False):
@@ -68,7 +67,7 @@ class ViolaDetector(object):
         self.roof_detectors = defaultdict(list)
         self.detector_names = detector_names
 
-        for roof_type in ['metal', 'thatch']:
+        for roof_type in utils.ROOF_TYPES:
             for path in detector_names[roof_type]: 
                 if path.startswith('cascade'):
                     start = '../viola_jones/cascades/' 
@@ -86,7 +85,9 @@ class ViolaDetector(object):
             self.detect_roofs(img_name)
             self.evaluation.score_img_rectified(img_name)
         self.evaluation.print_report()
-        self.save_training_FP_and_TP()
+        if self.output_patches:
+            self.save_training_FP_and_TP(viola=True)
+            self.save_training_FP_and_TP(neural=True)
         open(self.out_folder+'DONE', 'w').close() 
 
 
@@ -102,19 +103,16 @@ class ViolaDetector(object):
             for roof_type, detectors in self.roof_detectors.iteritems():
                 for i, detector in enumerate(detectors):
                     for angle in self.angles:
-
                         #for thatch we only need one angle
-                        if roof_type == 'thatch' and angle > 0:
+                        if roof_type == 'thatch' and angle>0:
                             continue
+
                         print 'Detecting with detector: '+str(i)
                         print 'ANGLE '+str(angle)
 
                         with Timer() as t: 
                             rotated_image = utils.rotate_image(gray, angle) if angle>0 else gray
                             detections = self.detect_and_rectify(detector, rotated_image, angle, rgb_unrotated.shape[:2]) 
-                            if self.group is not None:
-                                pass
-                                #detections = self.group(detections)
                         print 'Time detection: {0}'.format(t.secs)
                         self.viola_detections.total_time += t.secs
                         self.viola_detections.set_detections(roof_type=roof_type, img_name=img_name, 
@@ -136,10 +134,78 @@ class ViolaDetector(object):
             #we can save the detections in the rotated image here
         #rotate back to original image coordinates
         if angle > 0:
+            print 'rotating...'
             rectified_detections = utils.rotate_detection_polygons(polygons, image, angle, dest_img_shape, remove_off_img=self.remove_off_img)
         else:
             rectified_detections = polygons
+        print 'done rotating'
         return rectified_detections
+
+
+       
+
+    def save_training_FP_and_TP(self, viola=False, neural=False):
+        '''Save the correct and incorrect detections so that the neural network can train on it
+        '''
+        #we want to write to the params folder of neuralnet
+        assert viola or neural
+        general_path = utils.get_path(neural=neural, viola=viola, data_fold=utils.TRAINING, in_or_out=utils.IN, out_folder_name=self.out_folder_name) 
+
+        path_true = general_path+'truepos_from_viola_training/'
+        utils.mkdir(path_true)
+         
+        path_false = general_path+'falsepos_from_viola_training/'
+        utils.mkdir(path_false)
+
+        for img_name in self.img_names:
+            try:
+                if viola: #viola training will need grayscale patches
+                    img = cv2.imread(self.in_path+img_name, cv2.COLOR_BGR2GRAY)
+                else: #neural network will need RGB
+                    img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
+            except:
+                print 'Cannot open image'
+                sys.exit(-1)
+
+            #for the bad detections there is only one type: background (we merge the thatch and metal false positives)
+            detections = self.viola_detections.bad_detections[img_name]
+            patches_path= path_false
+            extraction_type = 'bad'
+            roof_type = None
+            self.save_training_FP_and_TP_helper(detections, patches_path, general_path, img, roof_type, extraction_type)               
+
+            #for the good detections, we separate them between thatch and metal true positives
+            for roof_type in utils.ROOF_TYPE:
+                detections = self.viola_detections.good_detections[roof_type][img_name] 
+                patches_path = path_true
+                extraction_type = 'good' 
+                self.save_training_FP_and_TP_helper(detections, patches_path, general_path, img, roof_type, extraction_type)               
+
+
+
+    def save_training_FP_and_TP_helper(self, detections, patches_path, general_path, img, roof_type, extraction_type):
+        #this is where we write the detections we're extraction. One image per roof type
+        #we save: 1. the patches and 2. the image with marks of what the detections are, along with the true roofs (for debugging)
+        img_debug = np.copy(img) 
+
+        if roof_type is None:
+            utils.draw_detections(self.evaluation.correct_roofs['metal'][img_name], img_debug, color=(0, 0, 0), thickness=2)
+            utils.draw_detections(self.evaluation.correct_roofs['thatch'][img_name], img_debug, color=(0, 0, 0), thickness=2)
+        else:
+            utils.draw_detections(self.evaluation.correct_roofs[roof_type][img_name], img_debug, color=(0, 0, 0), thickness=2)
+
+        for i, detection in enumerate(detections):
+            #extract the patch, rotate it to a horizontal orientation, save it
+            warped_patch = utils.four_point_transform(img, detection)
+            cv2.imwrite('{0}{1}_{2}_roof{3}.jpg'.format(patches_path, roof_type, img_name[:-4], i), warped_patch)
+            
+            #mark where roofs where taken out from for debugging
+            color = (0,255,0) if path==path_true else (0,0,255)
+            utils.draw_polygon(detection, img_debug, fill=False, color=color, thickness=2, number=i)
+
+        #write this type of extraction and the roofs to an image
+        extraction_type = 'good' if path == path_true else 'bad'
+        cv2.imwrite('{0}{1}_{2}_extract_{3}.jpg'.format(general_path, img_name[:-4], roof_type, extraction_type), img_debug)
 
 
     def group_detections(self, detections):
@@ -170,50 +236,11 @@ class ViolaDetector(object):
         path = '{0}_angle{1}.jpg'.format(out_folder+img_name[:-4], angle)
         print path
         cv2.imwrite(path, img)
-        
-
-    def save_training_FP_and_TP(self):
-        '''Save the correct and incorrect detections so that the neural network can train on it
-        '''
-        #we want to write to the params folder of neuralnet
-        general_path = utils.get_path(neural=True, data_fold=utils.TRAINING, in_or_out=utils.IN, out_folder_name=self.out_folder_name) 
-
-        path_true = general_path+'true/'
-        utils.mkdir(path_true)
-         
-        path_false = general_path+'false/'
-        utils.mkdir(path_false)
-
-        for img_name in self.img_names:
-            try:
-                img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
-            except:
-                print 'Cannot open image'
-                sys.exit(-1)
-
-            for roof_type in ['metal', 'thatch']:
-                good_d = self.viola_detections.good_detections[roof_type][img_name] 
-                bad_d = self.viola_detections.bad_detections[roof_type][img_name]
-                for path, detections in zip([path_true, path_false], [good_d, bad_d]):
-                    img_debug = np.copy(img) #this is where we write the detections we're extraction. One image per roof type
-                    utils.draw_detections(self.evaluation.correct_roofs[roof_type][img_name], img_debug, color=(0, 0, 0), thickness=2)
-
-                    for i, detection in enumerate(detections):
-                        #extract the patch, rotate it to a horizontal orientation, save it
-                        warped_patch = utils.four_point_transform(img, detection)
-                        cv2.imwrite('{0}{1}_{2}_roof{3}.jpg'.format(path, roof_type, img_name[:-4], i), warped_patch)
-                        
-                        #mark where roofs where taken out from for debugging
-                        color = (0,255,0) if path==path_true else (0,0,255)
-                        utils.draw_polygon(detection, img_debug, fill=False, color=color, thickness=2, number=i)
-
-                    #write this type of extraction and the roofs to an image
-                    extraction_type = 'good' if path == path_true else 'bad'
-                    cv2.imwrite('{0}{1}_{2}_extract_{3}.jpg'.format(general_path, img_name[:-4], roof_type, extraction_type), img_debug)
-            pdb.set_trace()
+ 
 
 
-def main(detector_params=None, original_dataset=True, save_imgs=True, data_fold=utils.VALIDATION):
+
+def main(output_patches=True, detector_params=None, original_dataset=True, save_imgs=True, data_fold=utils.VALIDATION):
     combo_f_name = None
     try:
         opts, args = getopt.getopt(sys.argv[1:], "c:")
@@ -233,13 +260,11 @@ def main(detector_params=None, original_dataset=True, save_imgs=True, data_fold=
     #name the output_folder
     folder_name = ['combo'+combo_f_name]
     for k, v in detector_params.iteritems():
-        if k == 'output_patches':
-            continue
         folder_name.append('{0}{1}'.format(k,v))
     folder_name = '_'.join(folder_name)
 
     out_path = utils.get_path(out_folder_name=folder_name, viola=True, in_or_out=utils.OUT, data_fold=data_fold)
-    viola = ViolaDetector(out_path=out_path, in_path=in_path, folder_name = folder_name, save_imgs=save_imgs, 
+    viola = ViolaDetector(output_patches=output_patches, out_path=out_path, in_path=in_path, folder_name = folder_name, save_imgs=save_imgs, 
                                         detector_names=detector,  **detector_params)
     viola.detect_roofs_in_img_folder()
 
@@ -251,12 +276,11 @@ if __name__ == '__main__':
         data_fold=utils.TRAINING
     else: 
         data_fold=utils.VALIDATION
-    #data_fold=utils.SMALL_TEST
+    data_fold=utils.SMALL_TEST
     
     # removeOff: whether to remove the roofs that fall off the image when rotating (especially the ones on the edge
     #group: can be None, group_rectangles, group_bounding
     # if check_both_detectors is True we check if either the metal or the thatch detector has found a detection that matches either type of roof 
-    detector_params = {'output_patches': output_patches, 'check_both_detectors':True, 'min_neighbors':3, 'scale':1.08,
-                                                                'group': None, 'rotate':True, 'removeOff':True} 
-    main(detector_params=detector_params, save_imgs=True, data_fold=data_fold, original_dataset=True)
+    detector_params = {'min_neighbors':3, 'scale':1.08, 'group': None, 'rotate':True, 'removeOff':True} 
+    main(output_patches=output_patches, detector_params=detector_params, save_imgs=True, data_fold=data_fold, original_dataset=True)
  

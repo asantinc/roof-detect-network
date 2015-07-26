@@ -33,6 +33,8 @@ OUT = 2 #output
 VIOLA_ANGLES = [0, 45, 90, 135]
 VOC_threshold = 0.5 
 
+ROOF_TYPES = ['metal', 'thatch']
+
 ###################################
 #VIOLA TRAINING
 ###################################
