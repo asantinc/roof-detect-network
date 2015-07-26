@@ -101,10 +101,12 @@ class Evaluation(object):
         self.save_imgs = save_imgs
         self.output_patches=output_patches
 
+        #threholds to classify detections as False/True positives and Good/Bad detections(these are to train the neural network on it)
         self.VOC_threshold = utils.VOC_threshold #threshold to assign a detection as a true positive
         self.VOC_good_detection_threshold = dict()
         self.VOC_good_detection_threshold['metal'] = 0.10
         self.VOC_good_detection_threshold['thatch'] = 0.50
+        self.detection_portion_threshold = 0.50
 
         self.detections = detections    #detection class
 
@@ -168,14 +170,15 @@ class Evaluation(object):
                 best_detection = -1 
 
                 for d, detection in enumerate(detections):  # detections[roof_type]):                           #for each patch found
-                    voc_score = self.get_score(roof=roof, detection=detection)
+                    #detection_roof_portion is how much of the detection is covered by roof
+                    voc_score, detection_roof_portion = self.get_score(roof=roof, detection=detection)
                     if (voc_score > self.VOC_threshold) and (voc_score > best_voc_score):#this may be a true pos
                         best_voc_score = voc_score
                         best_detection = d 
 
                     if self.output_patches:
                         #depending on roof type we consider a different threshold
-                        if (voc_score > self.VOC_good_detection_threshold[roof_type]):
+                        if (voc_score > self.VOC_good_detection_threshold[roof_type] or detection_roof_portion>self.detection_portion_threshold):
                             bad_detection_logical[roof_type][d] = 0 #we already know that this wasn't a bad detection
 
                 if best_detection != -1:
@@ -236,7 +239,10 @@ class Evaluation(object):
         #VOC measure
         union_area = (roof_area + (detection_area)) - intersection_area
         voc_score = float(intersection_area)/union_area
-        return voc_score
+
+        #How much of the detection is roof? If it's high, they this detection is mostly covering a roof
+        detection_roof_portion = float(intersection_area)/detection_area 
+        return voc_score, detection_roof_portion
 
 
     def print_report(self, write_to_file=True):

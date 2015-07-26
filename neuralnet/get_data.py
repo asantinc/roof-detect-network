@@ -29,14 +29,21 @@ class DataLoader(object):
         self.in_path = in_path
 
     @staticmethod
-    def get_all_patches_folder(folder_path, grayscale=False):
+    def get_all_patches_folder(folder_path=None, grayscale=False, merge_imgs=False):
+        '''If merge_imgs is True, we merge all roofs for a given roof type together, regardless of which image the roof came from
+        '''
+        folder_path = folder_path if folder_path is not None else utils.get_path(in_or_out=utils.IN, data_fold=utils.TRAINING)
         img_names = [f for f in os.listdir(folder_path) if f.endswith('.jpg')]
-        all_patches = dict()
+        all_patches = defaultdict(list)
         for img_name in img_names:
-            all_patches[img_name] = dict()
-            for roof_type in ['metal', 'thatch']:
-                polygons = DataLoader.get_polygons(roof_type=roof_type, xml_path=folder_path, xml_name=img_name[:-3]+'.xml')
-                all_patches[img_name][roof_type] = DataLoader.extract_patches(polygons, img_path=folder_path, grayscale=grayscale)
+            if merge_imgs == False:
+                all_patches[img_name] = dict()
+            for roof_type in utils.ROOF_TYPES:
+                polygons = DataLoader.get_polygons(roof_type=roof_type, xml_path=folder_path, xml_name=img_name[:-3]+'xml')
+                if merge_imgs == False:
+                    all_patches[img_name][roof_type] = DataLoader.extract_patches(polygons, img_path=folder_path+img_name, grayscale=grayscale)
+                else:
+                    all_patches[roof_type].extend(DataLoader.extract_patches(polygons, img_path=folder_path+img_name, grayscale=grayscale))
         return all_patches 
 
     @staticmethod
@@ -56,6 +63,7 @@ class DataLoader(object):
         assert img_path is not None
         try:
             img = cv2.imread(img_path, flags=cv2.IMREAD_COLOR)
+            assert img is not None
             if grayscale:
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 img = cv2.equalizeHist(img)
@@ -65,10 +73,7 @@ class DataLoader(object):
 
         patches = list()
         for i, polygon in enumerate(polygon_list):
-            print polygon
             patches.append(utils.four_point_transform(img, np.array(polygon, dtype = "float32")))
-            print polygon
-            pdb.set_trace()
         return patches
 
 

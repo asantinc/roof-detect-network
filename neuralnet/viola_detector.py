@@ -87,7 +87,7 @@ class ViolaDetector(object):
         self.evaluation.print_report()
         if self.output_patches:
             self.save_training_FP_and_TP(viola=True)
-            self.save_training_FP_and_TP(neural=True)
+            #self.save_training_FP_and_TP(neural=True)
         open(self.out_folder+'DONE', 'w').close() 
 
 
@@ -160,35 +160,36 @@ class ViolaDetector(object):
         for img_name in self.img_names:
             try:
                 if viola: #viola training will need grayscale patches
-                    img = cv2.imread(self.in_path+img_name, cv2.COLOR_BGR2GRAY)
+                    img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    img = cv2.equalizeHist(img)
                 else: #neural network will need RGB
                     img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
             except:
                 print 'Cannot open image'
                 sys.exit(-1)
-
-            #for the bad detections there is only one type: background (we merge the thatch and metal false positives)
+            #for the bad/background detections there is only one type: background (we've merge the thatch and metal false positives)
             detections = self.viola_detections.bad_detections[img_name]
             patches_path= path_false
             extraction_type = 'bad'
-            roof_type = None
-            self.save_training_FP_and_TP_helper(detections, patches_path, general_path, img, roof_type, extraction_type)               
+            roof_type = 'background'
+            self.save_training_FP_and_TP_helper(img_name, detections, patches_path, general_path, img, roof_type, extraction_type, (0,0,255)) 
+            #for viola we only need to save the negatives, since the positives can't be used (they'd need to be annotated and rectified)
+            if neural:
+                #for the good detections, we separate them between thatch and metal true positives
+                for roof_type in utils.ROOF_TYPES:
+                    detections = self.viola_detections.good_detections[roof_type][img_name] 
+                    patches_path = path_true
+                    extraction_type = 'good' 
+                    self.save_training_FP_and_TP_helper(img_name, detections, patches_path, general_path, img, roof_type, extraction_type, (0,255,0))               
 
-            #for the good detections, we separate them between thatch and metal true positives
-            for roof_type in utils.ROOF_TYPE:
-                detections = self.viola_detections.good_detections[roof_type][img_name] 
-                patches_path = path_true
-                extraction_type = 'good' 
-                self.save_training_FP_and_TP_helper(detections, patches_path, general_path, img, roof_type, extraction_type)               
 
-
-
-    def save_training_FP_and_TP_helper(self, detections, patches_path, general_path, img, roof_type, extraction_type):
+    def save_training_FP_and_TP_helper(self, img_name, detections, patches_path, general_path, img, roof_type, extraction_type, color):
         #this is where we write the detections we're extraction. One image per roof type
         #we save: 1. the patches and 2. the image with marks of what the detections are, along with the true roofs (for debugging)
         img_debug = np.copy(img) 
 
-        if roof_type is None:
+        if roof_type == 'background':
             utils.draw_detections(self.evaluation.correct_roofs['metal'][img_name], img_debug, color=(0, 0, 0), thickness=2)
             utils.draw_detections(self.evaluation.correct_roofs['thatch'][img_name], img_debug, color=(0, 0, 0), thickness=2)
         else:
@@ -200,11 +201,9 @@ class ViolaDetector(object):
             cv2.imwrite('{0}{1}_{2}_roof{3}.jpg'.format(patches_path, roof_type, img_name[:-4], i), warped_patch)
             
             #mark where roofs where taken out from for debugging
-            color = (0,255,0) if path==path_true else (0,0,255)
             utils.draw_polygon(detection, img_debug, fill=False, color=color, thickness=2, number=i)
 
         #write this type of extraction and the roofs to an image
-        extraction_type = 'good' if path == path_true else 'bad'
         cv2.imwrite('{0}{1}_{2}_extract_{3}.jpg'.format(general_path, img_name[:-4], roof_type, extraction_type), img_debug)
 
 

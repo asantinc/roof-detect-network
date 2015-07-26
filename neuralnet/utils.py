@@ -17,6 +17,8 @@ import warnings
 NON_ROOF = 0
 METAL = 1
 THATCH = 2
+ROOF_LABEL = {'background':NON_ROOF, 'metal':METAL, 'thatch':THATCH}
+
 #Constants for image size
 IMG_SIZE = 40
 CROP_SIZE = 32
@@ -216,7 +218,17 @@ def get_params_from_file(path):
                 raise ValueError('Cannot process {0}'.format(path))
     return parameters
 
- 
+########################
+# Image Resize 
+########################
+
+def resize_rgb(img, w=PATCH_W, h=PATCH_H):
+    resized = np.empty((h,w,3))
+    for channel in range(img.shape[-1]):
+        resized[:,:,channel] = cv2.resize(img[:,:,channel], (h, w), dst=resized[0,:,:], fx=0, fy=0, interpolation=cv2.INTER_AREA) 
+    return resized
+
+
 ########################
 # Image rotation
 ########################
@@ -421,8 +433,6 @@ def recalculate_rect(pts):
 
   if check_proper_rect(rect) == False:
     raise ValueError("The rectangle could not be ordered correctly {0}".format(rect))
-
-  print "Rect was fixed"
   return rect
 
 
@@ -447,9 +457,6 @@ def order_points(pts):
  
 	# return the ordered coordinates
         if check_proper_rect(rect) == False:
-            print 'Trying to fix rect'
-            print pts
-            print rect
             rect = recalculate_rect(pts)
 	return rect
 

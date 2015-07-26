@@ -9,6 +9,8 @@ import csv
 import numpy as np
 import cv2
 from scipy import misc, ndimage #load images
+from collections import defaultdict
+import sklearn.utils
 
 import get_data
 from get_data import DataLoader
@@ -22,79 +24,113 @@ ViolaDataSetup is used to:
 The .vec files are needed to train a cascade from the ViolaTrainer class
 '''
 
+
 class NeuralDataLoad(object):
-    def load_training_imgs():
-        #load thatch from viola TP
-        #load thatch from viola training
+    def __init__(self, viola_detector_data = None):
+        self.viola_detector_data = 'combo9_min_neighbors3_scale1.08_groupNone_rotateTrue_removeOffTrue' if viola_detector_data is None else viola_detector_data
+        self.background_FP_viola_path = '../data_original/training/neural/{0}/falsepos_from_viola_training/'.format(self.viola_detector_data)
+        self.thatch_metal_TP_viola_path = '../data_original/training/neural/{0}/truepos_from_viola_training/'.format(self.viola_detector_data)
 
-        in_path_source = utils.get_path(in_or_out=utils.IN, data_fold=utils.TRAINING)    
+    def load_data(self):
+        self.ground_truth_metal_thatch = DataLoader.get_all_patches_folder(merge_imgs=True)
+        self.viola_metal_thatch = self.get_viola_positive_patches(self.thatch_metal_TP_viola_path)
+        self.viola_background = self.get_viola_background_patches(self.background_FP_viola_path)
+        total_length = self.count_patches_helper()
+
+        self.X = np.empty((total_length, 3, utils.PATCH_W, utils.PATCH_H), dtype='float32')
+        self.y = np.empty((total_length), dtype='int32')
+        self.failed_patches = 0
+
+        #process the metal and thatch
+        index = 0 
         for roof_type in ['metal', 'thatch']:
-            normal_patches[roof_type] = get_neural_patches(roof_type, in_path_source)
-        viola_pos_folder = 'combo4_min_neighbors3_scale1.08_groupNone_removeOffTrue_rotateTrue/True/'
-        :tabedit 
+            label = utils.ROOF_LABEL[roof_type]
+            for data_source in [self.ground_truth_metal_thatch[roof_type], self.viola_metal_thatch[roof_type]]: 
+                for patch in data_source:
+                    index = self.process_patch(patch, label, index)                    
 
-        #load metal 
+        #process the background
+        label = utils.ROOF_LABEL['background']
+        for patch in self.viola_background:
+            index = self.process_patch(patch, label, index)
 
-        #load negative examples from: 1. Viola FP; 2. uninhabited images
+        #here we can add more random negative patches if needed
 
-    def get_neural_patches(roof_type, in_path):
-        in_path_source = utils.get_path(in_or_out=utils.IN, data_fold=utils.TRAINING)    
-        DataLoader.get_polygons(roof_type=roof_type,  
+        #remove the end if index<len(X) -- some patches failed to load
+        self.X = self.X[:index, :,:,:]
+        self.X = self.X.astype(np.float32)
+
+        self.X, self.y = sklearn.utils.shuffle(self.X, self.y, random_state=42)  # shuffle train data    
+        return self.X, self.y
+
+
+    def get_viola_positive_patches(self, path):
+        #lok at the viola folder, get all of the jpg.s depending on what roof_type the image name contains
+        viola_metal_thatch = defaultdict(list)
+        for file in os.listdir(self.thatch_metal_TP_viola_path):
+            if file.endswith('.jpg'):
+                patch = cv2.imread(path+file)
+                if 'metal' in file.lower():
+                    viola_metal_thatch['metal'].append(patch) 
+                elif 'thatch' in file.lower():
+                    viola_metal_thatch['thatch'].append(patch)
+        return viola_metal_thatch
+
+
+    def get_viola_background_patches(self, path): 
+        background_FP_viola_path = list()
+        for file in os.listdir(path):
+            if file.endswith('.jpg'):
+                if 'background' in file.lower():
+                    patch = cv2.imread(self.background_FP_viola_path+file)
+                    background_FP_viola_path.append(patch) 
+        return background_FP_viola_path 
+
+
+    def process_patch(self, patch, label, index):
+        x = np.asarray(patch, dtype='float32')/255
+        try:
+            x = utils.resize_rgb(x)
+            x = x.transpose(2,0,1)
+            x.shape = (1, x.shape[0], x.shape[1], x.shape[2])
+            self.X[index, :, :, :] = x
+        except ValueError, e:
+            print e
+            self.failed_patches += 1
+            print 'fail:'+ str(failures)
+        else:
+            self.y[index] = label
+            index += 1
+        return index 
+
+
+    def count_patches_helper(self):
+        total_length = 0 
+        for roof_type in utils.ROOF_TYPES:
+            total_length += len(self.viola_metal_thatch[roof_type])
+            total_length += len(self.ground_truth_metal_thatch[roof_type])
+        total_length += len(self.viola_background)
+        return total_length
 
     @staticmethod
-    def setup_augmented_patches():
-        '''
-        No division between different roof sizes: if a roof has a size that is off, we resize it
-        Make them lie down, save patches to folder
-        Augment patches, save them to augmented folder
-        '''
-        in_path = utils.get_path(in_or_out=utils.IN, data_fold=utils.TRAINING)
-        out_path = utils.get_path(neural=True, in_or_out=utils.IN, data_fold=utils.TRAINING)
-
-        img_names_list = [img_name for img_name in os.listdir(in_path) if img_name.endswith('.jpg')]
-
-        for roof_type in ['metal', 'thatch']:
-            for img_id, img_name in enumerate(img_names_list):
-
-                print 'Processing image: {0}'.format(img_name)
-                img_path = in_path+img_name
-
-                polygon_list = DataLoader.get_polygons(roof_type=roof_type, xml_name=img_name[:-3]+'xml', xml_path=in_path)
-                roof_patches = DataLoader.extract_patches(polygon_list, img_path=img_path, grayscale=True)
-
-                for roof_id, roof_img in enumerate(roof_patches):
-                    print 'Processing image {0}: roof {1}'.format(img_id, roof_id)
-                       
-                    #if it's vertical, make it lie down
-                    if roof_img.shape[0] > roof_img.shape[1]:
-                        roof_img = DataAugmentation.rotateImage(roof_img, clockwise=True)
-                    
-                    #write basic positive example to the right folder
-                    general_path = '{0}{1}_{2}_{3}'.format(out_path, roof_type, img_name[:-4], roof_id)
-
-                    #calculate and write the augmented images 
-                    for i in range(4):
-                        roof_img_cp = np.copy(roof_img)
-
-                        if i == 1:
-                            roof_img_cp = cv2.flip(roof_img_cp,flipCode=0)
-                        elif i == 2:
-                            roof_img_cp = cv2.flip(roof_img_cp,flipCode=1)
-                        elif i==3:
-                            roof_img_cp = cv2.flip(roof_img_cp,flipCode=-1)
-
-                        write_to_path = '{0}_flip{1}.jpg'.format(general_path, i)
-                        cv2.imwrite(write_to_path, roof_img_cp)
+    def save_img(x,y,i, other_text=''):
+        x = x*255
+        x = x.transpose(1,2,0)
+        cv2.imwrite('check_load_neural/{2}_img{0}_label{1}.jpg'.format(i, y[i], other_text), x)
 
 
-########################################
-## FINAL CODE USED BELOW
-########################################
 
 def main(data_reset=False):
-
+    X, y = NeuralDataLoad().load_data()
+    bins = np.bincount(y)
+    print bins 
+    print X.shape
+    print y.shape
+    for i in range(X.shape[0]):
+        x = X[i, :, :,:]
+        NeuralDataLoad.save_img(x,y, i)
 
 if __name__ == '__main__':
-    main(data_reset=False)
+    main()
 
 
