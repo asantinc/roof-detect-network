@@ -158,7 +158,7 @@ class Evaluation(object):
     def score_img_rectified(self, img_name): 
         raise ValueError('Call score_img instead')
     
-    def score_img(self, img_name):
+    def score_img(self, img_name, img_shape):
         '''Find best overlap between each roof in an img and the detections,
         according the VOC score
         '''
@@ -180,7 +180,7 @@ class Evaluation(object):
 
                 for d, detection in enumerate(detections):  # detections[roof_type]):                           #for each patch found
                     #detection_roof_portion is how much of the detection is covered by roof
-                    voc_score, detection_roof_portion = self.get_score(roof=roof, detection=detection)
+                    voc_score, detection_roof_portion = self.get_score(rows=img_shape[0], cols=img_shape[1], roof=roof, detection=detection)
                     if (voc_score > self.VOC_threshold) and (voc_score > best_voc_score):#this may be a true pos
                         best_voc_score = voc_score
                         best_detection = d 

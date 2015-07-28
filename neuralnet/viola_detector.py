@@ -7,6 +7,7 @@ import math
 from collections import defaultdict
 import pickle
 import csv
+import itertools
 
 import numpy as np
 import cv2
@@ -31,6 +32,7 @@ class ViolaDetector(object):
             detector_names=None, 
             group=None, #minNeighbors, scale...
             overlapThresh=None,
+            downsized=False,
             min_neighbors=3,
             scale=1.1,
             rotate=True, 
@@ -86,8 +88,11 @@ class ViolaDetector(object):
         '''
         for i, img_name in enumerate(self.img_names):
             print '************************ Processing image {0}/{1}\t{2} ************************'.format(i, len(self.img_names), img_name)
-            self.detect_roofs(img_name)
-            self.evaluation.score_img(img_name)
+            if self.group:
+                img = self.detect_roofs_group(img_name)
+            else:
+                img = self.detect_roofs(img_name)
+            self.evaluation.score_img(img_name, img.shape)
         self.evaluation.print_report()
         if self.output_patches:
             self.save_training_FP_and_TP(viola=True)
@@ -98,8 +103,11 @@ class ViolaDetector(object):
     def detect_roofs(self, img_name):
         try:
             rgb_unrotated = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
+            rgb_unrotated = utils.resize_rgb(rgb_unrotated, h=rgb_unrotated.shape[0]/2, w=rgb_unrotated.shape[1]/2)
+            pdb.set_trace()
             gray = cv2.cvtColor(rgb_unrotated, cv2.COLOR_BGR2GRAY)
             gray = cv2.equalizeHist(gray)
+            gray = utils.resize_rgb(gray, w=gray.shape[1]/2, h=gray.shape[0]/2) 
         except IOError as e:
             print e
             sys.exit(-1)
@@ -116,7 +124,7 @@ class ViolaDetector(object):
 
                         with Timer() as t: 
                             rotated_image = utils.rotate_image(gray, angle) if angle>0 else gray
-                            detections = self.detect_and_rectify(detector, rotated_image, angle, rgb_unrotated.shape[:2]) 
+                            detections, _ = self.detect_and_rectify(detector, rotated_image, angle, rgb_unrotated.shape[:2]) 
                         print 'Time detection: {0}'.format(t.secs)
                         self.viola_detections.total_time += t.secs
                         self.viola_detections.set_detections(roof_type=roof_type, img_name=img_name, 
@@ -132,10 +140,6 @@ class ViolaDetector(object):
     def detect_and_rectify(self, detector, image, angle, dest_img_shape):
         #do the detection
         detections = detector.detectMultiScale(image, scaleFactor=self.scale, minNeighbors=self.min_neighbors)
-
-        if self.group == 'angleDivided':
-            detections = suppression.non_max_suppression(detections, self.overlapThresh)
-
         #convert to proper coordinate system
         polygons = utils.convert_detections_to_polygons(detections)
 
@@ -146,7 +150,51 @@ class ViolaDetector(object):
         else:
             rectified_detections = polygons
         print 'done rotating'
-        return rectified_detections
+
+        if self.group:
+            bounding_boxes = utils.get_bounding_boxes(np.array(rectified_detections))
+        else:
+            bounding_boxes = None
+        return rectified_detections, bounding_boxes
+
+
+    def detect_roofs_group(self, img_name):
+        try:
+            rgb_unrotated = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
+            gray = cv2.cvtColor(rgb_unrotated, cv2.COLOR_BGR2GRAY)
+            gray = cv2.equalizeHist(gray)
+        except IOError as e:
+            print e
+            sys.exit(-1)
+        else:
+            for roof_type, detectors in self.roof_detectors.iteritems():
+                all_detections = list()
+                for i, detector in enumerate(detectors):
+                    for angle in self.angles:
+                        #for thatch we only need one angle
+                        if roof_type == 'thatch' and angle>0:
+                            continue
+
+                        print 'Detecting with detector: '+str(i)
+                        print 'ANGLE '+str(angle)
+
+                        with Timer() as t: 
+                            rotated_image = utils.rotate_image(gray, angle) if angle>0 else gray
+                            detections, bounding_boxes = self.detect_and_rectify(detector, rotated_image, angle, rgb_unrotated.shape[:2])
+                            all_detections.append(list(bounding_boxes)) 
+                        print 'Time detection: {0}'.format(t.secs)
+                        self.viola_detections.total_time += t.secs
+                #grouping
+                all_detections = [d for detections in all_detections for d in detections] 
+                grouped_detections, rects_grouped = cv2.groupRectangles(all_detections, 1) 
+                print "GROUPING DOWN BY:"
+                print len(all_detections)-len(grouped_detections)
+                grouped_polygons = utils.convert_detections_to_polygons(grouped_detections)
+
+                #merge the detections from all angles
+                self.viola_detections.set_detections(roof_type=roof_type, img_name=img_name, 
+                                detection_list=grouped_polygons, img=rotated_image)
+            return rgb_unrotated
 
 
 
@@ -266,6 +314,6 @@ if __name__ == '__main__':
     # removeOff: whether to remove the roofs that fall off the image when rotating (especially the ones on the edge
     #group: can be None, group_rectangles, group_bounding
     # if check_both_detectors is True we check if either the metal or the thatch detector has found a detection that matches either type of roof 
-    detector_params = {'min_neighbors':3, 'scale':1.08, 'group': 'angleDivided', 'overlapThresh':0.3, 'rotate':True, 'removeOff':True} 
+    detector_params = {'min_neighbors':3, 'scale':1.08, 'group': False, 'downsized':True, 'rotate':True, 'removeOff':True} 
     main(output_patches=output_patches, detector_params=detector_params, save_imgs=False, data_fold=data_fold, original_dataset=True)
  

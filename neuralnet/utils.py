@@ -249,13 +249,14 @@ def get_params_from_file(path):
 def resize_rgb(img, w=PATCH_W, h=PATCH_H):
     resized = np.empty((h,w,3))
     for channel in range(img.shape[-1]):
-        resized[:,:,channel] = cv2.resize(img[:,:,channel], (h, w), dst=np.empty((h,w)), fx=0, fy=0, interpolation=cv2.INTER_AREA) 
+        temp = cv2.resize(img[:,:,channel],(w, h), dst=np.empty((w, h)), fx=0, fy=0, interpolation=cv2.INTER_AREA) 
+        resized[:,:,channel]=temp
     return resized
 
 def resize_neural_patch(patch, w=CROP_SIZE, h=CROP_SIZE):
     resized = np.empty((3, h, w))
     for channel in range(3):
-        resized[channel, :, :] = cv2.resize(patch[channel,:,:], (h, w), dst=np.empty((h,w)), fx=0, fy=0, interpolation=cv2.INTER_AREA)
+        resized[channel, :, :] = cv2.resize(patch[channel,:,:], (w, h), dst=np.empty((h,w)), fx=0, fy=0, interpolation=cv2.INTER_AREA)
     return resized
 
 ########################
@@ -502,11 +503,27 @@ def convert_rect_to_polygon(rect):
 def convert_detections_to_polygons(detections):
     '''Covert (x,y,w,h) to (p1, p2, p3, p4) where each point is in the order (x, y)
     '''
-    polygons = np.zeros((detections.shape[0], 4, 2))
+    length = len(detections)
+    #polygons = np.zeros((detections.shape[0], 4, 2))
+    polygons = np.zeros((length, 4, 2))
     for i, d in enumerate(detections):
         polygons[i, :] = convert_rect_to_polygon(d)
     return polygons
 
+def get_bounding_boxes(detections):
+    #get a polygon, return a boundin box in form x, y, w, h
+    bounding_boxes = np.empty((detections.shape[0], 4))
+    xmax = np.maximum.reduce([detections[:,0,0], detections[:,1,0], detections[:,2,0],detections[:,3,0]])
+    xmin = np.minimum.reduce([detections[:,0,0], detections[:,1,0], detections[:,2,0],detections[:,3,0]])
+    ymax = np.maximum.reduce([detections[:,0,1], detections[:,1,1], detections[:,2,1],detections[:,3,1]])
+    ymin = np.minimum.reduce([detections[:,0,1], detections[:,1,1], detections[:,2,1],detections[:,3,1]])
+    w = xmax - xmin
+    h = ymax - ymin
+    bounding_boxes[:,0] = xmin
+    bounding_boxes[:,1] = ymin
+    bounding_boxes[:,2] = w
+    bounding_boxes[:,3] = h
+    return bounding_boxes
 
 
 ########################
@@ -556,21 +573,21 @@ def four_point_transform(image, pts):
 # ROTATIONS
 #########################
 
-def rotate_point(pos, img_rot, theta, dst_img_rows=1200, dst_img_cols=2000):
+def rotate_point(pos, img_rot, theta, dest_img_shape):
     '''
     Pos: point to be rotated, in (x, y) order
     img_rot: image around whose center the point should be rotated
     dst_img_rows, dst_img_cols: the shape of the image to which we are sendind the point
     '''
-    warnings.warn('!!!! rotate_point assumes image is size 1200,2000, but this may not always be the case. You should pass in the size of the image')
+    h, w = dest_img_shape
     theta = math.radians(theta)
 
     #translation: how much the image has moved
     oy, ox = tuple(np.array(img_rot.shape[:2])/2)
-    off_y, off_x = (oy-600), (ox-1000)
+    off_y, off_x = (oy-(h/2)), (ox-(w/2))
 
     #reposition the point and the center: move it back 
-    oy, ox = 600, 1000
+    oy, ox = (h/2), (w/2)
     px, py = pos[0]-off_x, pos[1]-off_y
 
     #rotate the point
@@ -579,19 +596,19 @@ def rotate_point(pos, img_rot, theta, dst_img_rows=1200, dst_img_cols=2000):
     return int(p_x), int(p_y)
 
 
-def rotate_polygon(polygon, img, angle):
+def rotate_polygon(polygon, img, angle, dest_img_shape):
     '''Rotate each of the points of a polygon
     img: the image center around which we will be rotating
     '''
     rot_polygon = np.empty((polygon.shape))
     for i, pnt in enumerate(polygon):
-        rot_polygon[i, :] = rotate_point(pnt, img, angle)
+        rot_polygon[i, :] = rotate_point(pnt, img, angle, dest_img_shape)
     #reordered_rot_polygon = order_points(rot_polygon)--> this messes points up
     reordered_rot_polygon = rot_polygon
     return reordered_rot_polygon
 
 
-def rotate_detection_polygons(detections, img, angle, dst_img_shape, remove_off_img=False):
+def rotate_detection_polygons(detections, img, angle, dest_img_shape, remove_off_img=False):
     '''Rotate all detections that are already in the form of polygons
     for a given angle and an original image around whose center we rotate
     '''
@@ -601,7 +618,7 @@ def rotate_detection_polygons(detections, img, angle, dst_img_shape, remove_off_
 
     for detection in detections:
         accept_polygon=True
-        rotated_pol = rotate_polygon(detection, img, angle)
+        rotated_pol = rotate_polygon(detection, img, angle, dest_img_shape)
 
         #remove points that fall off the image
         if remove_off_img == True:
