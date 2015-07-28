@@ -18,6 +18,8 @@ from timer import Timer
 
 from reporting import Evaluation, Detections
 import viola_detector_helpers
+import suppression
+
 DEBUG = False
 
 class ViolaDetector(object):
@@ -28,6 +30,7 @@ class ViolaDetector(object):
             save_imgs=False,
             detector_names=None, 
             group=None, #minNeighbors, scale...
+            overlapThresh=None,
             min_neighbors=3,
             scale=1.1,
             rotate=True, 
@@ -49,6 +52,7 @@ class ViolaDetector(object):
         self.scale = scale
         self.min_neighbors = min_neighbors
         self.group = group
+        self.overlapThresh = overlapThresh
         self.angles = utils.VIOLA_ANGLES if rotate else [0]
         self.remove_off_img = removeOff
 
@@ -128,13 +132,15 @@ class ViolaDetector(object):
     def detect_and_rectify(self, detector, image, angle, dest_img_shape):
         #do the detection
         detections = detector.detectMultiScale(image, scaleFactor=self.scale, minNeighbors=self.min_neighbors)
+
+        if self.group == 'angleDivided':
+            detections = suppression.non_max_suppression(detections, self.overlapThresh)
+
         #convert to proper coordinate system
         polygons = utils.convert_detections_to_polygons(detections)
-        if DEBUG:
-            pass
-            #we can save the detections in the rotated image here
-        #rotate back to original image coordinates
+
         if angle > 0:
+            #rotate back to original image coordinates
             print 'rotating...'
             rectified_detections = utils.rotate_detection_polygons(polygons, image, angle, dest_img_shape, remove_off_img=self.remove_off_img)
         else:
@@ -143,7 +149,6 @@ class ViolaDetector(object):
         return rectified_detections
 
 
-       
 
     def save_training_FP_and_TP(self, viola=False, neural=False):
         '''Save the correct and incorrect detections so that the neural network can train on it
@@ -261,6 +266,6 @@ if __name__ == '__main__':
     # removeOff: whether to remove the roofs that fall off the image when rotating (especially the ones on the edge
     #group: can be None, group_rectangles, group_bounding
     # if check_both_detectors is True we check if either the metal or the thatch detector has found a detection that matches either type of roof 
-    detector_params = {'min_neighbors':3, 'scale':1.08, 'group': None, 'rotate':False, 'removeOff':True} 
+    detector_params = {'min_neighbors':3, 'scale':1.08, 'group': 'angleDivided', 'overlapThresh':0.3, 'rotate':True, 'removeOff':True} 
     main(output_patches=output_patches, detector_params=detector_params, save_imgs=False, data_fold=data_fold, original_dataset=True)
  

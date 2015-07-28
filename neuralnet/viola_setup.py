@@ -51,7 +51,7 @@ class ViolaDataSetup(object):
                 print 'Processing image: {0}'.format(img_name)
                 img_path = in_path+img_name
 
-                polygon_list = DataLoader.get_polygons(roof_type=roof_type, xml_name=img_name[:-3]+'xml', xml_path=in_path)
+                polygon_list = DataLoader.get_polygons(roof_type=roof_type, xml_name=img_name[:-3]+'xml', xml_path=in_path, padding=)
                 roof_patches = DataLoader.extract_patches(polygon_list, img_path=img_path, grayscale=True)
 
                 for roof_id, roof_img in enumerate(roof_patches):
