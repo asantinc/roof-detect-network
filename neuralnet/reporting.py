@@ -56,6 +56,9 @@ class Detections(object):
     def set_detections(self, roof_type=None, img_name=None, angle=None, detection_list=None, img=None):
         '''@param img is the rotated image
         '''
+        #if we don't pass in an angle, we simply set everything to be from angle zero
+        angle = angle if angle is not None else 0
+
         #ensure we have a place to store detections for all angles for the current image/rooftype
         if img_name not in self.detections[roof_type]:
             self.detections[roof_type][img_name] = defaultdict(list)
@@ -72,9 +75,10 @@ class Detections(object):
         if roof_type is None:   #any roof_type
             if angle is None:
                 #return all detections regardless of angle or rooftype
-                for roof_type in utils.ROOF_TYPES:
-                    for angle in self.detections[roof_type][img_name].keys():
-                        detections.extend(self.detections[roof_type][img_name][angle])
+                for roof_type in self.detections.keys():
+                    if img_name in self.detections[roof_type]:
+                        for angle in self.detections[roof_type][img_name].keys():
+                            detections.extend(self.detections[roof_type][img_name][angle])
 
             else:
                 #return detections for some angle
@@ -95,7 +99,7 @@ class Detections(object):
 
 
 class Evaluation(object):
-    def __init__(self, output_patches=False, method=None, 
+    def __init__(self, report_name=None, output_patches=False, method=None, 
                         folder_name=None, save_imgs=True, out_path=None, 
                         detections=None, in_path=None, detector_names=None):
         self.save_imgs = save_imgs
@@ -113,6 +117,7 @@ class Evaluation(object):
         self.in_path = in_path          #the path from which the images are taken
         self.img_names = [f for f in listdir(self.in_path) if f.endswith('.jpg')]
 
+        #the ground truth roofs for every image and roof type
         self.correct_roofs = dict()
         for roof_type in utils.ROOF_TYPES:
             self.correct_roofs[roof_type] = dict()
@@ -122,9 +127,10 @@ class Evaluation(object):
                                                             xml_name=img_name[:-3]+'xml' , xml_path=self.in_path)
                 self.detections.update_roof_num(self.correct_roofs[roof_type][img_name], roof_type)
 
+        #init the report file
         self.out_path = out_path
         if detector_names is not None:
-            self.init_report(detector_names)
+            self.init_report(detector_names, report_name=report_name)
 
         #variables needed to pickle the FP and TP to a file that makes sense
         assert method is not None
@@ -133,8 +139,9 @@ class Evaluation(object):
         #self.datasource = self.set_datasource_name(in_path)
 
 
-    def init_report(self, detector_names):
-        self.report_file = self.out_path+'report.txt'
+    def init_report(self, detector_names, report_name=None):
+        report_name = report_name if report_name is not None else 'report.txt'
+        self.report_file = self.out_path+report_name
         try:
             report = open(self.report_file, 'w')
             report.write('metal detectors: \t')
@@ -148,8 +155,10 @@ class Evaluation(object):
         else:
             report.close()
 
-
     def score_img_rectified(self, img_name): 
+        raise ValueError('Call score_img instead')
+    
+    def score_img(self, img_name):
         '''Find best overlap between each roof in an img and the detections,
         according the VOC score
         '''
@@ -190,11 +199,13 @@ class Evaluation(object):
        
 
     def update_scores(self, img_name, detections, false_pos_logical, bad_detection_logical):
-        #a detection is only considered bad if it doesn't match either a metal or a thatch roof
         detects = np.array(detections)
-        truly_bad_detections = np.logical_and(bad_detection_logical['metal'], bad_detection_logical['thatch']) 
-        bad_d = detects[truly_bad_detections]
-        self.detections.update_bad_detections(bad_detections=bad_d, img_name=img_name) 
+
+        if self.output_patches:
+            #a detection is only considered bad if it doesn't match either a metal or a thatch roof
+            truly_bad_detections = np.logical_and(bad_detection_logical['metal'], bad_detection_logical['thatch']) 
+            bad_d = detects[truly_bad_detections]
+            self.detections.update_bad_detections(bad_detections=bad_d, img_name=img_name) 
 
         for roof_type in utils.ROOF_TYPES: 
             false_d = detects[false_pos_logical[roof_type]]
@@ -202,18 +213,21 @@ class Evaluation(object):
             pos_d = detects[np.invert(false_pos_logical[roof_type])]
             self.detections.update_true_pos(true_pos=pos_d, roof_type=roof_type, img_name=img_name) 
             
-            #get good are good for each specific roof type separately, unlike the truly bad detections above 
-            good_d = detects[np.invert(bad_detection_logical[roof_type])]
-            self.detections.update_good_detections(good_detections=good_d, roof_type=roof_type, img_name=img_name) 
+            if self.output_patches:
+                #get good are good for each specific roof type separately, unlike the truly bad detections above 
+                good_d = detects[np.invert(bad_detection_logical[roof_type])]
+                self.detections.update_good_detections(good_detections=good_d, roof_type=roof_type, img_name=img_name) 
 
             print '-------- Roof Type: {0} --------'.format(roof_type)
             print 'Roofs: {0}'.format(len(self.correct_roofs[roof_type][img_name]))
             print 'False pos: {0}'.format(len(false_d))
             print 'True pos: {0}'.format(len(pos_d))
-            print 'Good det: {0}'.format(len(good_d))
+            if self.output_patches:
+                print 'Good det: {0}'.format(len(good_d))
         print '---'
         print 'All Detections: {0}'.format(len(detections))
-        print 'All Bad det: {0}'.format(len(bad_d))
+        if self.output_patches:
+            print 'All Bad det: {0}'.format(len(bad_d))
 
 
     def get_score(self, rows=1200, cols=2000, roof=None, detection=None):

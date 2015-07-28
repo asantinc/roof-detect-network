@@ -17,7 +17,7 @@ sys.path.append('~/roof/Lasagne/lasagne')
 sys.path.append('~/roof/nolearn/nolearn')
 
 from nolearn.lasagne.base import NeuralNet, _sldict, BatchIterator
-import experiment_settings as settings
+import utils
 
 class MyNeuralNet(NeuralNet):
 	'''
@@ -75,7 +75,7 @@ class MyNeuralNet(NeuralNet):
 		self.batch_iterator_test = batch_iterator_test
         	self.preproc_scaler = preproc_scaler
                 self.num_layers=num_layers
-        	#self.set_layer_params(num_layers=self.num_layers)
+
 
 	def train_test_split(self, X, y, eval_size):
 	    if eval_size:
@@ -102,19 +102,13 @@ class MyNeuralNet(NeuralNet):
                 X_valid = X_valid_reshaped.reshape(valid_shape[0], valid_shape[1], valid_shape[2], valid_shape[3])
 
 	    return X_train, X_valid, y_train, y_valid
-    
-        ''' 
-        def set_params(self, **kwargs):
-            for key in kwargs.keys():
-                assert not hasattr(self, key)
-            vars(self).update(kwargs)
-            self._kwargs_keys = list(kwargs.keys())
-        '''
+   
 
         def save_weights(self):
             ''' Saves weigts of model so they can be loaded back later:
             '''
-            with open('saved_weights/'+settings.time_stamped(self.net_name)+'.pickle', 'wb') as f:
+            path = '../parameters/saved_weights/'
+            with open(path+self.net_name+'.pickle', 'wb') as f:
                 pickle.dump(self, f, -1)
         
         
@@ -126,7 +120,8 @@ class MyNeuralNet(NeuralNet):
             plt.plot(train_loss, label='train loss')
             plt.plot(valid_loss, label='valid loss')
             plt.legend(loc='best')
-            plt.savefig(settings.OUT_IMAGES+self.net_name+'_loss.png')
+            path = utils.get_path(neural=True, in_or_out=utils.OUT, data_fold=utils.TRAIN) 
+            plt.savefig(path+self.net_name+'_loss.png')
         
 
         @staticmethod
@@ -212,5 +207,44 @@ class MyNeuralNet(NeuralNet):
             return net_layers, params_dict 
 
 
+class EarlyStopping(object):
+    def __init__(self, patience=100):
+        self.patience = patience
+        self.best_valid = np.inf
+        self.best_valid_epoch = 0
+        self.best_weights = None
+
+    def __call__(self, nn, train_history):
+        current_valid = train_history[-1]['valid_loss']
+        current_epoch = train_history[-1]['epoch']
+        if current_valid < self.best_valid:
+            self.best_valid = current_valid
+            self.best_valid_epoch = current_epoch
+            self.best_weights = nn.get_all_params_values()
+        elif self.best_valid_epoch + self.patience < current_epoch:
+            print "Early stopping"
+            print("Best valid loss was {:.6f} at epoch {}.".format(
+                                self.best_valid, self.best_valid_epoch))
+            nn.load_params_from(self.best_weights)
+            raise StopIteration()
+
+
+
+class SaveBestWeights(object):
+    def __init__(self, patience=100):
+        self.best_valid = np.inf
+        self.weight_path = '../parameters/saved_weights/'
+
+    def __call__(self, nn, train_history):
+        current_valid = train_history[-1]['valid_loss']
+        current_epoch = train_history[-1]['epoch']
+        if current_valid < self.best_valid:
+            self.best_valid = current_valid
+            self.best_weights = nn.get_all_params_values()
+            weight_name = '{0}{1}_valid{2}_epoch{3}.pickle'.format(self.weight_path, nn.net_name, self.best_valid, current_epoch) 
+            with open(weight_name, 'wb') as f:
+                pickle.dump(nn, f, -1)                 
+
 if __name__ == "__main__":
     net = MyNeuralNet()
+

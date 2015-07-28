@@ -88,10 +88,8 @@ class NeuralDataLoad(object):
 
 
     def process_patch(self, patch, label, index):
-        x = np.asarray(patch, dtype='float32')/255
         try:
-            x = utils.resize_rgb(x)
-            x = x.transpose(2,0,1)
+            x = utils.cv2_to_neural(patch)
             x.shape = (1, x.shape[0], x.shape[1], x.shape[2])
             self.X[index, :, :, :] = x
         except ValueError, e:

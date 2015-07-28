@@ -1,6 +1,0 @@
-Contains parameter files to run the full pipeline with ViolaJones and ConvNets.
-
-It should include:
-- what viola detectors should be used
-- what the test set is
-

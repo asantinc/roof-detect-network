@@ -41,7 +41,7 @@ ROOF_TYPES = ['metal', 'thatch']
 #VIOLA TRAINING
 ###################################
 #Viola constants
-RECTIFIED_COORDINATES = '../data/source/bounding_inhabited/'
+RECTIFIED_COORDINATES = '../data_original/bounding_inhabited/'
 UNINHABITED_PATH = '../data/source/uninhabited/'
 BG_FILE = '../viola_jones/bg.txt'
 DAT_PATH = '../viola_jones/all_dat/'
@@ -89,6 +89,12 @@ def time_stamped(fname=''):
         fmt =  '%m-%d-%H-%M/'
     return datetime.datetime.now().strftime(fmt).format(fname=fname)
 
+def time_stamped_file(fname=''):
+    fmt = '{fname}_%d-%m-%H-%M'
+    return datetime.datetime.now().strftime(fmt).format(fname=fname)
+
+
+
 def mkdir(out_folder_path=None, confirm=False):
     assert out_folder_path is not None
     if not os.path.isdir(out_folder_path):
@@ -110,24 +116,26 @@ def check_append(path_being_constructed, addition):
     if os.path.isdir(''.join(path_being_constructed)):
         return path_being_constructed
     else:
-        mkdir(out_folder_path=''.join(path_being_constructed), confirm=True) 
+        mkdir(out_folder_path=''.join(path_being_constructed)) 
 
 
 def get_path(in_or_out=None, out_folder_name=None, params=False, full_dataset=False, 
-                    pipe=False, viola=False, template=False, neural=False, data_fold=None):
+                    pipe=False, viola=False, template=False, neural=False, neural_weights=False, data_fold=None):
     '''
     Return path to either input, output or parameter files. If a folder does not exit, ask user for confirmation and create it
     '''
     path = list()
     if params:
         #PARAMETER FILES
-        check_append(path, '../parameters/')
+        path.append('/afs/inf.ed.ac.uk/group/ANC/s0839470/parameters/')
         if neural:
-            check_append(path, 'net_params/') 
+            path.append('net_params/') 
+        elif neural_weights:
+            path.append('saved_weights/')
         elif pipe:
-            check_append(path, 'pipe_params/')
+            path.append('pipe_params/')
         elif viola:
-            check_append(path, 'detector_combos/')
+            path.append('detector_combos/')
         else:
             raise ValueError('There are no parameter files for templating')
     else:
@@ -199,6 +207,22 @@ def print_debug(to_print, verbosity=1):
 # Getting parameters 
 ########################################
 
+def view_combos():
+    combo_path = get_path(params=True, viola=True)
+    for file in os.listdir(combo_path):
+        if file.startswith('combo') == False:
+            continue
+        #get contents
+        contents = list()
+        with open(combo_path+file, 'r') as f:
+            for line in f:
+                contents.append(line)
+        contents = ''.join(contents)
+        print file+':'
+        print contents
+        print '\n'
+
+
 def get_params_from_file(path):
     print 'Getting parameters from {0}'.format(path)
     parameters = dict()
@@ -225,9 +249,14 @@ def get_params_from_file(path):
 def resize_rgb(img, w=PATCH_W, h=PATCH_H):
     resized = np.empty((h,w,3))
     for channel in range(img.shape[-1]):
-        resized[:,:,channel] = cv2.resize(img[:,:,channel], (h, w), dst=resized[0,:,:], fx=0, fy=0, interpolation=cv2.INTER_AREA) 
+        resized[:,:,channel] = cv2.resize(img[:,:,channel], (h, w), dst=np.empty((h,w)), fx=0, fy=0, interpolation=cv2.INTER_AREA) 
     return resized
 
+def resize_neural_patch(patch, w=CROP_SIZE, h=CROP_SIZE):
+    resized = np.empty((3, h, w))
+    for channel in range(3):
+        resized[channel, :, :] = cv2.resize(patch[channel,:,:], (h, w), dst=np.empty((h,w)), fx=0, fy=0, interpolation=cv2.INTER_AREA)
+    return resized
 
 ########################
 # Image rotation
@@ -485,41 +514,43 @@ def convert_detections_to_polygons(detections):
 #######################
 
 def four_point_transform(image, pts):
+    '''Take a rotate patch from an image and straightens it. 
+    '''
 	# obtain a consistent order of the points and unpack them
 	# individually
-	rect = order_points(pts)
-	(tl, tr, br, bl) = rect
+    rect = order_points(pts)
+    (tl, tr, br, bl) = rect
 	# compute the width of the new image, which will be the
 	# maximum distance between bottom-right and bottom-left
 	# x-coordiates or the top-right and top-left x-coordinates
-	widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
-	widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
-	maxWidth = max(int(widthA), int(widthB))
- 
-	# compute the height of the new image, which will be the
-	# maximum distance between the top-right and bottom-right
-	# y-coordinates or the top-left and bottom-left y-coordinates
-	heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
-	heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
-	maxHeight = max(int(heightA), int(heightB))
- 
-	# now that we have the dimensions of the new image, construct
-	# the set of destination points to obtain a "birds eye view",
-	# (i.e. top-down view) of the image, again specifying points
-	# in the top-left, top-right, bottom-right, and bottom-left
-	# order
-	dst = np.array([
-		[0, 0],
-		[maxWidth - 1, 0],
-		[maxWidth - 1, maxHeight - 1],
-		[0, maxHeight - 1]], dtype = "float32")
- 
-	# compute the perspective transform matrix and then apply it
-	M = cv2.getPerspectiveTransform(rect, dst)
-	warped = cv2.warpPerspective(image, M, (maxWidth, maxHeight))
- 
-	# return the warped image
-	return warped
+    widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
+    widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
+    maxWidth = max(int(widthA), int(widthB))
+
+    # compute the height of the new image, which will be the
+    # maximum distance between the top-right and bottom-right
+    # y-coordinates or the top-left and bottom-left y-coordinates
+    heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
+    heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
+    maxHeight = max(int(heightA), int(heightB))
+
+    # now that we have the dimensions of the new image, construct
+    # the set of destination points to obtain a "birds eye view",
+    # (i.e. top-down view) of the image, again specifying points
+    # in the top-left, top-right, bottom-right, and bottom-left
+    # order
+    dst = np.array([
+        [0, 0],
+        [maxWidth - 1, 0],
+        [maxWidth - 1, maxHeight - 1],
+        [0, maxHeight - 1]], dtype = "float32")
+
+    # compute the perspective transform matrix and then apply it
+    M = cv2.getPerspectiveTransform(rect, dst)
+    warped = cv2.warpPerspective(image, M, (maxWidth, maxHeight))
+
+    # return the warped image
+    return warped
 
 #########################
 # ROTATIONS
@@ -620,7 +651,33 @@ def draw_detections(polygon_list, img, fill=False, color=(0, 0, 255), number=Fal
         draw_polygon(polygon, img, fill=fill, color=color, number=num, thickness=thickness)
 
 
+############################
+# CV2 and LASAGNE
+############################
+def cv2_to_neural(img, w=PATCH_W, h=PATCH_H):
+    x = np.asarray(img, dtype='float32')/255
+    try:
+        #need to resize the image so it can be fed to neural network
+        x = resize_rgb(x, w, h)
+        #the channel comes first (h, w, channels) becomes (channels, h, w)
+        x = x.transpose(2,0,1)
+    except ValueError, e:
+        raise ValueError
+    else:
+        return x
+
+def neural_to_cv2(x):
+    try:
+        x *= 255
+        #the channel comes first (h, w, channels) becomes (channels, h, w)
+        img = x.transpose(1,2,0)
+    except ValueError, e:
+        raise ValueError
+    else:
+        return img
+
+
 
 if __name__ == '__main__':
-    pass
+    view_combos()
 

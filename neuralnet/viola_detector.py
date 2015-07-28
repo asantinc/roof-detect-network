@@ -18,7 +18,7 @@ from timer import Timer
 
 from reporting import Evaluation, Detections
 import viola_detector_helpers
-DEBUG = True
+DEBUG = False
 
 class ViolaDetector(object):
     def __init__(self, 
@@ -30,7 +30,7 @@ class ViolaDetector(object):
             group=None, #minNeighbors, scale...
             min_neighbors=3,
             scale=1.1,
-            rotate=False, 
+            rotate=True, 
             removeOff=True,
             output_patches=True
             ):
@@ -83,11 +83,11 @@ class ViolaDetector(object):
         for i, img_name in enumerate(self.img_names):
             print '************************ Processing image {0}/{1}\t{2} ************************'.format(i, len(self.img_names), img_name)
             self.detect_roofs(img_name)
-            self.evaluation.score_img_rectified(img_name)
+            self.evaluation.score_img(img_name)
         self.evaluation.print_report()
         if self.output_patches:
             self.save_training_FP_and_TP(viola=True)
-            #self.save_training_FP_and_TP(neural=True)
+            self.save_training_FP_and_TP(neural=True)
         open(self.out_folder+'DONE', 'w').close() 
 
 
@@ -122,6 +122,7 @@ class ViolaDetector(object):
                             rgb_to_write = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
                             utils.draw_detections(detections, rgb_to_write)
                             cv2.imwrite('{0}{1}_{2}.jpg'.format(self.out_folder, img_name[:-4], angle), rgb_to_write)
+            return rgb_unrotated
 
 
     def detect_and_rectify(self, detector, image, angle, dest_img_shape):
@@ -207,25 +208,6 @@ class ViolaDetector(object):
         cv2.imwrite('{0}{1}_{2}_extract_{3}.jpg'.format(general_path, img_name[:-4], roof_type, extraction_type), img_debug)
 
 
-    def group_detections(self, detections):
-        pass
-        #GROUPING
-        # TODO: fix the grouping
-        # with Timer() as t:
-        #     if self.group == 'group_rectangles':
-        #         raise ValueError('We need to consider the angles here also')
-        #         detected_roofs[roof_type][angle], weights = cv2.groupRectangles(np.array(detected_roofs[roof_type]).tolist(), 
-        #                                                    min_neighbors, eps)
-        #     elif self.group ==  'group_bounding':
-        #         raise ValueError('We need to consider the angles here also')
-        #         detected_roofs[roof_type][angle] = self.evaluation.get_bounding_rects(img_name=img_name, rows=1200, 
-        #                     cols=2000, detections=detected_roofs[roof_type]) 
-        #     else:
-        #         pass
-
-        #self.viola_detections.total_time += t.secs
-
-
     def mark_save_current_rotation(self, img_name, img, detections, angle, out_folder=None):
         out_folder = self.out_folder if out_folder is None else out_folder
         polygons = np.zeros((len(detections), 4, 2))
@@ -242,12 +224,12 @@ class ViolaDetector(object):
 def main(output_patches=True, detector_params=None, original_dataset=True, save_imgs=True, data_fold=utils.VALIDATION):
     combo_f_name = None
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "c:")
+        opts, args = getopt.getopt(sys.argv[1:], "f:")
     except getopt.GetoptError:
         sys.exit(2)
         print 'Command line failed'
     for opt, arg in opts:
-        if opt == '-c':
+        if opt == '-f':
             combo_f_name = arg
 
     assert combo_f_name is not None
@@ -270,16 +252,15 @@ def main(output_patches=True, detector_params=None, original_dataset=True, save_
 
 
 if __name__ == '__main__':
-    output_patches = True #if you want to save the true pos and false pos detections, you need to use the training set
+    output_patches = False#True #if you want to save the true pos and false pos detections, you need to use the training set
     if output_patches:
         data_fold=utils.TRAINING
     else: 
         data_fold=utils.VALIDATION
-    data_fold=utils.SMALL_TEST
     
     # removeOff: whether to remove the roofs that fall off the image when rotating (especially the ones on the edge
     #group: can be None, group_rectangles, group_bounding
     # if check_both_detectors is True we check if either the metal or the thatch detector has found a detection that matches either type of roof 
-    detector_params = {'min_neighbors':3, 'scale':1.08, 'group': None, 'rotate':True, 'removeOff':True} 
-    main(output_patches=output_patches, detector_params=detector_params, save_imgs=True, data_fold=data_fold, original_dataset=True)
+    detector_params = {'min_neighbors':3, 'scale':1.08, 'group': None, 'rotate':False, 'removeOff':True} 
+    main(output_patches=output_patches, detector_params=detector_params, save_imgs=False, data_fold=data_fold, original_dataset=True)
  

@@ -5,24 +5,21 @@ import numpy as np
 from nolearn.lasagne.base import NeuralNet, _sldict, BatchIterator
 import scipy.ndimage.interpolation
 
+import utils
+
 CROP_SIZE = 32
 IMG_SIZE = 40
 
-'''
-class BasicBatchIterator(BatchIterator):
-    def transform(self, Xb, yb):
-        temp_Xb = np.zeros((Xb.shape[0], Xb.shape[1], CROP_SIZE, CROP_SIZE))
-        xmin = ymin = (IMG_SIZE-CROP_SIZE)/2
-        temp_Xb[:,:,:,:] = Xb[:, :, xmin:(xmin+CROP_SIZE), ymin:(ymin+CROP_SIZE)]
-        return temp_Xb, yb
-'''
 
 
-class CropOnlyBatchIterator(BatchIterator):
+class ResizeBatchIterator(BatchIterator):
     def transform(self, Xb, yb):
-        temp_Xb = np.zeros((Xb.shape[0], Xb.shape[1], CROP_SIZE, CROP_SIZE))
-        xmin = ymin = (IMG_SIZE-CROP_SIZE)/2
-        temp_Xb[:,:,:,:] = Xb[:, :, xmin:(xmin+CROP_SIZE), ymin:(ymin+CROP_SIZE)]
+        temp_Xb = np.empty((Xb.shape[0], Xb.shape[1], CROP_SIZE, CROP_SIZE))
+        for i, x in enumerate(Xb):
+            x_transposed = x.transpose(1,2,0) 
+            x_resized = utils.resize_rgb(x_transposed, w=CROP_SIZE, h=CROP_SIZE)
+            x_new = x_resized.transpose(2,0,1)
+            temp_Xb[i, :, :, :]  = x_new
         return temp_Xb, yb
 
 

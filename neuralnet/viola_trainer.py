@@ -13,7 +13,6 @@ import cv
 from scipy import misc, ndimage #load images
 
 import get_data
-import experiment_settings as settings
 from timer import Timer
 
 class ViolaTrainer(object):
@@ -21,8 +20,6 @@ class ViolaTrainer(object):
     def train_cascade(vec_files=None, feature_type='haar', max_false_alarm_rate=0.5, stages=20, minHitRate=0.99999, roof_type=None, padding=-1):
         cascades = list()
         roof_type = roof_type
-        if vec_files is None:    
-            vec_files = get_data.DataLoader().get_img_names_from_path(path=utils.VEC_PATH, extension='.vec') 
         for vec_file in vec_files:
             vec_type = vec_file[:5] if roof_type == 'metal' else vec_file[:6]
             if (roof_type is None or vec_type  == roof_type):
@@ -94,4 +91,4 @@ def main(max_false_alarm=0.2, feature_type=None):
 
 
 if __name__ == '__main__':
-    main(max_false_alarm=0.4, feature_type='LBP')
+    main(max_false_alarm=0.3, feature_type='LBP')

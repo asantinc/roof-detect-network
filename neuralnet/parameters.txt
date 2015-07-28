@@ -1,0 +1,26 @@
+viola_training: in name of detector
+window_width
+window_height
+roof_type
+feature_type
+false_alarm_rate
+
+Viola_detection: in COMBO_FILE
+detector_thatch
+detector_metal
+scale
+min_neighbors
+
+Neural_training:
+preloaded_weights
+num_layers
+other parameters...
+learning rate etc.
+
+Neural_testing:
+pickle_file
+
+Pipeline:
+Report name: neural_pickle_file+viola_combo
+neural_pickle_file
+viola_detection
