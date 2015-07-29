@@ -37,8 +37,47 @@ class ViolaDetector(object):
             scale=1.1,
             rotate=True, 
             removeOff=True,
-            output_patches=True
+            output_patches=True,
+            mergeFalsePos=True
             ):
+        '''
+        Class used to do preliminary detection of metal and thatch roofs on images
+        Parameters:
+        --------------
+        in_path: string
+            path from which images are read
+        out_path: string
+            path in which we create an output folder
+        folder_name: string
+            folder to be created in out_path, into which the content is actually saved
+
+        detector_names: list(string)
+            names of detectors to be used
+        group: boolean
+            decides whether grouping of detections should occur for each roof type separately
+        downsized:
+            decides if images are downsized by a factor of 2 to perform detection
+        min_neighbors: int
+            parameter for the detectmultiscale method: determines how many neighbours a detection must
+            have in order to keep it
+        scale: float
+            parameter for the detectmultiscale method
+        rotate: boolean
+            whether we should rotate the image
+        removeOff: boolean
+            whether the detections that fall partially off the image should be removed. Relevant in particular
+            to the rotations
+        output_patches: boolean
+            whether good and bad detections should be saved. These can then be used to train other models
+        mergeFalsePos: boolean
+            whether the bad detections of the metal and thatch roofs should be saved together or separately.
+            If it is true, then only bad detections that are bad for both metal and thatch fall into the bad
+            detection category. If it is false, then we consider each roof type separately. For example, 
+            if a detection is bad for the metal detector, but it contains a thatch roof, it will be classified
+            as bad for metal. In the other case, any detection can only be classified as bad if it contains neither
+            a metal or a thatch roof
+        '''
+
         assert in_path is not None
         self.in_path = in_path
         assert out_path is not None
@@ -49,6 +88,7 @@ class ViolaDetector(object):
         self.img_names = [f for f in os.listdir(in_path) if f.endswith('.jpg')]
         self.save_imgs = save_imgs
         self.output_patches = output_patches
+        self.mergeFalsePos = mergeFalsePos
 
         #parameters for detection 
         self.scale = scale
@@ -57,12 +97,15 @@ class ViolaDetector(object):
         self.overlapThresh = overlapThresh
         self.angles = utils.VIOLA_ANGLES if rotate else [0]
         self.remove_off_img = removeOff
+        self.downsized = downsized
 
-        self.viola_detections = Detections()
+        self.viola_detections = Detections(mergeFalsePos = self.mergeFalsePos)
         self.setup_detectors(detector_names)
 
-        self.evaluation = Evaluation(method='viola', folder_name=folder_name, out_path=self.out_folder, detections=self.viola_detections, 
-                    in_path=self.in_path, detector_names=detector_names, output_patches=output_patches)
+        self.evaluation = Evaluation(method='viola', folder_name=folder_name, 
+                    out_path=self.out_folder, detections=self.viola_detections, 
+                    in_path=self.in_path, detector_names=detector_names, 
+                    output_patches=output_patches, mergeFalsePos=mergeFalsePos)
 
 
     def setup_detectors(self, detector_names=None, old_detector=False):
@@ -103,11 +146,15 @@ class ViolaDetector(object):
     def detect_roofs(self, img_name):
         try:
             rgb_unrotated = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
-            rgb_unrotated = utils.resize_rgb(rgb_unrotated, h=rgb_unrotated.shape[0]/2, w=rgb_unrotated.shape[1]/2)
-            pdb.set_trace()
-            gray = cv2.cvtColor(rgb_unrotated, cv2.COLOR_BGR2GRAY)
+            if self.downsized:
+                rgb_unrotated = utils.resize_rgb(rgb_unrotated, h=rgb_unrotated.shape[0]/2, w=rgb_unrotated.shape[1]/2)
+            rgb_unrotated_for_gray = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
+            gray = cv2.cvtColor(rgb_unrotated_for_gray, cv2.COLOR_BGR2GRAY)
             gray = cv2.equalizeHist(gray)
-            gray = utils.resize_rgb(gray, w=gray.shape[1]/2, h=gray.shape[0]/2) 
+            if self.downsized:
+                gray = utils.resize_grayscale(gray, w=gray.shape[1]/2, h=gray.shape[0]/2)
+            print gray.shape
+
         except IOError as e:
             print e
             sys.exit(-1)
@@ -127,6 +174,8 @@ class ViolaDetector(object):
                             detections, _ = self.detect_and_rectify(detector, rotated_image, angle, rgb_unrotated.shape[:2]) 
                         print 'Time detection: {0}'.format(t.secs)
                         self.viola_detections.total_time += t.secs
+                        if self.downsized:
+                            detections = detections*2
                         self.viola_detections.set_detections(roof_type=roof_type, img_name=img_name, 
                                 angle=angle, detection_list=detections, img=rotated_image)
 
@@ -222,15 +271,18 @@ class ViolaDetector(object):
             except:
                 print 'Cannot open image'
                 sys.exit(-1)
-            #for the bad/background detections there is only one type: background (we've merge the thatch and metal false positives)
-            detections = self.viola_detections.bad_detections[img_name]
             patches_path= path_false
             extraction_type = 'bad'
-            roof_type = 'background'
-            self.save_training_FP_and_TP_helper(img_name, detections, patches_path, general_path, img, roof_type, extraction_type, (0,0,255)) 
-            #for viola we only need to save the negatives, since the positives can't be used (they'd need to be annotated and rectified)
+            if self.mergeFalsePos:
+                roof_type = 'background'
+                detections = self.viola_detections.bad_detections[img_name]
+                self.save_training_FP_and_TP_helper(img_name, detections, patches_path, general_path, img, roof_type, extraction_type, (0,0,255)) 
+            else:
+                for roof_type in utils.ROOF_TYPES:
+                    detections = self.viola_detections.bad_detections[roof_type][img_name]
+                    self.save_training_FP_and_TP_helper(img_name, detections, patches_path, general_path, img, roof_type, extraction_type, (0,0,255)) 
             if neural:
-                #for the good detections, we separate them between thatch and metal true positives
+                #for viola we only need to save the negatives, since the positives can't be used (they'd need to be annotated and rectified)
                 for roof_type in utils.ROOF_TYPES:
                     detections = self.viola_detections.good_detections[roof_type][img_name] 
                     patches_path = path_true
@@ -274,7 +326,7 @@ class ViolaDetector(object):
 
 
 
-def main(output_patches=True, detector_params=None, original_dataset=True, save_imgs=True, data_fold=utils.VALIDATION):
+def setup_params_viola(combo_f_name=None, output_patches=True, detector_params=None, original_dataset=True, save_imgs=True, data_fold=utils.VALIDATION):
     combo_f_name = None
     try:
         opts, args = getopt.getopt(sys.argv[1:], "f:")
@@ -298,22 +350,26 @@ def main(output_patches=True, detector_params=None, original_dataset=True, save_
     folder_name = '_'.join(folder_name)
 
     out_path = utils.get_path(out_folder_name=folder_name, viola=True, in_or_out=utils.OUT, data_fold=data_fold)
-    viola = ViolaDetector(output_patches=output_patches, out_path=out_path, in_path=in_path, folder_name = folder_name, save_imgs=save_imgs, 
-                                        detector_names=detector,  **detector_params)
+    viola = ViolaDetector(output_patches=output_patches,  
+                            out_path=out_path, in_path=in_path, folder_name = folder_name, 
+                            save_imgs=save_imgs, detector_names=detector,  **detector_params)
     viola.detect_roofs_in_img_folder()
 
 
 
 if __name__ == '__main__':
-    output_patches = False#True #if you want to save the true pos and false pos detections, you need to use the training set
+    output_patches = True #if you want to save the true pos and false pos detections, you need to use the training set
+    mergeFalsePos = True 
     if output_patches:
         data_fold=utils.TRAINING
     else: 
         data_fold=utils.VALIDATION
-    
+
     # removeOff: whether to remove the roofs that fall off the image when rotating (especially the ones on the edge
     #group: can be None, group_rectangles, group_bounding
     # if check_both_detectors is True we check if either the metal or the thatch detector has found a detection that matches either type of roof 
-    detector_params = {'min_neighbors':3, 'scale':1.08, 'group': False, 'downsized':True, 'rotate':True, 'removeOff':True} 
-    main(output_patches=output_patches, detector_params=detector_params, save_imgs=False, data_fold=data_fold, original_dataset=True)
+    detector_params = {'min_neighbors':3, 'scale':1.08, 'mergeFalsePos':mergeFalsePos,
+                        'group': False, 'downsized':False, 
+                        'rotate':True, 'removeOff':True} 
+    setup_params_viola(output_patches=output_patches, detector_params=detector_params, save_imgs=False, data_fold=data_fold, original_dataset=True)
  

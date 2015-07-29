@@ -11,25 +11,32 @@ import utils
 
 
 class Detections(object):
-    def __init__(self, roof_types=None):
+    def __init__(self, roof_types=None, mergeFalsePos=True):
         self.total_detection_num = defaultdict(int)
         self.false_positive_num =  defaultdict(int)
         self.true_positive_num =  defaultdict(int)
         self.good_detection_num =  defaultdict(int)
-        self.bad_detection_num = 0 #we count the metal and thatch false positives together 
+        if mergeFalsePos:
+            self.bad_detection_num = 0 #we count the metal and thatch false positives together 
+        else:
+            self.bad_detection_num = defaultdict(int)
         self.roof_num =  defaultdict(int)
 
         self.detections = defaultdict(list)
         self.true_positives = dict()
         self.false_positives = dict()
         self.good_detections =dict()#all the detections above the VOC threshold
-        self.bad_detections = defaultdict(list) #there's only one set of bad detections
+        if mergeFalsePos:
+            self.bad_detections = defaultdict(list) #there's only one set of bad detections
+        else:
+            self.bad_detections = dict()
         for roof_type in utils.ROOF_TYPES: # we need this to separate them per image
             self.detections[roof_type] = dict()
             self.true_positives[roof_type] = defaultdict(list)
             self.false_positives[roof_type] = defaultdict(list)
             self.good_detections[roof_type] = defaultdict(list)
-            #self.bad_detections[roof_type] = defaultdict(list)
+            if mergeFalsePos == False:
+                self.bad_detections[roof_type] = defaultdict(list)
 
         self.total_time = 0
         self.imgs = set()
@@ -46,9 +53,13 @@ class Detections(object):
         self.good_detections[roof_type][img_name].extend(good_detections)
         self.good_detection_num[roof_type] += len(good_detections)
 
-    def update_bad_detections(self, bad_detections=None, img_name=None):
-        self.bad_detections[img_name].extend(bad_detections)
-        self.bad_detection_num += len(bad_detections)
+    def update_bad_detections(self, roof_type=None, bad_detections=None, img_name=None):
+        if roof_type is not None:
+            self.bad_detections[roof_type][img_name].extend(bad_detections)
+            self.bad_detection_num[roof_type] += len(bad_detections)
+        else:
+            self.bad_detections[img_name].extend(bad_detections)
+            self.bad_detection_num += len(bad_detections)
 
     def update_roof_num(self, roofs, roof_type):
         self.roof_num[roof_type] += len(roofs)
@@ -99,11 +110,13 @@ class Detections(object):
 
 
 class Evaluation(object):
-    def __init__(self, report_name=None, output_patches=False, method=None, 
+    def __init__(self, report_name=None, method=None, 
                         folder_name=None, save_imgs=True, out_path=None, 
-                        detections=None, in_path=None, detector_names=None):
+                        detections=None, in_path=None, 
+                        detector_names=None, output_patches=False, mergeFalsePos=True):
         self.save_imgs = save_imgs
         self.output_patches=output_patches
+        self.mergeFalsePos=mergeFalsePos
 
         #threholds to classify detections as False/True positives and Good/Bad detections(these are to train the neural network on it)
         self.VOC_threshold = utils.VOC_threshold #threshold to assign a detection as a true positive
@@ -201,7 +214,7 @@ class Evaluation(object):
     def update_scores(self, img_name, detections, false_pos_logical, bad_detection_logical):
         detects = np.array(detections)
 
-        if self.output_patches:
+        if self.output_patches and self.mergeFalsePos:
             #a detection is only considered bad if it doesn't match either a metal or a thatch roof
             truly_bad_detections = np.logical_and(bad_detection_logical['metal'], bad_detection_logical['thatch']) 
             bad_d = detects[truly_bad_detections]
@@ -218,15 +231,22 @@ class Evaluation(object):
                 good_d = detects[np.invert(bad_detection_logical[roof_type])]
                 self.detections.update_good_detections(good_detections=good_d, roof_type=roof_type, img_name=img_name) 
 
+                if self.mergeFalsePos == False:
+                    bad_d = detects[bad_detection_logical[roof_type]]
+                    self.detections.update_bad_detections(roof_type=roof_type,bad_detections=bad_d, img_name=img_name) 
+
             print '-------- Roof Type: {0} --------'.format(roof_type)
             print 'Roofs: {0}'.format(len(self.correct_roofs[roof_type][img_name]))
             print 'False pos: {0}'.format(len(false_d))
             print 'True pos: {0}'.format(len(pos_d))
             if self.output_patches:
                 print 'Good det: {0}'.format(len(good_d))
+                if self.mergeFalsePos == False:
+                    print 'Bad detections: {0}'.format(len(bad_d))
+
         print '---'
         print 'All Detections: {0}'.format(len(detections))
-        if self.output_patches:
+        if self.output_patches and self.mergeFalsePos:
             print 'All Bad det: {0}'.format(len(bad_d))
 
 

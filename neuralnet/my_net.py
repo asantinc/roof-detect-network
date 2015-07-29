@@ -107,8 +107,8 @@ class MyNeuralNet(NeuralNet):
         def save_weights(self):
             ''' Saves weigts of model so they can be loaded back later:
             '''
-            path = '../parameters/saved_weights/'
-            with open(path+self.net_name+'.pickle', 'wb') as f:
+            path = utils.get_path(params=True, neural_weights=True) #'../parameters/saved_weights/'
+            with ('{0}_{1}_accur{0:.4f}.pickle'.format(path, self.net_name, self.valid_accuracy), 'wb') as f:
                 pickle.dump(self, f, -1)
         
         
@@ -233,7 +233,7 @@ class EarlyStopping(object):
 class SaveBestWeights(object):
     def __init__(self, patience=100):
         self.best_valid = np.inf
-        self.weight_path = '../parameters/saved_weights/'
+        self.weight_path = utils.get_path(params=True, neural_weights=True)
 
     def __call__(self, nn, train_history):
         current_valid = train_history[-1]['valid_loss']
@@ -241,7 +241,8 @@ class SaveBestWeights(object):
         if current_valid < self.best_valid:
             self.best_valid = current_valid
             self.best_weights = nn.get_all_params_values()
-            weight_name = '{0}{1}_valid{2}_epoch{3}.pickle'.format(self.weight_path, nn.net_name, self.best_valid, current_epoch) 
+            
+            weight_name = '{0}{1}.pickle'.format(self.weight_path, nn.net_name, self.best_valid, current_epoch) 
             with open(weight_name, 'wb') as f:
                 pickle.dump(nn, f, -1)                 
 

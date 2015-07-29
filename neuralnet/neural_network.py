@@ -30,34 +30,49 @@ from neural_data_setup import NeuralDataLoad
 
 
 class Experiment(object):
-    def __init__(self, test_path=None, train_path=None, flip=True, preloaded_path=None, pipeline=False, 
-                    print_out=True, preloaded=False, test_percent=.20, non_roofs=2, 
-                    log=True, plot_loss=True, plot=True, epochs=50, net_name=None, num_layers=None, max_roofs=None):
+    def __init__(self, flip=True, preloaded_path=None, pipeline=False, 
+                    print_out=True, preloaded=False,  
+                    log=True, plot_loss=True, plot=True, epochs=50, 
+                    roof_type=None, non_roofs=2, viola_data=None,
+                    net_name=None, num_layers=None, max_roofs=None):
+        
+        #Load data
+        print 'Loading data...\n'
+        self.X, self.y = NeuralDataLoad(viola_data=viola_data).load_data(roof_type=roof_type, non_roofs=non_roofs) 
+        print 'Data is loaded \n'
+        #set up the data scaler
+        self.scaler = DataScaler()
+        self.X = self.scaler.fit_transform(self.X)
+
+        #count the number of each type of class, add it to the network name
+        if roof_type == 'Both':
+            nonroof_num, metal_num, thatch_num = np.bincount(self.y)
+        elif roof_type == 'metal':
+            nonroof_num, metal_num = np.bincount(self.y)
+            thatch_num = 0
+        elif roof_type == 'thatch':
+            nonroof_num, thatch_num = np.bincount(self.y)
+            metal_num = 0
+        else:
+            raise ValueError('You have given an unknown roof_type to the network')
+
         self.pipeline = pipeline
+        #if we are doing the pipeline, we already have a good name for the network, no need to add more info
+        if self.pipeline:
+            self.net_name = net_name
+        else:
+            self.net_name = 'conv{0}_{1}_metal{2}_thatch{3}_nonroof{4}'.format(num_layers, net_name, metal_num, thatch_num, nonroof_num)
         self.num_layers = num_layers
-        self.net_name = net_name
+        print 'Final network name is: {0}'.format(self.net_name)
 
         self.epochs = epochs
-        self.test_percent = test_percent
         self.non_roofs = non_roofs    #the proportion of non_roofs relative to roofs to be used in data
         self.log = log
         self.plot_loss = True
         self.flip = flip
-        self.test_path = test_path
-        self.train_path = train_path
 
         print 'Setting up the Neural Net \n'
         self.setup_net(print_out=print_out)
-
-        print 'Loading data...\n'
-
-        self.X, self.y = NeuralDataLoad().load_data() 
-        print self.X.shape, self.y.shape
-        print 'Data is loaded \n'
-
-        #set up the data scaler
-        self.scaler = DataScaler()
-        self.X = self.scaler.fit_transform(self.X)
 
         #preload weights if a path to weights was provided
         self.preloaded_path = preloaded_path 
@@ -125,7 +140,7 @@ class Experiment(object):
         #fitting the network to X_train
         self.net.fit(self.X, self.y)
         self.net.save_weights()
-
+        self.net.save_loss()
 
 
     def test(self, X_test): 
@@ -272,44 +287,20 @@ class SaveLayerInfo(PrintLayerInfo):
         file.close()
 
 
-def set_parameters():
-    try:
-        opts, args = getopt.getopt(sys.argv[1:], "t:n:l:p:r:a:e:")
-    except getopt.GetoptError:
-        print 'Command line error'
-        sys.exit(2) 
-    test_percent=0.2
-    non_roofs=1
-    preloaded=False
-    num_layers=0 #logistic
-    plot=True
-    net_name=None
-    epochs=250
-    for opt, arg in opts:
-        if opt == '-t':
-            test_percent=float(arg)
-        elif opt == '-n':
-            num_layers = int(float(arg))
-        elif opt=='-a':
-            net_name=arg
-        elif opt=='-e':
-            epochs=int(float(arg))
-    return test_percent, non_roofs, preloaded, num_layers, plot, net_name, epochs
 
-
-def get_params_from_file(file_name):
+def get_neural_training_params_from_file(file_name):
     parameters = dict()
     with open(file_name, 'r') as f:
         reader = csv.reader(f, delimiter=',')
         for par in reader:
             if len(par) == 2: 
-                if par[0].strip() == 'test_percent':
-                    parameters[par[0].strip()] = (float(par[1].strip()))
-                elif par[0].strip() == 'test_path' or par[0].strip() == 'train_path':
-                    parameters[par[0].strip()] = par[1].strip()
+                key = par[0].strip()
+                if key == 'viola_data' or key == 'roof_type':
+                    parameters[key] = (par[1].strip())
                 else:
-                    parameters[par[0].strip()] = int(float(par[1].strip()))
+                    parameters[key] = int(float(par[1].strip()))
     return parameters
+
 
 def get_parameter_file():
     try:
@@ -327,7 +318,7 @@ if __name__ == '__main__':
     param_file = 'params'+get_parameter_file()+'.csv'
     
     params_path = '{0}{1}'.format(utils.get_path(params=True, neural=True), param_file)
-    params = get_params_from_file(params_path) 
+    params = get_neural_training_params_from_file(params_path) 
 
     if params['net_name'] == 0:
         params['net_name'] = param_file[:-4]

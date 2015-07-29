@@ -3,6 +3,7 @@ import getopt
 import os
 import subprocess
 import pdb
+import re
 
 import numpy as np
 from scipy import misc
@@ -15,6 +16,7 @@ import lasagne
 
 #import convolution
 import FlipBatchIterator as flip
+import neural_network
 from neural_network import Experiment, SaveLayerInfo, PrintLogSave
 from viola_detector import ViolaDetector
 import viola_detector_helpers
@@ -36,9 +38,11 @@ class Pipeline(object):
         open(self.report_path, 'w').close()
 
         #Viola will spit out an evaluation of the viola detector to the pipe folder also
+        pdb.set_trace()
         if len(viola.keys()) > 0:
-            self.viola = ViolaDetector(detector_names=viola['detectors'], out_path=out_path, 
-                                    in_path=in_path,folder_name=out_folder_name,save_imgs=True) 
+            self.viola = ViolaDetector(out_path=out_path, in_path=in_path,
+                                        folder_name=out_folder_name,
+                                        save_imgs=True, **viola) 
         else: 
             self.viola = None 
         self.experiment = Experiment(pipeline=True, **neural)
@@ -152,19 +156,53 @@ class Pipeline(object):
 
 
 def setup_neural_viola_params(parameters):
-    pipe_params = parameters['pipe']
-    #set up neural parameters
-    neural_params = parameters['neural']
-    neural_params['num_layers'] = int(float(neural_params['preloaded_path'][4:5]))
-    neural_params['net_name'] = neural_params['preloaded_path'][:-(len('.pickle'))]+'_metal'+parameters['viola']['metal_combo']+'_thatch'+parameters['viola']['thatch_combo']+'/'
+    '''
+    Pipe file contains info about
 
-    #set up viola parameters
+    '''
+    #PIPE PARAMS
+    pipe_params = {'step_size':parameters['step_size'] ,'preloaded_path': parameters['preloaded_path']}
+
+    #NEURAL parameters
+    start_params = parameters['preloaded_path'].index('params')
+    end_index = start_params+re.search('_', parameters['preloaded_path'][start_params:]).start()
+    print start_params, end_index
+    neural_params_file = '{0}.csv'.format(parameters['preloaded_path'][start_params:end_index])
+    params_path = '{0}{1}'.format(utils.get_path(params=True, neural=True), neural_params_file)
+    neural_params = neural_network.get_neural_training_params_from_file(params_path)
+    neural_params['net_name'] = parameters['preloaded_path'][:-(len('.pickle'))]
+
+    #VIOLA PARAMS
     viola_params = dict()
-    detectors = dict()
-    detectors['metal'] = viola_detector_helpers.get_detectors(parameters['viola']['metal_combo'])['metal']
-    detectors['thatch'] = viola_detector_helpers.get_detectors(parameters['viola']['thatch_combo'])['thatch']   
-    viola_params['detectors'] = detectors
+    viola_data = neural_params['viola_data']
+    end_combo = re.search('_', viola_data).start()
+    combo_fname = viola_data[:end_combo]
+    viola_params['detector_names'] = viola_detector_helpers.get_detectors(combo_fname)
+    #get other non-default params
+    possible_parameters = ['min_neighbors','scale', 'group', 'removeOff', 'rotate', 'mergeFalsePos'] 
+    for param in possible_parameters:
+        if param in viola_data:
+            start_index = re.search(param, viola_data).start() 
+            param_value_start = start_index+len(param)
+           
+            end_index_re = re.search('_', viola_data[param_value_start:])
+            if end_index_re is not None:
+                end_index = param_value_start + end_index_re.start()
+                value = viola_data[param_value_start:end_index]
+            else:
+                value = viola_data[param_value_start:]
 
+            try:#try to conver to a float, if not will keep as string
+                float_value = float(value)
+                value = float_value
+            except:
+                continue
+            finally:
+                if value == 'True':
+                    value = True
+                elif value == 'False':
+                    value = False
+                viola_params[param] = value
     return neural_params, viola_params, pipe_params
 
 

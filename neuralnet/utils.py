@@ -253,6 +253,11 @@ def resize_rgb(img, w=PATCH_W, h=PATCH_H):
         resized[:,:,channel]=temp
     return resized
 
+def resize_grayscale(img, w=None, h=None):
+    resized = np.empty((h,w))
+    return cv2.resize(img,(w, h), dst=np.empty((w, h)), fx=0, fy=0, interpolation=cv2.INTER_AREA) 
+
+
 def resize_neural_patch(patch, w=CROP_SIZE, h=CROP_SIZE):
     resized = np.empty((3, h, w))
     for channel in range(3):
@@ -614,7 +619,7 @@ def rotate_detection_polygons(detections, img, angle, dest_img_shape, remove_off
     '''
     rotated_polygons = np.zeros((detections.shape[0], 4, 2))
     accepted_number = 0
-    h, w = dst_img_shape
+    h, w = dest_img_shape
 
     for detection in detections:
         accept_polygon=True
@@ -628,7 +633,7 @@ def rotate_detection_polygons(detections, img, angle, dest_img_shape, remove_off
                     accept_polygon = False        
                     continue
         if accept_polygon:
-            rotated_polygons[accepted_number, :] = rotate_polygon(detection, img, angle)
+            rotated_polygons[accepted_number, :] = rotate_polygon(detection, img, angle, dest_img_shape)
             accepted_number += 1
     return rotated_polygons[:accepted_number,:] 
 
