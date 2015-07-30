@@ -10,6 +10,7 @@ import math
 import cv2
 import numpy as np
 import warnings
+import re
 
 ###################################
 #types of roof
@@ -206,6 +207,37 @@ def print_debug(to_print, verbosity=1):
 ########################################
 # Getting parameters 
 ########################################
+
+def get_param_value_from_filename(filename, param_name, separator='_'):
+    '''Return the value as a string of a parameter embedded in a longer string, such as a filename
+    '''
+    value = None
+    filename = filename[:-len('.pickle')] if filename.endswith('.pickle') else filename
+    filename = filename[:-len('.csv')] if filename.endswith('.csv') else filename
+    if param_name in filename:
+        start_param = filename.index(param_name)
+        end_index_re = re.search('_', filename[(start_param+len(param_name)):])
+
+        #if it's the last param, there will be no separator 
+        #behind it and re.search returns None
+        value_start = start_param+ len(param_name) 
+        if end_index_re is not None:
+            end_index = start_param + len(param_name)+ end_index_re.start()
+            value = filename[value_start:end_index]
+        else:
+            value = filename[value_start:]
+        try:#try to conver to a float, if not will keep as string
+            float_value = float(value)
+            value = float_value
+        except:
+           pass 
+        finally:
+            if value == 'True':
+                value = True
+            elif value == 'False':
+                value = False
+    return value
+
 
 def view_combos():
     combo_path = get_path(params=True, viola=True)
@@ -535,11 +567,12 @@ def get_bounding_boxes(detections):
 # Perspective transform
 #######################
 
-def four_point_transform(image, pts):
+def four_point_transform(image, pts): #original_points):
     '''Take a rotate patch from an image and straightens it. 
     '''
 	# obtain a consistent order of the points and unpack them
 	# individually
+    #pts = np.copy(original_points)
     rect = order_points(pts)
     (tl, tr, br, bl) = rect
 	# compute the width of the new image, which will be the

@@ -44,24 +44,25 @@ class Experiment(object):
         self.scaler = DataScaler()
         self.X = self.scaler.fit_transform(self.X)
 
-        #count the number of each type of class, add it to the network name
-        if roof_type == 'Both':
-            nonroof_num, metal_num, thatch_num = np.bincount(self.y)
-        elif roof_type == 'metal':
-            nonroof_num, metal_num = np.bincount(self.y)
-            thatch_num = 0
-        elif roof_type == 'thatch':
-            nonroof_num, thatch_num = np.bincount(self.y)
-            metal_num = 0
-        else:
-            raise ValueError('You have given an unknown roof_type to the network')
-
         self.pipeline = pipeline
         #if we are doing the pipeline, we already have a good name for the network, no need to add more info
+
         if self.pipeline:
             self.net_name = net_name
         else:
+            #count the number of each type of class, add it to the network name
+            if roof_type == 'Both':
+                nonroof_num, metal_num, thatch_num = np.bincount(self.y)
+            elif roof_type == 'metal':
+                nonroof_num, metal_num = np.bincount(self.y)
+                thatch_num = 0
+            elif roof_type == 'thatch':
+                nonroof_num, thatch_num = np.bincount(self.y)
+                metal_num = 0
+            else:
+                raise ValueError('You have given an unknown roof_type to the network')
             self.net_name = 'conv{0}_{1}_metal{2}_thatch{3}_nonroof{4}'.format(num_layers, net_name, metal_num, thatch_num, nonroof_num)
+
         self.num_layers = num_layers
         print 'Final network name is: {0}'.format(self.net_name)
 
