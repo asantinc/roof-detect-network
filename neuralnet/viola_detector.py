@@ -381,7 +381,7 @@ if __name__ == '__main__':
     # if check_both_detectors is True we check if either the metal or the thatch detector has found a detection that matches either type of roof 
     detector_params = {'min_neighbors':3, 'scale':1.08, 'mergeFalsePos':mergeFalsePos,
                         'group': False, 'downsized':False, 
-                        'rotate':True, 'removeOff':True,
+                        'rotate':False, 'removeOff':True,
                         'separateDetections':True} 
     viola = setup_params_viola(output_patches=output_patches, 
                 detector_params=detector_params, save_imgs=False, data_fold=data_fold, original_dataset=True)
