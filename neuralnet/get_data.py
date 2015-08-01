@@ -47,11 +47,11 @@ class DataLoader(object):
         return all_patches 
 
     @staticmethod
-    def get_polygons(roof_type=None, xml_name=None, xml_path=None):
+    def get_polygons(roof_type=None, xml_name=None, xml_path=None, padding=0, fix_polygons=True):
         if roof_type =='metal':
-            polygon_list = DataLoader.get_metal_polygons(xml_name=xml_name)
+            polygon_list = DataLoader.get_metal_polygons(xml_name=xml_name, fix_polygons=fix_polygons, padding=padding)
         elif roof_type == 'thatch':
-            polygon_list = DataLoader.get_thatch_polygons(xml_name=xml_name, xml_path=xml_path)
+            polygon_list = DataLoader.get_thatch_polygons(xml_name=xml_name, xml_path=xml_path, padding=padding)
         return polygon_list
 
 
@@ -116,9 +116,14 @@ class DataLoader(object):
 
 
     @staticmethod
-    def get_metal_polygons(xml_path=utils.RECTIFIED_COORDINATES, xml_name=None):
+    def get_metal_polygons(fix_polygons=True, xml_path=utils.RECTIFIED_COORDINATES, xml_name=None, padding=0):
         '''
         Return coordinates of metal polygons in image
+
+        Parameters:
+        fix_polygons: boolean
+            If true, we return min rects around the manually annotated 'squares'
+            If false, we return the polygon that was manually annotated
         '''
         assert xml_name is not None
         xml_path = xml_path+xml_name
@@ -147,7 +152,41 @@ class DataLoader(object):
                                 polygon.append((x,y))
                         if len(polygon) == 4:
                             polygon_list.append(polygon)
-        return np.array(polygon_list)
+
+        polygons = np.array(polygon_list)
+
+        if fix_polygons:
+            polygons = DataLoader.fix_nonrect_polygons(polygons, padding=padding)
+
+        return polygons 
+
+    @staticmethod
+    def fix_nonrect_polygons(polygon_list, padding=0): 
+        #GET PROPER RECTANGLES
+        #the manually annotated coordinates do not actually make up rectangles
+        #so we find the minbounding rects of the polygons to obtain rectangles
+
+        #draw the detections onto a binary image
+        min_polygons = list()
+        for polygon in polygon_list:
+            bitmap = np.zeros((1200, 2000), np.uint8) 
+            utils.draw_detections([polygon], bitmap, fill=True, color=1)
+
+            #get contours
+            contours, hierarchy = cv2.findContours(bitmap, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+            #get the min bounding rect for the rects
+            min_area_rect = cv2.minAreaRect(contours[0]) # rect = ((center_x,center_y),(width,height),angle)
+            print min_area_rect
+            min_area_rect_list = [list(x) if type(x) is tuple else x for x in min_area_rect] 
+            min_area_rect_list[1][0] += padding 
+            min_area_rect_list[1][1] += padding 
+
+            cnt = tuple(tuple(x) if type(x) is list else x for x in min_area_rect_list)#, dtype=np.int32)
+            min_poly = np.int0(cv2.cv.BoxPoints(cnt))
+            min_polygons.append(min_poly)
+
+        return np.array(min_polygons)
 
 
 #######################################################################
@@ -219,8 +258,19 @@ class DataLoader(object):
 
 
 if __name__ == '__main__':
-    pass    
-            
+    img_list = [img_name for img_name in os.listdir('../data_original/small_test/') if img_name.endswith('.jpg')]
+    for img_name in img_list:    
+        img = cv2.imread('../data_original/small_test/'+img_name)
+        xml_name = img_name[:-3]+'xml'
+        xml_path = '../data_original/small_test/'
+
+        fixed_list = DataLoader.get_polygons(roof_type='metal', xml_name=xml_name, xml_path=xml_path, fix_polygons=True, padding=30)  
+        non_fixed = DataLoader.get_polygons(roof_type='metal', xml_name=xml_name, xml_path=xml_path, fix_polygons=False)
+        utils.draw_detections(fixed_list, img, color=(0, 255, 0))
+        utils.draw_detections(non_fixed, img, color=(0, 0, 255))
+
+        cv2.imwrite('delete_'+img_name, img)
+         
 
 
 
