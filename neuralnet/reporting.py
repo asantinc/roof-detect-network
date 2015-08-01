@@ -188,7 +188,7 @@ class Evaluation(object):
             report.close()
 
     
-    def score_img(self, img_name, img_shape):
+    def score_img(self, img_name, img_shape, contours=False):
         '''Find best overlap between each roof in an img and the detections,
         according the VOC score
         '''
@@ -201,6 +201,12 @@ class Evaluation(object):
 
         detections = dict()
         for roof_type in utils.ROOF_TYPES:
+            #this will only be necessary if we work with the neural network
+            #and we want to score roofs by merging nearby detections
+            work_with_contours = False
+            if roof_type=='metal' and contours:
+                work_with_contours = True
+
             #we may want to keep all detections together, but this lowers precision a lot
             #by default, metal and thatch detections are evaluated separately
             if self.keep_detections_separate:
@@ -218,7 +224,8 @@ class Evaluation(object):
 
                 for d, detection in enumerate(detections[roof_type]):  # detections[roof_type]):                           #for each patch found
                     #detection_roof_portion is how much of the detection is covered by roof
-                    voc_score, detection_roof_portion = self.get_score(rows=img_shape[0], cols=img_shape[1], roof=roof, detection=detection)
+                    voc_score, detection_roof_portion = self.get_score(contours=work_with_contours, 
+                                                        rows=img_shape[0], cols=img_shape[1], roof=roof, detection=detection)
                     if (voc_score > self.VOC_threshold) and (voc_score > best_voc_score):#this may be a true pos
                         best_voc_score = voc_score
                         best_detection = d 
@@ -276,12 +283,15 @@ class Evaluation(object):
             print 'All Bad det: {0}'.format(len(bad_d))
 
 
-    def get_score(self, rows=1200, cols=2000, roof=None, detection=None):
-        assert len(roof) == 4 and len(detection) == 4
+    def get_score(self, contours=False, rows=1200, cols=2000, roof=None, detection=None):
+        #assert len(roof) == 4 and len(detection) == 4
 
         #First, count the area that was detected
         count_detection_area_mask = np.zeros((rows, cols), dtype='uint8')
-        utils.draw_detections(np.array([detection]), count_detection_area_mask, fill=True, color=1)
+        if contours == False:
+            utils.draw_detections(np.array([detection]), count_detection_area_mask, fill=True, color=1)
+        else:
+            cv2.drawContours(count_detection_area_mask, np.array([detection]), 0, 1, -1)
         detection_area = utils.sum_mask(count_detection_area_mask)
 
         #binary mask of ground truth roof on the original image, non-rotated
@@ -290,7 +300,10 @@ class Evaluation(object):
         roof_area = utils.sum_mask(matching_mask)
 
         #subtract the detection
-        utils.draw_detections(np.array([detection]), matching_mask, fill=True, color=0)
+        if contours == False:
+            utils.draw_detections(np.array([detection]), matching_mask, fill=True, color=0)
+        else:
+            cv2.drawContours(matching_mask, [detection], 0, 0, -1)
 
         #calculate the intersection 
         roof_missed = utils.sum_mask(matching_mask)
@@ -319,7 +332,7 @@ class Evaluation(object):
             false_pos = self.detections.false_positive_num[roof_type]
             cur_type_roofs = self.detections.roof_num[roof_type] 
 
-            if detection_num > 0:
+            if detection_num > 0 and cur_type_roofs > 0:
                 recall = float(true_pos) / cur_type_roofs 
                 precision = float(true_pos) / detection_num
                 if precision+recall > 0:

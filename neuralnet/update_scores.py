@@ -7,9 +7,9 @@ import pdb
 
 import utils
 
-def process_viola_reports(viola_paths, path=None, fold=None):
+def process_viola_reports(viola_paths, fold=None):
     all_reports = dict()
-    for folder_name in viola_paths:
+    for path, folder_name in viola_paths:
         with open(path+folder_name+'/report.txt', 'rb') as csvfile:
             all_reports[folder_name] = defaultdict(list)
             reader = csv.reader(csvfile, delimiter='\t')
@@ -70,22 +70,27 @@ def process_viola_reports(viola_paths, path=None, fold=None):
                                                                         recall, precision, f1, time, folder_name)) 
             log_to_file.append('\n')
 
-    with open(path+utils.time_stamped_file('ranking'), 'w') as ranking_file:
+    with open(utils.time_stamped_file('ranking'), 'w') as ranking_file:
         ranking_file.write('\n'.join(log_to_file)) 
     print '\n'.join(log_to_file)
 
 
 
 def main():
-    viola_paths = defaultdict(list)
+    paths = defaultdict(list)
     #for fold in [utils.TRAINING, utils.TESTING, utils.VALIDATION]:
     for fold in [utils.VALIDATION]:
         viola_path = utils.get_path(in_or_out=utils.OUT, viola=True, data_fold=fold) 
-        for folder in os.listdir(viola_path):
-            if os.path.isfile(viola_path+folder+'/report.txt'):
-                viola_paths[fold].append(folder)
+        pipe_path = utils.get_path(in_or_out=utils.OUT, pipe=True, data_fold=fold)
+
+        for path in [viola_path, pipe_path]:
+            for folder in os.listdir(path):
+                if os.path.isfile(path+folder+'/report.txt'):
+                    paths[fold].append((path, folder))
+
         #print viola_paths
-        process_viola_reports(viola_paths[fold], path=viola_path, fold=fold)
+        pdb.set_trace()
+        process_viola_reports(paths[fold], fold=fold)
 
 
 if __name__ == '__main__':

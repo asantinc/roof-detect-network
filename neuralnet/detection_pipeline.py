@@ -5,6 +5,7 @@ import subprocess
 import pdb
 import re
 from collections import defaultdict
+import pickle
 
 import numpy as np
 from scipy import misc
@@ -25,12 +26,31 @@ from my_net import MyNeuralNet
 import viola_detector
 import utils
 from reporting import Detections, Evaluation
+from timer import Timer
+import suppression
 
 DEBUG = True
 
 class Pipeline(object):
-    def __init__(self,single_detector=True, in_path=None, out_path=None, neural=None, viola=None, pipe=None, out_folder_name=None):
+    def __init__(self, groupThres=0, groupBounds=False, erosion=0, suppress=False, overlapThresh=0.3,
+                    pickle_viola=None, single_detector=True, 
+                    in_path=None, out_path=None, neural=None, 
+                    viola=None, pipe=None, out_folder_name=None):
+        
+        '''
+
+        Parameters:
+        ------------------
+        groupThres bool
+            Decides if we should do grouping on neural detections
+        '''
+
         self.step_size = pipe['step_size'] if pipe['step_size'] is not None else utils.STEP_SIZE
+        self.groupThreshold = int(groupThres)
+        self.groupBounds = groupBounds
+        self.erosion = erosion
+        self.suppress = suppress
+        self.overlapThresh = overlapThresh
 
         self.single_detector = single_detector
         self.in_path = in_path
@@ -41,11 +61,19 @@ class Pipeline(object):
         self.report_path = self.out_path+'report_pipe.txt'
         open(self.report_path, 'w').close()
 
-        #Setup Viola 
-        self.viola = ViolaDetector(pipeline=True, out_path=out_path, 
-                                    in_path=in_path,
-                                    folder_name=out_folder_name,
-                                    save_imgs=True, **viola) 
+        #Setup Viola: if we are given an evaluation directly, don't bother running viola 
+        self.pickle_viola = pickle_viola
+        if self.pickle_viola is None:
+            self.viola = ViolaDetector(pipeline=True, out_path=out_path, 
+                                        in_path=in_path,
+                                        folder_name=out_folder_name,
+                                        save_imgs=True, **viola) 
+        else:
+            with open(pickle_viola, 'rb') as f:
+                self.viola_evaluation = pickle.load(f) 
+                self.viola_evaluation.in_path = self.in_path
+                self.viola_evaluation.out_path = self.out_path
+                
         #Setup Neural network(s)
         if self.single_detector:
             self.net = Experiment(pipeline=True, **neural['metal'])
@@ -74,24 +102,57 @@ class Pipeline(object):
         2. Resize the window and classify it
         3. Net returns a list of the roof coordinates of each type - saved in roof_coords
         '''
+        neural_time = 0
         for i, img_name in enumerate(self.img_names):
             print '***************** Image {0}: {1}/{2} *****************'.format(img_name, i, len(self.img_names)-1)
+
             #VIOLA
-            proposal_patches, proposal_coords, img_shape = self.find_viola_proposals(img_name=img_name)
+            if self.pickle_viola is None:
+                self.viola.detect_roofs(img_name=img_name)
+                #this next line will fail because you dont get the image shape!
+                self.viola.evaluation.score_img(img_name, img_shape[:2])
+                self.viola.evaluation.save_images(img_name, fname='beforeNeural')
+                current_viola_detections = self.viola.viola_detections 
+                viola_time = self.viola.evaluation.detections.total_time
+            else:#use the pickled detections for speed in testing the neural network
+                current_viola_detections = self.viola_evaluation.detections
+                viola_time = self.viola_evaluation.detections.total_time 
+            proposal_patches, proposal_coords, img_shape = self.find_viola_proposals(current_viola_detections, img_name=img_name)
 
             #NEURALNET
-            classified_detections  = self.neural_classification(proposal_patches, proposal_coords)
-            self.viola.evaluation.score_img(img_name, img_shape[:2])
-            self.viola.evaluation.save_images(img_name, fname='beforeNeural')
-            
-            #set detections and score
-            for roof_type in utils.ROOF_TYPES:
-                self.detections_after_neural.set_detections(img_name=img_name, 
-                                                    roof_type=roof_type, 
-                                                    detection_list=classified_detections[roof_type])
-            self.evaluation_after_neural.score_img(img_name, img_shape[:2])
-            self.evaluation_after_neural.save_images(img_name, 'posNeural')
+            with Timer() as t:
+                classified_detections  = self.neural_classification(proposal_patches, proposal_coords) 
+                #set detections and score
+                for roof_type in utils.ROOF_TYPES:
+                    if self.groupThreshold > 0 and roof_type == 'metal':
+                        #need to covert to rectangles
+                        boxes = utils.get_bounding_boxes(np.array(classified_detections[roof_type]))
+                        grouped_boxes, weights = cv2.groupRectangles(np.array(boxes).tolist(), self.groupThreshold)
+                        classified_detections[roof_type] = utils.convert_detections_to_polygons(grouped_boxes) 
+                        #convert back to polygons
 
+                    elif self.groupBounds and roof_type == 'metal':
+                        #grouping with the minimal bound of all overlapping rects
+                        classified_detections[roof_type] = self.group_min_bound(classified_detections[roof_type], img_shape[:2], erosion=self.erosion)
+
+                    elif self.suppress and roof_type == 'metal':
+                        #proper non max suppression from Felzenszwalb et al.
+                        classified_detections[roof_type] = self.non_max_suppression(classified_detections[roof_type])
+
+                    self.detections_after_neural.set_detections(img_name=img_name, 
+                                                        roof_type=roof_type, 
+                                                        detection_list=classified_detections[roof_type])
+            neural_time += t.secs 
+
+            self.evaluation_after_neural.score_img(img_name, img_shape[:2], contours=self.groupBounds)
+            self.evaluation_after_neural.save_images(img_name, 'posNeural')
+        
+        if self.pickle_viola is None:
+            self.viola.evaluation.print_report()
+        else:
+            self.viola_evaluation.print_report()
+
+        self.evaluation_after_neural.detections.total_time = (neural_time + viola_time)
         self.evaluation_after_neural.print_report()
 
         #mark roofs on image
@@ -100,12 +161,41 @@ class Pipeline(object):
             #compare the predictions made by viola and by viola+neural network
 
 
-    def find_viola_proposals(self, img_name=None):
+    def non_max_suppression(self,polygons):
+        #we start with polygons, get the bounding box of it
+        rects = utils.get_bounding_boxes(np.array(polygons))
+        #covert the bounding box to what's requested by the non_max_suppression
+        boxes = utils.rects2boxes(rects)
+        boxes_suppressed = suppression.non_max_suppression(boxes, overlapThresh=self.overlapThresh)
+        polygons_suppressed = utils.boxes2polygons(boxes_suppressed)
+        return polygons_suppressed 
+
+
+    def group_min_bound(self, polygons, img_shape, erosion=0):
+        '''
+        Attempt at finding the minbound of all overlapping rects and merging them
+        to a single detection. This unfortunately will merge nearby roofs.
+        '''
+        bitmap = np.zeros(img_shape, dtype='uint8')
+        utils.draw_detections(np.array(polygons), bitmap, fill=True, color=1)
+
+        if erosion>0:
+            kernel = np.ones((5,5),np.uint8)
+            bitmap = cv2.erode(bitmap,kernel,iterations = erosion)
+
+        #get contours
+        contours, hierarchy = cv2.findContours(bitmap, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+        #get the min bounding rect for the rects
+        min_area_conts = [np.int0(cv2.cv.BoxPoints(cv2.minAreaRect(cnt))) for cnt in contours]
+        return min_area_conts
+
+
+    def find_viola_proposals(self, viola_detections, img_name=None):
         '''Call viola to find coordinates of candidate roofs. 
         Extract those patches from the image, tranform them so they can be fed to neural network.
         Return both the coordinates and the patches.
         '''
-        self.viola.detect_roofs(img_name=img_name)
         try:
             img_full = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
             img_shape = img_full.shape
@@ -113,14 +203,16 @@ class Pipeline(object):
             print e
             sys.exit(-1)
 
-        if DEBUG:
-            self.viola.evaluation.save_images(img_name)
+        #if DEBUG:
+        #    self.viola.evaluation.save_images(img_name)
+
         all_proposal_patches = dict()
         all_proposal_coords = dict()
         
         #extract patches for neural network classification
         for roof_type in ['metal', 'thatch']: 
-            all_proposal_coords[roof_type] = self.viola.viola_detections.get_detections(img_name=img_name, roof_type=roof_type)
+            all_proposal_coords[roof_type] = viola_detections.get_detections(img_name=img_name, roof_type=roof_type)
+            #all_proposal_coords[roof_type] = self.viola.viola_detections.get_detections(img_name=img_name, roof_type=roof_type)
             patches = np.empty((len(all_proposal_coords[roof_type]), 3, utils.PATCH_W, utils.PATCH_H)) 
 
             for i, detection in enumerate(all_proposal_coords[roof_type]): 
@@ -273,28 +365,44 @@ def setup_neural_viola_params(parameters, pipe_fname):
 
 def get_main_param_filenum():
     #get the pipeline number
+    groupThres = 0
     try:
-        opts, args = getopt.getopt(sys.argv[1:], ":f")
+        opts, args = getopt.getopt(sys.argv[1:], "f:g:")
     except getopt.GetoptError:
         print 'Command line error'
         sys.exit(2)  
-    for opt in opts:
-        if opt[0] == '-f':
-            pipe_num = args[0]
-    return pipe_num
+    for opt, arg in opts:
+        if opt == '-f':
+            pipe_num = arg
+        elif opt == '-g':
+            groupThres = int(float(arg))
+    return pipe_num, groupThres
 
 
 if __name__ == '__main__':
-    pipe_num = get_main_param_filenum()
+    pipe_num, groupThres = get_main_param_filenum()
+    suppress = False 
+    overlapThresh = 1 
+    groupBounds = False
+    erosion = 0 
 
     #get the parameters from the pipeline
     pipe_fname = 'pipe{}.csv'.format(pipe_num)
+    #out_pipe_fname = 'pipe{}_suppress{}_overlapThresh{}.csv'.format(pipe_num, suppress, overlapThresh)
+    out_pipe_fname = 'pipe{}.csv'.format(pipe_num)
+
     parameters = utils.get_params_from_file( '{0}{1}'.format(utils.get_path(params=True, pipe=True), pipe_fname))
     neural_params, viola_params, pipe_params, single_detector_bool = setup_neural_viola_params(parameters, pipe_fname[:-len('.csv')])
     in_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.IN, pipe=True) 
-    out_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.OUT, pipe=True, out_folder_name=pipe_fname[:-len('.csv')])   
-    pipe = Pipeline(single_detector=single_detector_bool, in_path=in_path, out_path=out_path, 
-                    pipe=pipe_params, neural=neural_params, viola=viola_params, out_folder_name=pipe_fname)
+    out_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.OUT, pipe=True, out_folder_name=out_pipe_fname[:-len('.csv')])   
+
+    pickle_viola = '../data_original/training/neural/evaluation.pickle' 
+    pipe = Pipeline(pickle_viola=pickle_viola, single_detector=single_detector_bool, 
+                    in_path=in_path, out_path=out_path, 
+                    pipe=pipe_params, 
+                    groupThres = groupThres, groupBounds=groupBounds,suppress=suppress,overlapThresh=overlapThresh, 
+                    neural=neural_params, 
+                    viola=viola_params, out_folder_name=pipe_fname)
     pipe.run()
 
 

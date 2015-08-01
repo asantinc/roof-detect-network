@@ -1,12 +1,11 @@
 # import the necessary packages
 import numpy as np
-import pdb
  
+
 # Malisiewicz et al.
-def non_max_suppression(boxes, overlapThresh):
+def non_max_suppression(boxes, overlapThresh=0.3):
+    #required boxes in the form of x1, y1, x2, y2
     # if there are no boxes, return an empty list
-    #boxes are in the form of (x, y, w, h)
-    print boxes
     if len(boxes) == 0:
         return []
 
@@ -19,22 +18,10 @@ def non_max_suppression(boxes, overlapThresh):
     pick = []
 
     # grab the coordinates of the bounding boxes
-    # since boxes are (x, y, w, h) we need to add the width and height 
-    #to get x2 and y2 respectively
     x1 = boxes[:,0]
     y1 = boxes[:,1]
-    #x2 = boxes[:,2]
-    #y2 = boxes[:,3]
-    x2 = boxes[:,0]+boxes[:,2]
-    y2 = boxes[:,1]+boxes[:,3]
-
-    boxes_to_rects = np.empty((len(boxes), 4))
-    boxes_to_rects[:,0] = x1
-    boxes_to_rects[:,1] = y1
-    boxes_to_rects[:,2] = x2
-    boxes_to_rects[:,3] = y2
-    print "BOXES TO RECTS"
-    print boxes_to_rects
+    x2 = boxes[:,2]
+    y2 = boxes[:,3]
 
     # compute the area of the bounding boxes and sort the bounding
     # boxes by the bottom-right y-coordinate of the bounding box
@@ -71,16 +58,7 @@ def non_max_suppression(boxes, overlapThresh):
 
     # return only the bounding boxes that were picked using the
     # integer data type
-    merged_boxes = boxes[pick].astype("int")
-    print merged_boxes
-    merged_rects = np.empty((merged_boxes.shape[0], 4))
-    merged_rects[:, :2] = merged_boxes[:, :2]
-    merged_rects[:, 2] = merged_boxes[:, 2] - merged_boxes[:, 0]
-    merged_rects[:, 3] = merged_boxes[:, 3] - merged_boxes[:, 1]
-
-    print merged_rects
-    pdb.set_trace()
-    return merged_rects
+    return boxes[pick].astype("int")
     
 
 

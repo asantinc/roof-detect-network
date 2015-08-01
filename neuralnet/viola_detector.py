@@ -180,13 +180,13 @@ class ViolaDetector(object):
                         with Timer() as t: 
                             rotated_image = utils.rotate_image(gray, angle) if angle>0 else gray
                             detections, _ = self.detect_and_rectify(detector, rotated_image, angle, rgb_unrotated.shape[:2]) 
+                            if self.downsized:
+                                detections = detections*2
+                            self.viola_detections.set_detections(roof_type=roof_type, img_name=img_name, 
+                                    angle=angle, detection_list=detections, img=rotated_image)
+
                         print 'Time detection: {0}'.format(t.secs)
                         self.viola_detections.total_time += t.secs
-                        if self.downsized:
-                            detections = detections*2
-                        self.viola_detections.set_detections(roof_type=roof_type, img_name=img_name, 
-                                angle=angle, detection_list=detections, img=rotated_image)
-
                         if DEBUG:
                             rgb_to_write = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
                             utils.draw_detections(detections, rgb_to_write)
@@ -375,13 +375,14 @@ if __name__ == '__main__':
         data_fold=utils.TRAINING
     else: 
         data_fold=utils.VALIDATION
+    data_fold = utils.SMALL_TEST
 
     # removeOff: whether to remove the roofs that fall off the image when rotating (especially the ones on the edge
     #group: can be None, group_rectangles, group_bounding
     # if check_both_detectors is True we check if either the metal or the thatch detector has found a detection that matches either type of roof 
-    detector_params = {'min_neighbors':3, 'scale':1.08, 'mergeFalsePos':mergeFalsePos,
-                        'group': False, 'downsized':False, 
-                        'rotate':False, 'removeOff':True,
+    detector_params = {'min_neighbors':2, 'scale':1.06, 'mergeFalsePos':mergeFalsePos,
+                        'group': False, 'downsized':True, 
+                        'rotate':True, 'removeOff':True,
                         'separateDetections':True} 
     viola = setup_params_viola(output_patches=output_patches, 
                 detector_params=detector_params, save_imgs=False, data_fold=data_fold, original_dataset=True)

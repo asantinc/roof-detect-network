@@ -562,6 +562,44 @@ def get_bounding_boxes(detections):
     bounding_boxes[:,3] = h
     return bounding_boxes
 
+def rects2boxes(rects):
+    # rects are passed in as x,y,w,h and boxes are returned
+    # as x1, y1, x2, y2
+    boxes = np.empty((len(rects), 4))
+    x1 = rects[:,0]
+    y1 = rects[:,1]
+    w = rects[:,2]
+    h = rects[:,3]
+
+    boxes[:,:2] = rects[:,:2]
+    boxes[:,2] = x1+w 
+    boxes[:,3] = y1+h
+    return boxes
+
+def boxes2polygons(boxes):
+    polygons = np.empty((len(boxes), 4, 2))    
+    #follow the same convention as in order_points:
+    #order points in
+    #1.top_left 2.top_right 3.bottom_right 4.bottom_left order
+
+    #1. top left point
+    polygons[:,0,0] = boxes[:,0]#x1
+    polygons[:,0,1] = boxes[:,1]#y1
+
+    #3. bottom right
+    polygons[:,2,0] = boxes[:,2]#x2
+    polygons[:,2,1] = boxes[:,3]#y2
+
+    #2. top right
+    polygons[:,1,0] = boxes[:,2]# == x2
+    polygons[:,1,1] = boxes[:,1]# == y1
+
+    #4. bottom left
+    polygons[:,3,0] = boxes[:,0] # == x1
+    polygons[:,3,1] = boxes[:,3] # == y2
+
+    return polygons
+
 
 ########################
 # Perspective transform
