@@ -12,6 +12,7 @@ import lasagne
 sys.path.append('~/roof/Lasagne/lasagne')
 sys.path.append('~/roof/nolearn/nolearn')
 from nolearn.lasagne.handlers import PrintLog, PrintLayerInfo 
+from nolearn.lasagne.base import BatchIterator
 from nolearn.lasagne.util import is_conv2d
 from sklearn.metrics import classification_report, confusion_matrix
 from scipy.stats import uniform as sp_rand
@@ -30,7 +31,8 @@ from neural_data_setup import NeuralDataLoad
 
 
 class Experiment(object):
-    def __init__(self, flip=True, preloaded_path=None, pipeline=False, 
+    def __init__(self, flip=True, dropout=False,
+                    preloaded_path=None, pipeline=False, 
                     print_out=True, preloaded=False,  
                     log=True, plot_loss=True, plot=True, epochs=50, 
                     roof_type=None, non_roofs=2, viola_data=None,
@@ -70,7 +72,10 @@ class Experiment(object):
         self.non_roofs = non_roofs    #the proportion of non_roofs relative to roofs to be used in data
         self.log = log
         self.plot_loss = True
+
+
         self.flip = flip
+        self.dropout = dropout
 
         print 'Setting up the Neural Net \n'
         self.setup_net(print_out=print_out)
@@ -93,6 +98,11 @@ class Experiment(object):
             on_epoch_finished = [EarlyStopping(patience=200)]
             on_training_started = []
 
+        if self.flip:
+            batch_iterator_train=flip.FlipBatchIterator(batch_size=128)
+        else:
+            batch_iterator_test=BatchIterator(batch_size=128) 
+
         layers, layer_params = my_net.MyNeuralNet.produce_layers(self.num_layers)      
         self.net = my_net.MyNeuralNet(
             layers=layers,
@@ -114,7 +124,7 @@ class Experiment(object):
 
             #data augmentation
             batch_iterator_test= flip.ResizeBatchIterator(batch_size=128),
-            batch_iterator_train=flip.FlipBatchIterator(batch_size=128),
+            batch_iterator_train=batch_iterator_train,
 
         
             max_epochs=self.epochs,
@@ -321,9 +331,8 @@ if __name__ == '__main__':
     params_path = '{0}{1}'.format(utils.get_path(params=True, neural=True), param_file)
     params = get_neural_training_params_from_file(params_path) 
 
-    if params['net_name'] == 0:
-        params['net_name'] = param_file[:-4]
-        print 'Network name is: {0}'.format(params['net_name'])
+    params['net_name'] = '{}_flip{}_dropout{}'.format(param_file[:-4], params['flip'], params['dropout'])
+    print 'Network name is: {0}'.format(params['net_name'])
 
     experiment = Experiment(print_out=True, **params)
 

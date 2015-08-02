@@ -115,7 +115,8 @@ class Evaluation(object):
                         detections=None, in_path=None, 
                         detector_names=None, 
                         mergeFalsePos=False,
-                        separateDetections=True):
+                        separateDetections=True,
+                        vocGood=0.1):
         '''
         Will score the detections class it contains.
 
@@ -140,7 +141,7 @@ class Evaluation(object):
         #threholds to classify detections as False/True positives and Good/Bad detections(these are to train the neural network on it)
         self.VOC_threshold = utils.VOC_threshold #threshold to assign a detection as a true positive
         self.VOC_good_detection_threshold = dict()
-        self.VOC_good_detection_threshold['metal'] = 0.10
+        self.VOC_good_detection_threshold['metal'] = vocGood
         self.VOC_good_detection_threshold['thatch'] = 0.50
         self.detection_portion_threshold = 0.50
 

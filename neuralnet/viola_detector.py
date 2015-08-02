@@ -40,7 +40,9 @@ class ViolaDetector(object):
             removeOff=True,
             output_patches=True,
             mergeFalsePos=False,
-            separateDetections=True
+            separateDetections=True,
+            vocGood=0.1,
+            pickled_evaluation=False
             ):
         '''
         Class used to do preliminary detection of metal and thatch roofs on images
@@ -108,10 +110,15 @@ class ViolaDetector(object):
         self.remove_off_img = removeOff
         self.downsized = downsized
 
-        self.evaluation = Evaluation(method='viola', folder_name=folder_name, 
-                    out_path=self.out_folder, detections=self.viola_detections, 
-                    in_path=self.in_path, detector_names=detector_names, 
-                    mergeFalsePos=mergeFalsePos)
+        self.pickled_evaluation = pickled_evaluation
+        if pickled_evaluation == False:
+            self.evaluation = Evaluation(method='viola', folder_name=folder_name, 
+                        out_path=self.out_folder, detections=self.viola_detections, 
+                        in_path=self.in_path, detector_names=detector_names, 
+                        mergeFalsePos=mergeFalsePos, vocGood=vocGood)
+        else:
+            with open(self.out_folder+'evaluation.pickle', 'rb') as f:
+                self.evaluation = pickle.load(f)
 
 
     def setup_detectors(self, detector_names=None, old_detector=False):
@@ -143,12 +150,13 @@ class ViolaDetector(object):
                 img = self.detect_roofs(img_name)
             self.evaluation.score_img(img_name, img.shape)
         self.evaluation.print_report()
-        if self.output_patches:
-            self.save_training_FP_and_TP(viola=True)
-            self.save_training_FP_and_TP(neural=True)
 
         with open('{0}evaluation.pickle'.format(self.out_folder), 'wb') as f:
             pickle.dump(self.evaluation, f) 
+
+        if self.output_patches:
+            self.save_training_FP_and_TP(viola=True)
+            self.save_training_FP_and_TP(neural=True)
 
         open(self.out_folder+'DONE', 'w').close() 
 
@@ -285,16 +293,25 @@ class ViolaDetector(object):
             extraction_type = 'bad'
             if self.mergeFalsePos:
                 roof_type = 'background'
-                detections = self.viola_detections.bad_detections[img_name]
+                if self.pickled_evaluation == False:
+                    detections = self.viola_detections.bad_detections[img_name]
+                else:
+                    detections = self.evaluation.detections.bad_detections[img_name]
                 self.save_training_FP_and_TP_helper(img_name, detections, patches_path, general_path, img, roof_type, extraction_type, (0,0,255)) 
             else:
                 for roof_type in utils.ROOF_TYPES:
-                    detections = self.viola_detections.bad_detections[roof_type][img_name]
+                    if self.pickled_evaluation == False:
+                        detections = self.viola_detections.bad_detections[roof_type][img_name]
+                    else:
+                        detections = self.evaluation.detections.bad_detections[roof_type][img_name]
                     self.save_training_FP_and_TP_helper(img_name, detections, patches_path, general_path, img, roof_type, extraction_type, (0,0,255)) 
             if neural:
                 #for viola we only need to save the negatives, since the positives can't be used (they'd need to be annotated and rectified)
                 for roof_type in utils.ROOF_TYPES:
-                    detections = self.viola_detections.good_detections[roof_type][img_name] 
+                    if self.pickled_evaluation == False:
+                        detections = self.viola_detections.good_detections[roof_type][img_name] 
+                    else:
+                        detections = self.evaluation.detections.good_detections[roof_type][img_name]
                     patches_path = path_true
                     extraction_type = 'good' 
                     self.save_training_FP_and_TP_helper(img_name, detections, patches_path, general_path, img, roof_type, extraction_type, (0,255,0))               
@@ -313,11 +330,13 @@ class ViolaDetector(object):
 
         for i, detection in enumerate(detections):
             #extract the patch, rotate it to a horizontal orientation, save it
-            warped_patch = utils.four_point_transform(img, detection)
+            bitmap = np.zeros((img.shape[:2]), dtype=np.uint8)
+            padded_detection = utils.add_padding_polygon(detection, bitmap)
+            warped_patch = utils.four_point_transform(img, padded_detection)
             cv2.imwrite('{0}{1}_{2}_roof{3}.jpg'.format(patches_path, roof_type, img_name[:-4], i), warped_patch)
             
             #mark where roofs where taken out from for debugging
-            utils.draw_polygon(detection, img_debug, fill=False, color=color, thickness=2, number=i)
+            utils.draw_polygon(padded_detection, img_debug, fill=False, color=color, thickness=2, number=i)
 
         #write this type of extraction and the roofs to an image
         cv2.imwrite('{0}{1}_{2}_extract_{3}.jpg'.format(general_path, img_name[:-4], roof_type, extraction_type), img_debug)
@@ -336,7 +355,8 @@ class ViolaDetector(object):
 
 
 
-def setup_params_viola(combo_f_name=None, output_patches=True, detector_params=None, original_dataset=True, save_imgs=True, data_fold=utils.VALIDATION):
+def main(pickled_evaluation=False, combo_f_name=None, output_patches=True, 
+                detector_params=None, original_dataset=True, save_imgs=True, data_fold=utils.VALIDATION):
     combo_f_name = None
     try:
         opts, args = getopt.getopt(sys.argv[1:], "f:")
@@ -360,31 +380,38 @@ def setup_params_viola(combo_f_name=None, output_patches=True, detector_params=N
     folder_name = '_'.join(folder_name)
 
     out_path = utils.get_path(out_folder_name=folder_name, viola=True, in_or_out=utils.OUT, data_fold=data_fold)
-    viola = ViolaDetector(output_patches=output_patches,  
+    viola = ViolaDetector(pickled_evaluation=pickled_evaluation, output_patches=output_patches,  
                             out_path=out_path, in_path=in_path, folder_name = folder_name, 
                             save_imgs=save_imgs, detector_names=detector,  **detector_params)
-    viola.detect_roofs_in_img_folder()
     return viola
 
 
 if __name__ == '__main__':
-    pickle_class = False 
-    output_patches = False #if you want to save the true pos and false pos detections, you need to use the training set
     mergeFalsePos = False
+    output_patches = True #if you want to save the true pos and false pos detections, you need to use the training set
+    pickled_evaluation = True
     if output_patches:
         data_fold=utils.TRAINING
     else: 
         data_fold=utils.VALIDATION
-    data_fold = utils.SMALL_TEST
 
     # removeOff: whether to remove the roofs that fall off the image when rotating (especially the ones on the edge
-    #group: can be None, group_rectangles, group_bounding
+    # group: can be None, group_rectangles, group_bounding
     # if check_both_detectors is True we check if either the metal or the thatch detector has found a detection that matches either type of roof 
-    detector_params = {'min_neighbors':2, 'scale':1.06, 'mergeFalsePos':mergeFalsePos,
-                        'group': False, 'downsized':True, 
+    detector_params = {'min_neighbors':3, 'scale':1.08, 'mergeFalsePos':mergeFalsePos,
+                        'group': False, 'downsized':False, 
                         'rotate':True, 'removeOff':True,
-                        'separateDetections':True} 
-    viola = setup_params_viola(output_patches=output_patches, 
+                        'separateDetections':True, 'vocGood':0.3} 
+    viola = main(pickled_evaluation=pickled_evaluation, output_patches=output_patches, 
                 detector_params=detector_params, save_imgs=False, data_fold=data_fold, original_dataset=True)
+
+    if pickled_evaluation == False:
+        viola.detect_roofs_in_img_folder()
+    
+    if pickled_evaluation and output_patches:
+        #viola.save_training_FP_and_TP(viola=True)
+        viola.save_training_FP_and_TP(neural=True)
+
+
 
 

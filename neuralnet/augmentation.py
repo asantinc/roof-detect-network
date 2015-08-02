@@ -169,4 +169,4 @@ class DataAugmentation(object):
         roof.set_centroid()
         return roof
 
-        
+       

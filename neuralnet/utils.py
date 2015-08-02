@@ -300,6 +300,23 @@ def resize_neural_patch(patch, w=CROP_SIZE, h=CROP_SIZE):
 # Image rotation
 ########################
 
+def add_padding_polygon(polygon, bitmap, padding=10):
+    draw_detections([polygon], bitmap, fill=True, color=1) 
+    #get contours
+    contours, hierarchy = cv2.findContours(bitmap, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    #get the min bounding rect for the rects
+    min_area_rect = cv2.minAreaRect(contours[0]) # rect = ((center_x,center_y),(width,height),angle)
+    #convert to list so you can change the value of the width and height
+    min_area_rect_list = [list(x) if type(x) is tuple else x for x in min_area_rect] 
+    min_area_rect_list[1][0] += padding 
+    min_area_rect_list[1][1] += padding 
+    #convert back to tuple
+    cnt = tuple(tuple(x) if type(x) is list else x for x in min_area_rect_list)#, dtype=np.int32)
+    min_poly_padded = np.int0(cv2.cv.BoxPoints(cnt))
+    return min_poly_padded
+
+
 def rotate(image, angle, center=None, scale=1.0):
     (h, w) = image.shape[:2]
 

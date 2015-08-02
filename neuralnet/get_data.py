@@ -51,7 +51,7 @@ class DataLoader(object):
         if roof_type =='metal':
             polygon_list = DataLoader.get_metal_polygons(xml_name=xml_name, fix_polygons=fix_polygons, padding=padding)
         elif roof_type == 'thatch':
-            polygon_list = DataLoader.get_thatch_polygons(xml_name=xml_name, xml_path=xml_path, padding=padding)
+            polygon_list = DataLoader.get_thatch_polygons(xml_name=xml_name, xml_path=xml_path)
         return polygon_list
 
 
@@ -177,7 +177,6 @@ class DataLoader(object):
 
             #get the min bounding rect for the rects
             min_area_rect = cv2.minAreaRect(contours[0]) # rect = ((center_x,center_y),(width,height),angle)
-            print min_area_rect
             min_area_rect_list = [list(x) if type(x) is tuple else x for x in min_area_rect] 
             min_area_rect_list[1][0] += padding 
             min_area_rect_list[1][1] += padding 

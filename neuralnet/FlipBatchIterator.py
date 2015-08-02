@@ -6,7 +6,7 @@ from nolearn.lasagne.base import NeuralNet, _sldict, BatchIterator
 import scipy.ndimage.interpolation
 
 import utils
-from data_augmented import Augmenter
+from data_augment import Augmenter
 
 CROP_SIZE = 32
 IMG_SIZE = 40
@@ -30,12 +30,15 @@ class FlipBatchIterator(BatchIterator):
     def transform(self, Xb, yb):
         Xb = Xb
         Xb, yb = super(FlipBatchIterator, self).transform(Xb, yb)
-        for i, x in self.Xb:
+        for i, x in enumerate(Xb):
             patch = utils.neural_to_cv2(x)
             patch = Augmenter.random_flip(patch) 
+            patch = Augmented.full_rotation(patch)
             patch = Augmenter.random_rotation(patch, 10)
             patch = Augmenter.random_crop(patch, (CROP_SIZE, CROP_SIZE))
             #patch = Augmenter.random_illum(patch)
             Xb[i, :, :,: ] = utils.neural_to_cv2(patch)
         return Xb, yb
+
+
 
