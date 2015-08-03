@@ -1,4 +1,7 @@
 import os
+import sys
+sys.setrecursionlimit(10000) #so you can pickle large nets
+
 import subprocess
 import getopt
 import numpy as np
@@ -27,6 +30,7 @@ from my_net import SaveBestWeights, EarlyStopping
 import FlipBatchIterator as flip
 import utils
 from neural_data_setup import NeuralDataLoad
+from timer import Timer
 
 
 
@@ -34,10 +38,11 @@ class Experiment(object):
     def __init__(self, flip=True, dropout=False,
                     preloaded_path=None, pipeline=False, 
                     print_out=True, preloaded=False,  
-                    log=True, plot_loss=True, plot=True, epochs=50, 
+                    log=True, plot_loss=True, plot=True,epochs=1000,  
                     roof_type=None, non_roofs=2, viola_data=None,
                     net_name=None, num_layers=None, max_roofs=None):
         
+
         #Load data
         print 'Loading data...\n'
         self.X, self.y = NeuralDataLoad(viola_data=viola_data).load_data(roof_type=roof_type, non_roofs=non_roofs) 
@@ -45,10 +50,10 @@ class Experiment(object):
         #set up the data scaler
         self.scaler = DataScaler()
         self.X = self.scaler.fit_transform(self.X)
+        print self.X.shape
 
         self.pipeline = pipeline
         #if we are doing the pipeline, we already have a good name for the network, no need to add more info
-
         if self.pipeline:
             self.net_name = net_name
         else:
@@ -64,19 +69,19 @@ class Experiment(object):
             else:
                 raise ValueError('You have given an unknown roof_type to the network')
             self.net_name = 'conv{0}_{1}_metal{2}_thatch{3}_nonroof{4}'.format(num_layers, net_name, metal_num, thatch_num, nonroof_num)
+            self.roof_type = roof_type
 
         self.num_layers = num_layers
         print 'Final network name is: {0}'.format(self.net_name)
+        self.flip = flip
+        self.dropout = dropout
+        self.non_roofs = non_roofs    #the proportion of non_roofs relative to roofs to be used in data
 
         self.epochs = epochs
-        self.non_roofs = non_roofs    #the proportion of non_roofs relative to roofs to be used in data
         self.log = log
         self.plot_loss = True
 
-
-        self.flip = flip
-        self.dropout = dropout
-
+        self.out_file = utils.get_path(in_or_out=utils.OUT, neural=True, data_fold=utils.TRAINING)+self.net_name
         print 'Setting up the Neural Net \n'
         self.setup_net(print_out=print_out)
 
@@ -91,19 +96,20 @@ class Experiment(object):
 
     def setup_net(self, print_out=True):
         if print_out:
-            self.printer = PrintLogSave()
-            on_epoch_finished = [self.printer, SaveBestWeights(), EarlyStopping(patience=200)]
-            on_training_started = [SaveLayerInfo()]
+            self.printer = PrintLogSave(out_file=self.out_file)
+            on_epoch_finished = [self.printer, SaveBestWeights(), EarlyStopping(patience=200, out_file=self.out_file)]
+            on_training_started = [SaveLayerInfo(out_file=self.out_file)]
         else:
-            on_epoch_finished = [EarlyStopping(patience=200)]
+            on_epoch_finished = [EarlyStopping(patience=200, out_file=self.out_file)]
             on_training_started = []
 
         if self.flip:
+            #batch_iterator_train=flip.ResizeBatchIterator(batch_size=128) 
             batch_iterator_train=flip.FlipBatchIterator(batch_size=128)
         else:
-            batch_iterator_test=BatchIterator(batch_size=128) 
+            batch_iterator_train=flip.ResizeBatchIterator(batch_size=128) 
 
-        layers, layer_params = my_net.MyNeuralNet.produce_layers(self.num_layers)      
+        layers, layer_params = my_net.MyNeuralNet.produce_layers(self.num_layers, dropout=self.dropout)      
         self.net = my_net.MyNeuralNet(
             layers=layers,
             num_layers=self.num_layers,
@@ -131,6 +137,7 @@ class Experiment(object):
             verbose=1,
             **layer_params
             )
+        return layer_params
 
 
     def train_test(self, fname_pretrain=None):
@@ -146,12 +153,27 @@ class Experiment(object):
         if net_pretrain is not None:
             self.load_params_from(net_pretrain)
 
-        self.printer.log_to_file(self.net, '', overwrite=True)
-        
+        log = 'best_valid_loss\tbest_epoch\tbest_valid_accuracy\tlayers\tdropout\taugment\troof_type\ttime\tnet_name\n'
+        self.printer.log_to_file(self.net, log, overwrite=True)
+
         #fitting the network to X_train
-        self.net.fit(self.X, self.y)
+        with Timer() as t:
+            self.net.fit(self.X, self.y)
+
+        self.save_params_to_file(timer=t)
         self.net.save_weights()
-        self.net.save_loss()
+
+
+
+    def save_params_to_file(self, timer=None):
+        log = []
+        log.append('{}'.format(self.num_layers))
+        log.append('{}'.format(self.dropout))
+        log.append('{}'.format(self.flip))
+        log.append('{}'.format(self.roof_type))
+        log.append('{}'.format(timer.secs))
+        log.append('{}'.format(self.net_name))
+        self.printer.log_to_file(self.net, '\t'.join(log))
 
 
     def test(self, X_test): 
@@ -256,10 +278,14 @@ class DataScaler(StandardScaler):
 
 
 class PrintLogSave(PrintLog):
+    def __init__(self, out_file=None):
+        self.out_file = out_file
+        with open(self.out_file+'_history', 'w') as f:
+            f.write('epoch\ttrain_loss\tvalid_loss\ttrain_over_valid_loss_ratio\tvalid_accuracy\n')
+
     def __call__(self, nn, train_history): 
-        file = open(utils.get_path(in_or_out=utils.OUT, neural=True, data_fold=utils.TRAINING)+nn.net_name+'_history', 'a')
-        file.write(self.table(nn, train_history))
-        file.close()
+        with open(self.out_file+'_history', 'a') as f:
+            f.write(self.table(nn, train_history))
 
     def table(self, nn, train_history):
         info = train_history[-1]
@@ -267,35 +293,34 @@ class PrintLogSave(PrintLog):
         
     def log_to_file(self, nn, log, overwrite=False, binary=False, title=''):
         write_type = 'w' if overwrite else 'a'
-        file = open(utils.get_path(in_or_out=utils.OUT, neural=True, data_fold=utils.TRAINING)+nn.net_name, write_type)
-        file.write(title)
-        if binary:
-            print >> file, log
-        else:
-            file.write(log)
-        file.close()
+        with open(self.out_file, write_type) as f:
+            if binary:
+                print >> file, log
+            else:
+                f.write(title)
+                f.write(log)
 
 
 class SaveLayerInfo(PrintLayerInfo):
+    def __init__(self, out_file=None):
+        self.out_file = out_file
+
     def __call__(self, nn, train_history):
-        file = open(utils.get_path(in_or_out=utils.OUT, neural=True, data_fold=utils.TRAINING)+nn.net_name, 'a')
-        #message = self._get_greeting(nn)
-        #file.write(message)
-        file.write("## Layer information")
-        file.write("\n\n")
+        with open(self.out_file+'_layers', 'w') as f:
+            f.write("## Layer information")
+            f.write("\n")
 
-        layers_contain_conv2d = is_conv2d(list(nn.layers_.values()))
-        if not layers_contain_conv2d or (nn.verbose < 2):
-            layer_info = self._get_layer_info_plain(nn)
-            legend = None
-        else:
-            layer_info, legend = self._get_layer_info_conv(nn)
-        file.write(layer_info)
-        if legend is not None:
-            file.write(legend)
-        file.write(" \n\n")
+            layers_contain_conv2d = is_conv2d(list(nn.layers_.values()))
+            if not layers_contain_conv2d or (nn.verbose < 2):
+                layer_info = self._get_layer_info_plain(nn)
+                legend = None
+            else:
+                layer_info, legend = self._get_layer_info_conv(nn)
+            f.write(layer_info)
+            if legend is not None:
+                file.write(legend)
+            f.write(" \n")
 
-        file.close()
 
 
 
@@ -342,7 +367,5 @@ if __name__ == '__main__':
     elif to_do == 't':
         experiment.train_test() 
     else:
-        img = cv2.imread("../data/inhabited/0001.jpg")
-        experiment.test_image(img)
-
+        pass
 

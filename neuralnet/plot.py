@@ -18,10 +18,14 @@ def plot_loss():
                     training_loss.append(float(row[1]))
                     validation_loss.append(float(row[2]))
 
-            plt.plot(training_loss, label='train loss')
-            plt.plot(validation_loss, label='valid loss')
-            plt.title('History of {0}'.format(file[:-(len('_history'))]))
+            plt.plot(training_loss, linewidth=3, label='train loss')
+            plt.plot(validation_loss, linewidth=3, label='valid loss')
+
+            #plt.title('History of {0}'.format(file[:-(len('_history'))]))
             plt.legend(loc='best')
+            plt.grid()
+            plt.xlabel("epoch")
+            plt.ylabel("loss")
 
             plot_name = path+file+'.jpg' 
             plt.savefig(plot_name)

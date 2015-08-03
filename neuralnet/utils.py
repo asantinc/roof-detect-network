@@ -771,6 +771,7 @@ def cv2_to_neural(img, w=PATCH_W, h=PATCH_H):
         x = resize_rgb(x, w, h)
         #the channel comes first (h, w, channels) becomes (channels, h, w)
         x = x.transpose(2,0,1)
+
     except ValueError, e:
         raise ValueError
     else:

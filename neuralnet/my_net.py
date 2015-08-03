@@ -108,7 +108,7 @@ class MyNeuralNet(NeuralNet):
             ''' Saves weigts of model so they can be loaded back later:
             '''
             path = utils.get_path(params=True, neural_weights=True) #'../parameters/saved_weights/'
-            with ('{0}_{1}_accur{0:.4f}.pickle'.format(path, self.net_name, self.valid_accuracy), 'wb') as f:
+            with open('{0}{1}.pickle'.format(path, self.net_name), 'wb') as f:
                 pickle.dump(self, f, -1)
         
         
@@ -125,15 +125,17 @@ class MyNeuralNet(NeuralNet):
         
 
         @staticmethod
-        def produce_layers(num_layers=1):
-            assert num_layers<=5
-            assert num_layers>=0
+        def produce_layers(num_layers=1, dropout=False):
+            assert num_layers<=5 and num_layers>=0
+            if num_layers<5:
+                assert dropout==False
+
             if num_layers==0:
                 net_layers=[
                     ('input', layers.InputLayer),
                     ('output', layers.DenseLayer),
                     ]
-                params_dict = {'conv1_num_filters':32, 'conv1_filter_size':(3, 3), 'pool1_pool_size':(2, 2)}
+                params_dict = {}
 
             elif num_layers==1:
                 net_layers=[
@@ -142,8 +144,7 @@ class MyNeuralNet(NeuralNet):
                     ('pool1', layers.MaxPool2DLayer),
                     ('output', layers.DenseLayer),
                     ]
-                params_dict = {'conv1_num_filters':32, 'conv1_filter_size':(3, 3), 'pool1_pool_size':(2, 2),
-                        'conv2_num_filters':64, 'conv2_filter_size':(2, 2), 'pool2_pool_size':(2, 2)}
+                params_dict = {'conv1_num_filters':32, 'conv1_filter_size':(3, 3), 'pool1_pool_size':(2, 2)}
 
             elif num_layers==2:
                 net_layers=[
@@ -188,44 +189,79 @@ class MyNeuralNet(NeuralNet):
                         'conv3_num_filters':128, 'conv3_filter_size':(2, 2), 'pool3_pool_size':(2, 2),
                         'hidden4_num_units':500}
             elif num_layers==5:
-                net_layers=[
-                    ('input', layers.InputLayer),
-                    ('conv1', layers.Conv2DLayer),
-                    ('pool1', layers.MaxPool2DLayer),
-                    ('conv2', layers.Conv2DLayer),
-                    ('pool2', layers.MaxPool2DLayer),
-                    ('conv3', layers.Conv2DLayer),
-                    ('pool3', layers.MaxPool2DLayer),
-                    ('hidden4', layers.DenseLayer),
-                    ('hidden5', layers.DenseLayer),
-                    ('output', layers.DenseLayer),
-                    ]
+                if dropout:
+                    net_layers=[
+                        ('input', layers.InputLayer),
+                        ('conv1', layers.Conv2DLayer),
+                        ('pool1', layers.MaxPool2DLayer),
+                        ('dropout1', layers.DropoutLayer),
+                        ('conv2', layers.Conv2DLayer),
+                        ('pool2', layers.MaxPool2DLayer),
+                        ('dropout2', layers.DropoutLayer),
+                        ('conv3', layers.Conv2DLayer),
+                        ('pool3', layers.MaxPool2DLayer),
+                        ('dropout3', layers.DropoutLayer),
+                        ('hidden4', layers.DenseLayer),
+                        ('dropout4', layers.DropoutLayer),
+                        ('hidden5', layers.DenseLayer),
+                        ('output', layers.DenseLayer),
+                        ]
+                else:
+                    net_layers=[
+                        ('input', layers.InputLayer),
+                        ('conv1', layers.Conv2DLayer),
+                        ('pool1', layers.MaxPool2DLayer),
+                        ('conv2', layers.Conv2DLayer),
+                        ('pool2', layers.MaxPool2DLayer),
+                        ('conv3', layers.Conv2DLayer),
+                        ('pool3', layers.MaxPool2DLayer),
+                        ('hidden4', layers.DenseLayer),
+                        ('hidden5', layers.DenseLayer),
+                        ('output', layers.DenseLayer),
+                        ]
                 params_dict = {'conv1_num_filters':32, 'conv1_filter_size':(3, 3), 'pool1_pool_size':(2, 2),
                         'conv2_num_filters':64, 'conv2_filter_size':(2, 2), 'pool2_pool_size':(2, 2),
                         'conv3_num_filters':128, 'conv3_filter_size':(2, 2), 'pool3_pool_size':(2, 2),
                         'hidden4_num_units':500, 'hidden5_num_units':500}
+                if dropout:
+                    params_dict['dropout1_p'] =0.1 
+                    params_dict['dropout2_p'] =0.2 
+                    params_dict['dropout3_p'] =0.3 
+                    params_dict['dropout4_p'] =0.4 
+
             return net_layers, params_dict 
 
 
 class EarlyStopping(object):
-    def __init__(self, patience=100):
+    def __init__(self, patience=100, out_file=None):
         self.patience = patience
         self.best_valid = np.inf
         self.best_valid_epoch = 0
+        self.best_valid_accuracy = 0
         self.best_weights = None
+        self.output_file = out_file
 
     def __call__(self, nn, train_history):
         current_valid = train_history[-1]['valid_loss']
         current_epoch = train_history[-1]['epoch']
+        current_valid_accuracy = train_history[-1]['valid_accuracy']
         if current_valid < self.best_valid:
             self.best_valid = current_valid
             self.best_valid_epoch = current_epoch
             self.best_weights = nn.get_all_params_values()
+            self.best_valid_accuracy = current_valid_accuracy
+
         elif self.best_valid_epoch + self.patience < current_epoch:
             print "Early stopping"
-            print("Best valid loss was {:.6f} at epoch {}.".format(
-                                self.best_valid, self.best_valid_epoch))
+            print("Best valid loss was {:.6f} at epoch {} with accuracy {}.".format(
+                                self.best_valid, self.best_valid_epoch, self.best_valid_accuracy))
             nn.load_params_from(self.best_weights)
+            if self.output_file is not None:
+                with open(self.output_file, 'a') as f:
+                    log = ['{}'.format(self.best_valid),
+                            '{}'.format(self.best_valid_epoch), 
+                            '{}\t'.format(self.best_valid_accuracy)]
+                    f.write('\t'.join(log))
             raise StopIteration()
 
 
