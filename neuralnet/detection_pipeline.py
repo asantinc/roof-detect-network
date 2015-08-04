@@ -396,7 +396,7 @@ if __name__ == '__main__':
     in_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.IN, pipe=True) 
     out_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.OUT, pipe=True, out_folder_name=out_pipe_fname[:-len('.csv')])   
 
-    pickle_viola = '../data_original/training/neural/evaluation.pickle' 
+    pickle_viola = '../data_original/training/neural/evaluation_validation_set_combo11.pickle' 
     pipe = Pipeline(pickle_viola=pickle_viola, single_detector=single_detector_bool, 
                     in_path=in_path, out_path=out_path, 
                     pipe=pipe_params, 

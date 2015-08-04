@@ -14,7 +14,9 @@ def plot_loss():
             validation_loss = list()
             with open(path+file, 'rb') as csv_file:
                 csv_reader = csv.reader(csv_file, delimiter='\t')
-                for row in csv_reader:
+                for i, row in enumerate(csv_reader):
+                    if i==0:
+                        continue
                     training_loss.append(float(row[1]))
                     validation_loss.append(float(row[2]))
 
