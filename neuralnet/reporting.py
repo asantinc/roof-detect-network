@@ -5,6 +5,7 @@ import sys
 import pdb
 import cv2
 import pickle
+from hashlib import sha1
 
 from get_data import DataLoader #for get_roofs
 import utils
@@ -16,6 +17,7 @@ class Detections(object):
         self.false_positive_num =  defaultdict(int)
         self.true_positive_num =  defaultdict(int)
         self.good_detection_num =  defaultdict(int)
+
         if mergeFalsePos:
             self.bad_detection_num = 0 #we count the metal and thatch false positives together 
         else:
@@ -26,11 +28,16 @@ class Detections(object):
         self.true_positives = dict()
         self.false_positives = dict()
         self.good_detections =dict()#all the detections above the VOC threshold
+        #index with the roof polygon coordinates
+        #stores the best score and detection for each grount true roof
+        self.roof_detections_voc = dict() 
+
         if mergeFalsePos:
             self.bad_detections = defaultdict(list) #there's only one set of bad detections
         else:
             self.bad_detections = dict()
         for roof_type in utils.ROOF_TYPES: # we need this to separate them per image
+            self.roof_detections_voc[roof_type] = dict()
             self.detections[roof_type] = dict()
             self.true_positives[roof_type] = defaultdict(list)
             self.false_positives[roof_type] = defaultdict(list)
@@ -40,6 +47,15 @@ class Detections(object):
 
         self.total_time = 0
         self.imgs = set()
+
+    def update_best_voc(self,img_name=None, roof_type=None, roof_polygon=None, best_detection=None, score=None):
+        roof = sha1(roof_polygon) #we can't use np array as a hash, so we make it a tuple
+        if img_name not in self.roof_detections_voc[roof_type]:
+            self.roof_detections_voc[roof_type][img_name] = dict()
+        #ensure the new score is actually better
+        if roof in self.roof_detections_voc[roof_type][img_name]:
+            assert self.roof_detections_voc[roof_type][img_name][roof][1] < score
+        self.roof_detections_voc[roof_type][img_name][roof] = (best_detection, score)  
 
     def update_true_pos(self, true_pos=None, img_name=None, roof_type=None):
         self.true_positives[roof_type][img_name].extend(true_pos)
@@ -141,8 +157,8 @@ class Evaluation(object):
         #threholds to classify detections as False/True positives and Good/Bad detections(these are to train the neural network on it)
         self.VOC_threshold = utils.VOC_threshold #threshold to assign a detection as a true positive
         self.VOC_good_detection_threshold = dict()
-        self.VOC_good_detection_threshold['metal'] = vocGood
-        self.VOC_good_detection_threshold['thatch'] = 0.50
+        self.VOC_good_detection_threshold['metal'] = utils.VOC_threshold 
+        self.VOC_good_detection_threshold['thatch'] = utils.VOC_threshold
         self.detection_portion_threshold = 0.50
 
         self.detections = detections    #detection class
@@ -223,6 +239,7 @@ class Evaluation(object):
                 best_voc_score = -1 
                 best_detection = -1 
 
+
                 for d, detection in enumerate(detections[roof_type]):  # detections[roof_type]):                           #for each patch found
                     #detection_roof_portion is how much of the detection is covered by roof
                     voc_score, detection_roof_portion = self.get_score(contours=work_with_contours, 
@@ -230,6 +247,10 @@ class Evaluation(object):
                     if (voc_score > self.VOC_threshold) and (voc_score > best_voc_score):#this may be a true pos
                         best_voc_score = voc_score
                         best_detection = d 
+
+                    #store the best detection regardless of whether it is over 0.5
+                    if voc_score > best_voc_score:
+                        self.detections.update_best_voc(img_name=img_name, roof_type=roof_type, roof_polygon=roof, best_detection=detection, score=voc_score)  
 
                     #if self.output_patches:
                     #depending on roof type we consider a different threshold
@@ -371,15 +392,6 @@ class Evaluation(object):
 
         cv2.imwrite('{0}{1}{2}.jpg'.format(self.out_path, img_name[:-4], fname), img)
 
-
-
-    def pickle_detections(self): 
-        file_name = 'TP{tp}_FP{fp}_{method}_{foldername}.pickle'.format( 
-                        tp=len(self.true_positive_coords['metal'])+len(self.true_positive_coords['thatch']), 
-                        fp=len(self.false_positive_coords['metal'])+len(self.false_positive_coords['thatch']),
-                        method=self.method, foldername=self.folder_name[:-1])
-        with open(utils.TRAINING_NEURAL_PATH+file_name, 'wb') as f:
-            pickle.dump(self.detections, f)
 
 
     def get_patch_mask(self, rows=None, cols=None, detections=None):

@@ -427,7 +427,7 @@ def rotate_image_RGB(image, angle):
   diagonal = int(math.sqrt(pow(image.shape[0], 2) + pow(image.shape[1], 2)))
   offset_x = (diagonal - image.shape[0])/2
   offset_y = (diagonal - image.shape[1])/2
-  dst_image = np.zeros((diagonal, diagonal, 3), dtype='uint8')
+  dst_image = np.ones((diagonal, diagonal, 3), dtype='uint8')
   #dst_image = np.zeros((diagonal, diagonal), dtype='uint8')
   image_center = (diagonal/2, diagonal/2)
 

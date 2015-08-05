@@ -24,8 +24,14 @@ def process_viola_reports(viola_paths, fold=None):
 
             all_reports[folder_name]['metal']['detectors'] = all_lines[0][1:]
             all_reports[folder_name]['thatch']['detectors'] = all_lines[1][1:]
-            all_reports[folder_name]['metal']['time'] = float(all_lines[2][2])
-            all_reports[folder_name]['thatch']['time'] = float(all_lines[2][2])
+            print all_lines 
+            try:
+                all_reports[folder_name]['metal']['time'] = float(all_lines[2][2])
+                all_reports[folder_name]['thatch']['time'] = float(all_lines[2][2])
+            except:
+                print all_lines
+                pdb.set_trace()
+                continue
            
             for roof_type in ['metal', 'thatch']:
                 if roof_type == 'metal':
@@ -83,13 +89,13 @@ def main():
         viola_path = utils.get_path(in_or_out=utils.OUT, viola=True, data_fold=fold) 
         pipe_path = utils.get_path(in_or_out=utils.OUT, pipe=True, data_fold=fold)
 
-        for path in [viola_path, pipe_path]:
+        #for path in [viola_path, pipe_path]:
+        for path in [viola_path]:
             for folder in os.listdir(path):
                 if os.path.isfile(path+folder+'/report.txt'):
                     paths[fold].append((path, folder))
 
         #print viola_paths
-        pdb.set_trace()
         process_viola_reports(paths[fold], fold=fold)
 
 
