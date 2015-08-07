@@ -37,9 +37,12 @@ class ViolaDetector(object):
             min_neighbors=3,
             scale=1.1,
             rotate=True, 
+            rotateRectOnly=False, 
+            fullAngles=False, 
             removeOff=True,
             output_patches=True,
             strict=True,
+            negThres=0.3,
             mergeFalsePos=False,
             separateDetections=True,
             vocGood=0.1,
@@ -72,6 +75,8 @@ class ViolaDetector(object):
             parameter for the detectmultiscale method
         rotate: boolean
             whether we should rotate the image
+        rotateRectOnly:boolean
+            rotate only rectangular detectors, instead of all metal detectors
         removeOff: boolean
             whether the detections that fall partially off the image should be removed. Relevant in particular
             to the rotations
@@ -79,6 +84,8 @@ class ViolaDetector(object):
             whether good and bad detections should be saved. These can then be used to train other models
         strict: boolean
             whether the patches saved should be strictly the true and false detections
+        neg_thres: float
+            the threshold voc score under which a detection is considered a negative example for neural training
         mergeFalsePos: boolean
             whether the bad detections of the metal and thatch roofs should be saved together or separately.
             If it is true, then only bad detections that are bad for both metal and thatch fall into the bad
@@ -100,8 +107,10 @@ class ViolaDetector(object):
         self.save_imgs = save_imgs
         self.output_patches = output_patches
         self.strict = strict
+        self.neg_thres = negThres
         self.mergeFalsePos = mergeFalsePos
 
+        self.rotateRectOnly = rotateRectOnly
         self.viola_detections = Detections(mergeFalsePos = self.mergeFalsePos)
         self.setup_detectors(detector_names)
 
@@ -110,7 +119,10 @@ class ViolaDetector(object):
         self.min_neighbors = int(min_neighbors)
         self.group = group
         self.overlapThresh = overlapThresh
-        self.angles = utils.VIOLA_ANGLES if rotate else [0]
+        if rotate:
+            self.angles = utils.VIOLA_ANGLES if fullAngles==False else [0, 90, 180] 
+        else:
+            self.angles = [0]
         self.remove_off_img = removeOff
         self.downsized = downsized
 
@@ -132,9 +144,16 @@ class ViolaDetector(object):
         assert detector_names is not None 
         self.roof_detectors = defaultdict(list)
         self.detector_names = detector_names
+        self.rotate_detectors = list()
+
+        rectangular_detector = 'cascade_metal_rect_augm1_singlesize_original_pad0_num872_w40_h20_FA0.4_LBP'
 
         for roof_type in utils.ROOF_TYPES:
-            for path in detector_names[roof_type]: 
+            for i, path in enumerate(detector_names[roof_type]): 
+                if rectangular_detector in path or self.rotateRectOnly == False:
+                    self.rotate_detectors.append(True)     
+                else:
+                    self.rotate_detectors.append(False)
                 if path.startswith('cascade'):
                     start = '../viola_jones/cascades/' 
                     self.roof_detectors[roof_type].append(cv2.CascadeClassifier(start+path+'/cascade.xml'))
@@ -159,13 +178,15 @@ class ViolaDetector(object):
             pickle.dump(self.evaluation, f) 
 
         if self.output_patches:
+            self.save_training_TP_FP_using_voc()
+            '''
             if self.strict:
                 #self.strict_save_training_FP_and_TP(viola=True)
                 self.strict_save_training_FP_and_TP(neural=True)
             else:
                 #self.save_training_FP_and_TP(viola=True)
                 self.save_training_FP_and_TP(neural=True)
-
+            '''
         open(self.out_folder+'DONE', 'w').close() 
 
 
@@ -187,7 +208,7 @@ class ViolaDetector(object):
                 for i, detector in enumerate(detectors):
                     for angle in self.angles:
                         #for thatch we only need one angle
-                        if roof_type == 'thatch' and angle>0:
+                        if self.rotate_detectors[i] == False and angle>0 or (roof_type=='thatch' and angle>0):#roof_type == 'thatch' and angle>0:
                             continue
 
                         print 'Detecting with detector: '+str(i)
@@ -271,6 +292,46 @@ class ViolaDetector(object):
                 print len(self.viola_detections.get_detections(roof_type=roof_type, img_name=img_name))
             return rgb_unrotated
 
+
+    def save_training_TP_FP_using_voc(self, neural=True, viola=False):
+        '''use the voc scores to decide if a patch should be saved as a TP or FP or not
+        '''
+        general_path = utils.get_path(neural=neural, viola=viola, data_fold=utils.TRAINING, in_or_out=utils.IN, out_folder_name=self.out_folder_name)
+        path_true = general_path+'truepos_from_viola_training/'
+        utils.mkdir(path_true)
+
+        path_false = general_path+'falsepos_from_viola_training/'
+        utils.mkdir(path_false)
+
+        for img_name in self.img_names:
+            good_detections = defaultdict(list)
+            bad_detections = defaultdict(list)
+            try:
+                if viola: #viola training will need grayscale patches
+                    img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    img = cv2.equalizeHist(img)
+                else: #neural network will need RGB
+                    img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
+            except:
+                print 'Cannot open image'
+                sys.exit(-1)
+
+            for roof_type in utils.ROOF_TYPES:
+                detection_scores = self.viola_detections.best_score_per_detection[img_name][roof_type]
+                for detection, score in detection_scores:
+                    if score > 0.5:
+                        #true positive
+                        good_detections[roof_type].append(detection)
+                    if score < self.neg_thres:
+                        #false positive
+                        bad_detections[roof_type].append(detection)
+                    
+            for roof_type in utils.ROOF_TYPES:
+                extraction_type = 'good'
+                self.save_training_FP_and_TP_helper(img_name, good_detections[roof_type], path_true, general_path, img, roof_type, extraction_type, (0,255,0))               
+                extraction_type = 'background'
+                self.save_training_FP_and_TP_helper(img_name, bad_detections[roof_type], path_false, general_path, img, roof_type, extraction_type, (0,0,255))               
 
 
     def strict_save_training_FP_and_TP(self, viola=False, neural=False):
@@ -442,21 +503,24 @@ def main(pickled_evaluation=False, combo_f_name=None, output_patches=True,
 
 
 if __name__ == '__main__':
-    strict=True
+    strict=True #decides if we only want to save actual true positives and not just good detections as true positives
     mergeFalsePos = False
-    output_patches = True #if you want to save the true pos and false pos detections, you need to use the training set
+    output_patches = False #if you want to save the true pos and false pos detections, you need to use the training set
     pickled_evaluation = False 
+    negThres = 0.3
+
     if output_patches:
         data_fold=utils.TRAINING
     else: 
         data_fold=utils.VALIDATION
+    #data_fold = utils.SMALL_TEST
 
     # removeOff: whether to remove the roofs that fall off the image when rotating (especially the ones on the edge
     # group: can be None, group_rectangles, group_bounding
     # if check_both_detectors is True we check if either the metal or the thatch detector has found a detection that matches either type of roof 
-    detector_params = {'min_neighbors':3, 'scale':1.08, 'mergeFalsePos':mergeFalsePos, 'strict':strict,
+    detector_params = {'min_neighbors':3, 'scale':1.08, 'mergeFalsePos':mergeFalsePos, 'negThres':negThres,
                         'group': False, 'downsized':False, 
-                        'rotate':True, 'removeOff':True,
+                        'rotate':True, 'fullAngles':True, 'removeOff':True,
                         'separateDetections':True} 
     viola = main(pickled_evaluation=pickled_evaluation, output_patches=output_patches,  
                 detector_params=detector_params, save_imgs=False, data_fold=data_fold, original_dataset=True)
@@ -466,8 +530,6 @@ if __name__ == '__main__':
     
     if pickled_evaluation and output_patches:
         #viola.save_training_FP_and_TP(viola=True)
-        viola.save_training_FP_and_TP(neural=True)
-
-
+        viola.save_training_FP_TP_using_voc(neural=True)
 
 

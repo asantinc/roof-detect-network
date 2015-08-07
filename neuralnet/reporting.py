@@ -5,7 +5,6 @@ import sys
 import pdb
 import cv2
 import pickle
-from hashlib import sha1
 
 from get_data import DataLoader #for get_roofs
 import utils
@@ -31,13 +30,14 @@ class Detections(object):
         #index with the roof polygon coordinates
         #stores the best score and detection for each grount true roof
         self.roof_detections_voc = dict() 
+        self.best_score_per_detection = dict() #keep track of each detection's best voc score with some roof, for each image
 
         if mergeFalsePos:
             self.bad_detections = defaultdict(list) #there's only one set of bad detections
         else:
             self.bad_detections = dict()
         for roof_type in utils.ROOF_TYPES: # we need this to separate them per image
-            self.roof_detections_voc[roof_type] = dict()
+            self.roof_detections_voc[roof_type] = defaultdict(list)
             self.detections[roof_type] = dict()
             self.true_positives[roof_type] = defaultdict(list)
             self.false_positives[roof_type] = defaultdict(list)
@@ -48,14 +48,8 @@ class Detections(object):
         self.total_time = 0
         self.imgs = set()
 
-    def update_best_voc(self,img_name=None, roof_type=None, roof_polygon=None, best_detection=None, score=None):
-        roof = sha1(roof_polygon) #we can't use np array as a hash, so we make it a tuple
-        if img_name not in self.roof_detections_voc[roof_type]:
-            self.roof_detections_voc[roof_type][img_name] = dict()
-        #ensure the new score is actually better
-        if roof in self.roof_detections_voc[roof_type][img_name]:
-            assert self.roof_detections_voc[roof_type][img_name][roof][1] < score
-        self.roof_detections_voc[roof_type][img_name][roof] = (best_detection, score)  
+    def set_best_voc(self,img_name=None, roof_type=None, roof_polygon=None, best_detection=None, score=None):
+        self.roof_detections_voc[roof_type][img_name].append((roof_polygon, best_detection, score))  
 
     def update_true_pos(self, true_pos=None, img_name=None, roof_type=None):
         self.true_positives[roof_type][img_name].extend(true_pos)
@@ -211,12 +205,11 @@ class Evaluation(object):
         '''
         print 'Scoring.....'
         #start with all detections as false pos; as we find matches, we increase the true_pos, decrese the false_pos numbers
-        detections = dict() 
         false_pos_logical = dict()
         bad_detection_logical = dict()
-        
-
+        best_score_per_detection = defaultdict(list) #for the current image
         detections = dict()
+
         for roof_type in utils.ROOF_TYPES:
             #this will only be necessary if we work with the neural network
             #and we want to score roofs by merging nearby detections
@@ -235,12 +228,15 @@ class Evaluation(object):
             false_pos_logical[roof_type] = np.ones(len(detections[roof_type]), dtype=bool) #[roof_type]
             bad_detection_logical[roof_type] = np.ones(len(detections[roof_type]), dtype=bool) #[roof_type]
 
-            for roof in self.correct_roofs[roof_type][img_name]:
+            for r, roof in enumerate(self.correct_roofs[roof_type][img_name]):
                 best_voc_score = -1 
                 best_detection = -1 
 
 
-                for d, detection in enumerate(detections[roof_type]):  # detections[roof_type]):                           #for each patch found
+                for d, detection in enumerate(detections[roof_type]):                             #for each patch found
+                    if r == 0:#first roof, so insert the current detection and a negative score
+                        best_score_per_detection[roof_type].append([detection, -1])
+
                     #detection_roof_portion is how much of the detection is covered by roof
                     voc_score, detection_roof_portion = self.get_score(contours=work_with_contours, 
                                                         rows=img_shape[0], cols=img_shape[1], roof=roof, detection=detection)
@@ -248,24 +244,27 @@ class Evaluation(object):
                         best_voc_score = voc_score
                         best_detection = d 
 
-                    #store the best detection regardless of whether it is over 0.5
-                    if voc_score > best_voc_score:
-                        self.detections.update_best_voc(img_name=img_name, roof_type=roof_type, roof_polygon=roof, best_detection=detection, score=voc_score)  
-
-                    #if self.output_patches:
-                    #depending on roof type we consider a different threshold
-                    if (voc_score > self.VOC_good_detection_threshold[roof_type] or detection_roof_portion>self.detection_portion_threshold):
+                    if (voc_score > self.VOC_good_detection_threshold[roof_type]): # or detection_roof_portion>self.detection_portion_threshold):
                         bad_detection_logical[roof_type][d] = 0 #we already know that this wasn't a bad detection
+
+                    if (voc_score > best_score_per_detection[roof_type][d][1]): #keep track of best match with some roof for each detection
+                        best_score_per_detection[roof_type][d][1] = voc_score
+                        
+
+                #store the best detection for this roof regardless of whether it is over 0.5
+                if voc_score > best_voc_score:
+                    self.detections.set_best_voc(img_name=img_name, roof_type=roof_type, roof_polygon=roof, best_detection=detections[roof_type][d], score=best_voc_score)  
 
                 if best_detection != -1:
                     false_pos_logical[roof_type][best_detection] = 0 #this detection is not a false positive
 
-        self.update_scores(img_name, detections, false_pos_logical, bad_detection_logical)
+        self.update_scores(img_name, detections, false_pos_logical, bad_detection_logical, best_score_per_detection)
         self.save_images(img_name)
 
        
 
-    def update_scores(self, img_name, detections, false_pos_logical, bad_detection_logical):
+    def update_scores(self, img_name, detections, false_pos_logical, bad_detection_logical, best_score_per_detection):
+        self.detections.best_score_per_detection[img_name] = best_score_per_detection
 
         if self.mergeFalsePos: #self.output_patches 
             detects = np.array(detections['metal'].extend(detections['thatch']))

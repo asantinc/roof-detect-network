@@ -764,6 +764,9 @@ def draw_detections(polygon_list, img, fill=False, color=(0, 0, 255), number=Fal
 ############################
 # CV2 and LASAGNE
 ############################
+def float32(k):
+    return np.cast['float32'](k)
+
 def cv2_to_neural(img, w=PATCH_W, h=PATCH_H):
     x = np.asarray(img, dtype='float32')/255
     try:

@@ -45,7 +45,6 @@ class Pipeline(object):
             Decides if we should do grouping on neural detections
         '''
 
-        self.step_size = pipe['step_size'] if pipe['step_size'] is not None else utils.STEP_SIZE
         self.groupThreshold = int(groupThres)
         self.groupBounds = groupBounds
         self.erosion = erosion

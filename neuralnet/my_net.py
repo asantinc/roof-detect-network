@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import cPickle as pickle
 import pdb
 
+import theano
 import lasagne
 from lasagne import layers
 from lasagne.updates import nesterov_momentum
@@ -281,6 +282,22 @@ class SaveBestWeights(object):
             weight_name = '{0}{1}.pickle'.format(self.weight_path, nn.net_name, self.best_valid, current_epoch) 
             with open(weight_name, 'wb') as f:
                 pickle.dump(nn, f, -1)                 
+
+class AdjustVariable(object):
+    def __init__(self, name, start=0.03, stop=0.001):
+        self.name = name
+        self.start, self.stop = start, stop
+        self.ls = None
+
+    def __call__(self, nn, train_history):
+        if self.ls is None:
+            self.ls = np.linspace(self.start, self.stop, nn.max_epochs)
+
+        epoch = train_history[-1]['epoch']
+        new_value = utils.float32(self.ls[epoch-1])
+        getattr(nn, self.name).set_value(new_value)
+
+
 
 if __name__ == "__main__":
     net = MyNeuralNet()

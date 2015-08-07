@@ -12,6 +12,7 @@ from operator import itemgetter
 import cv2
 
 import lasagne
+import theano
 sys.path.append('~/roof/Lasagne/lasagne')
 sys.path.append('~/roof/nolearn/nolearn')
 from nolearn.lasagne.handlers import PrintLog, PrintLayerInfo 
@@ -26,22 +27,30 @@ import skimage
 
 #my modules
 import my_net
-from my_net import SaveBestWeights, EarlyStopping
+from my_net import SaveBestWeights, AdjustVariable, EarlyStopping
 import FlipBatchIterator as flip
 import utils
 from neural_data_setup import NeuralDataLoad
 from timer import Timer
 
 
-
 class Experiment(object):
-    def __init__(self, flip=True, dropout=False,
+    def __init__(self, flip=True, dropout=False, adaptive=False,
                     preloaded_path=None, pipeline=False, 
                     print_out=True, preloaded=False,  
-                    log=True, plot_loss=True, plot=True,epochs=1000,  
+                    log=True, plot_loss=True, plot=True,epochs=3000,  
                     roof_type=None, non_roofs=2, viola_data=None,
                     net_name=None, num_layers=None, max_roofs=None):
-        
+        '''
+        Parameters:
+        ------------
+        flip: boolean
+            whether we should perform data augmentation
+        dropout: boolean
+            whether we should perform dropout
+        adaptive: boolean
+            Whether learning rate and momentum should adapt over time
+        '''
 
         #Load data
         print 'Loading data...\n'
@@ -83,6 +92,7 @@ class Experiment(object):
 
         self.out_file = utils.get_path(in_or_out=utils.OUT, neural=True, data_fold=utils.TRAINING)+self.net_name
         print 'Setting up the Neural Net \n'
+        self.adaptive_learning = adaptive
         self.setup_net(print_out=print_out)
 
         #preload weights if a path to weights was provided
@@ -109,6 +119,16 @@ class Experiment(object):
         else:
             batch_iterator_train=flip.ResizeBatchIterator(batch_size=128) 
 
+        if self.adaptive_learning:
+            update_learning_rate = theano.shared(utils.float32(0.03))
+            update_momentum = theano.shared(utils.float32(0.9))
+            on_epoch_finished.append(AdjustVariable('update_learning_rate', start=0.03, stop=0.0001))
+            on_epoch_finished.append(AdjustVariable('update_momentum', start=0.9, stop=0.999))
+        else: 
+            update_learning_rate = 0.01
+            update_momentum = 0.9
+
+
         layers, layer_params = my_net.MyNeuralNet.produce_layers(self.num_layers, dropout=self.dropout)      
         self.net = my_net.MyNeuralNet(
             layers=layers,
@@ -120,8 +140,8 @@ class Experiment(object):
             preproc_scaler = None, 
         
             #learning rates
-            update_learning_rate=0.01,
-            update_momentum=0.9,
+            update_learning_rate=update_learning_rate,
+            update_momentum=update_momentum,
         
             #printing
             net_name=self.net_name,
@@ -356,7 +376,7 @@ if __name__ == '__main__':
     params_path = '{0}{1}'.format(utils.get_path(params=True, neural=True), param_file)
     params = get_neural_training_params_from_file(params_path) 
 
-    params['net_name'] = '{}_flip{}_dropout{}'.format(param_file[:-4], params['flip'], params['dropout'])
+    params['net_name'] = '{}_flip{}_dropout{}_adapt{}'.format(param_file[:-4], params['flip'], params['dropout'], params['adaptive'])
     print 'Network name is: {0}'.format(params['net_name'])
 
     experiment = Experiment(print_out=True, **params)
