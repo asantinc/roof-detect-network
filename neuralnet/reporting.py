@@ -339,7 +339,7 @@ class Evaluation(object):
         return voc_score, detection_roof_portion
 
 
-    def print_report(self, write_to_file=True):
+    def print_report_old(self, write_to_file=True):
         log_to_file = list() 
         print '*************** FINAL REPORT *****************'
         log_to_file.append('Total Detection Time:\t\t{0}'.format(self.detections.total_time))
@@ -371,7 +371,47 @@ class Evaluation(object):
         with open(self.out_path+'report.txt', 'a') as report:
             report.write(log)
  
+    def print_report(self, print_header=True, stage=None, report_name='report.txt', write_to_file=True):
+        '''
+        Parameters:
+        ---------------
+        stage: string
+            can add an additional column to the report for instance, if theres' multiple stages that we want to report in a single file,
+            as is the case of the pipeline detection
+        '''
+        log_to_file = list() 
+        if print_header: 
+            open(self.out_path+report_name, 'w').close() 
+            if stage is None:
+                log_to_file.append('roof_type\ttotal_roofs\ttotal_time\tdetections\trecall\tprecision\tf1')
+            else:
+                log_to_file.append('stage\troof_type\ttotal_roofs\ttotal_time\tdetections\trecall\tprecision\tf1')
 
+
+        for roof_type in utils.ROOF_TYPES:
+            detection_num = self.detections.total_detection_num[roof_type]
+            true_pos = self.detections.true_positive_num[roof_type]
+            false_pos = self.detections.false_positive_num[roof_type]
+            cur_type_roofs = self.detections.roof_num[roof_type] 
+
+            if detection_num > 0 and cur_type_roofs > 0:
+                recall = float(true_pos) / cur_type_roofs 
+                precision = float(true_pos) / detection_num
+                if precision+recall > 0:
+                    F1 = (2.*precision*recall)/(precision+recall)
+                else:
+                    F1 = 0
+            else:
+                recall = precision = F1 = 0
+            if stage is None:
+                log_to_file.append('{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(roof_type, cur_type_roofs, self.detections.total_time, detection_num, recall, precision,F1)) 
+            else:
+                log_to_file.append('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(stage, roof_type, cur_type_roofs, self.detections.total_time, detection_num, recall, precision,F1)) 
+
+        log = '\n'.join(log_to_file)
+        with open(self.out_path+report_name, 'a') as report:
+            report.write(log)
+ 
 
 
 

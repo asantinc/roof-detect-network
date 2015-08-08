@@ -57,8 +57,8 @@ class Pipeline(object):
         self.out_path = out_path
 
         #create report file
-        self.report_path = self.out_path+'report_pipe.txt'
-        open(self.report_path, 'w').close()
+        #self.report_path = self.out_path+'report_pipe.txt'
+        #open(self.report_path, 'w').close()
 
         #Setup Viola: if we are given an evaluation directly, don't bother running viola 
         self.pickle_viola = pickle_viola
@@ -91,7 +91,7 @@ class Pipeline(object):
                                 #in_path=self.in_path, detector_names=viola['detector_names'])
         self.evaluation_after_neural = Evaluation(detections=self.detections_after_neural, 
                                 method='pipeline', save_imgs=True, out_path=self.out_path,
-                                report_name='after_neural.txt', folder_name=out_folder_name, 
+                                folder_name=out_folder_name, 
                                 in_path=self.in_path, detector_names=viola['detector_names'])
 
    
@@ -147,12 +147,13 @@ class Pipeline(object):
             self.evaluation_after_neural.save_images(img_name, 'posNeural')
         
         if self.pickle_viola is None:
-            self.viola.evaluation.print_report()
+            self.viola.evaluation.print_report(print_header=True, stage='viola')
         else:
-            self.viola_evaluation.print_report()
+            self.viola_evaluation.print_report(print_header=True, stage='viola')
 
-        self.evaluation_after_neural.detections.total_time = (neural_time + viola_time)
-        self.evaluation_after_neural.print_report()
+        self.evaluation_after_neural.detections.total_time = (neural_time)
+        self.evaluation_after_neural.print_report(print_header=False, stage='neural')
+        
 
         #mark roofs on image
         #evaluate predictions
@@ -328,7 +329,7 @@ def setup_neural_viola_params(parameters, pipe_fname):
     preloaded_paths = parameters['preloaded_path'].split() #there can be more than one network, separated by space
     single_detector_boolean = False if len(preloaded_paths) == 2 else True
 
-    #PIPE PARAMS:the step size (probably not needed) and the neural nets
+    #PIPE PARAMS:the step size (probably not needed) and the neural nets to be used
     metal_net, thatch_net = check_preloaded_paths_correct(preloaded_paths)
     pipe_params = dict() 
     preloaded_paths_dict = {'metal': metal_net, 'thatch': thatch_net}
