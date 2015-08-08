@@ -42,7 +42,7 @@ ROOF_TYPES = ['metal', 'thatch']
 #VIOLA TRAINING
 ###################################
 #Viola constants
-RECTIFIED_COORDINATES = '../data_original/bounding_inhabited/'
+RECTIFIED_COORDINATES = '/afs/inf.ed.ac.uk/group/ANC/s0839470/data_original/bounding_inhabited/'
 UNINHABITED_PATH = '../data/source/uninhabited/'
 BG_FILE = '../viola_jones/bg.txt'
 DAT_PATH = '../viola_jones/all_dat/'
@@ -144,7 +144,7 @@ def get_path(in_or_out=None, out_folder_name=None, params=False, full_dataset=Fa
         if in_or_out == IN:
             #INPUT PATH
             if full_dataset==False:
-                path.append('../data_original/')
+                path.append('/afs/inf.ed.ac.uk/group/ANC/s0839470/data_original/')
             else:
                 path.append('../data/')
             assert data_fold is not None
@@ -309,8 +309,18 @@ def add_padding_polygon(polygon, bitmap, padding=10):
     min_area_rect = cv2.minAreaRect(contours[0]) # rect = ((center_x,center_y),(width,height),angle)
     #convert to list so you can change the value of the width and height
     min_area_rect_list = [list(x) if type(x) is tuple else x for x in min_area_rect] 
-    min_area_rect_list[1][0] += padding 
-    min_area_rect_list[1][1] += padding 
+
+    height = min_area_rect_list[1][1]
+    width = min_area_rect_list[1][0]
+    center_x = min_area_rect_list[0][0]
+    center_y = min_area_rect_list[0][1]
+    bitmap_height, bitmap_width = bitmap.shape
+
+    #only add padding if it doens't go off the image
+    if center_x+(width/2)+padding < bitmap_width and center_x-(width/2)-padding >= 0 and center_y+(height/2)+padding < bitmap_height and center_y-(height/2)-padding >= 0:
+        min_area_rect_list[1][0] += padding 
+        min_area_rect_list[1][1] += padding 
+
     #convert back to tuple
     cnt = tuple(tuple(x) if type(x) is list else x for x in min_area_rect_list)#, dtype=np.int32)
     min_poly_padded = np.int0(cv2.cv.BoxPoints(cnt))
@@ -820,48 +830,7 @@ def sliding_window(image, stepSize, windowSize):
     for y in xrange(0, image.shape[0], stepSize):
         for x in xrange(0, image.shape[1], stepSize):
             # yield the current window
-            yield (x, y, image[y:y + windowSize[1], x:x + windowSize[0]
+            yield (x, y, image[y:y + windowSize[1], x:x + windowSize[0]])
 
 
 
-if __name__ == '__main__':
-    try:
-        opts, args = getopt.getopt(sys.argv[1:], "s:m:")
-    except getopt.GetoptError:
-        sys.exit(2)
-        print 'Command line failed'
-    for opt, arg in opts:
-        if opt == '-s':
-            scale = arg
-        if opt == '-m':
-            min_size = (int(float(arg)), int(float(arg)))
-
-    #need to get an image!
-    image = cv2.imread('../data_original/training/source/0002.jpg')
-    (winW, winH) = (128, 128)
-    # loop over the image pyramid
-    for (i, resized) in enumerate(pyramid(image, scale=args["scale"])):
-        # show the resized image
-        cv2.imshow("Layer {}".format(i + 1), resized)
-        cv2.waitKey(0)
-
-    cv2.destroyAllWindows()
-
-    # loop over the image pyramid
-    for resized in pyramid(image, scale=1.5):
-        # loop over the sliding window for each layer of the pyramid
-        for (x, y, window) in sliding_window(resized, stepSize=32, windowSize=(winW, winH)):
-            # if the window does not meet our desired window size, ignore it
-            if window.shape[0] != winH or window.shape[1] != winW:
-                continue
-
-            # THIS IS WHERE YOU WOULD PROCESS YOUR WINDOW, SUCH AS APPLYING A
-            # MACHINE LEARNING CLASSIFIER TO CLASSIFY THE CONTENTS OF THE
-            # WINDOW
-
-            # since we do not have a classifier, we'll just draw the window
-            clone = resized.copy()
-            cv2.rectangle(clone, (x, y), (x + winW, y + winH), (0, 255, 0), 2)
-            cv2.imshow("Window", clone)
-            cv2.waitKey(1)
-            time.sleep(0.025)
