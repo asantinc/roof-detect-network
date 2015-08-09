@@ -51,21 +51,21 @@ class Experiment(object):
         adaptive: boolean
             Whether learning rate and momentum should adapt over time
         '''
+        #TODO: for now we don't have the scalers saved, but from now on we should be saving them so we don't have to load the data every time we want to do a prediction!
         self.pipeline = pipeline
-       
+        #Load data
+        print 'Loading data...\n'
+        self.X, self.y = NeuralDataLoad(data_path=viola_data).load_data(roof_type=roof_type, non_roofs=non_roofs) 
+        print 'Data is loaded \n'
+        #set up the data scaler
+        self.scaler = DataScaler()
+        self.X = self.scaler.fit_transform(self.X)
+        print self.X.shape
+ 
         #if we are doing the pipeline, we already have a good name for the network, no need to add more info
         if self.pipeline:
             self.net_name = net_name
         else:
-            #Load data
-            print 'Loading data...\n'
-            self.X, self.y = NeuralDataLoad(viola_data=viola_data).load_data(roof_type=roof_type, non_roofs=non_roofs) 
-            print 'Data is loaded \n'
-            #set up the data scaler
-            self.scaler = DataScaler()
-            self.X = self.scaler.fit_transform(self.X)
-            print self.X.shape
-     
             #count the number of each type of class, add it to the network name
             if roof_type == 'Both':
                 nonroof_num, metal_num, thatch_num = np.bincount(self.y)

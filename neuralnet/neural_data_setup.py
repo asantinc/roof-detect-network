@@ -26,10 +26,17 @@ The .vec files are needed to train a cascade from the ViolaTrainer class
 
 
 class NeuralDataLoad(object):
-    def __init__(self, viola_data = None):
-        self.viola_detector_data = 'combo9_min_neighbors3_scale1.08_groupNone_rotateTrue_removeOffTrue' if viola_data is None else viola_data
-        self.background_FP_viola_path = '../data_original/training/neural/{0}/falsepos_from_viola_training/'.format(self.viola_detector_data)
-        self.thatch_metal_TP_viola_path = '../data_original/training/neural/{0}/truepos_from_viola_training/'.format(self.viola_detector_data)
+    def __init__(self, data_path = None):
+#        self.viola_detector_data = 'combo9_min_neighbors3_scale1.08_groupNone_rotateTrue_removeOffTrue' if viola_data is None else viola_data
+#        self.background_FP_viola_path = '../data_original/training/neural/{0}/falsepos_from_viola_training/'.format(self.viola_detector_data)
+#        self.thatch_metal_TP_viola_path = '../data_original/training/neural/{0}/truepos_from_viola_training/'.format(self.viola_detector_data)
+
+        self.viola_detector_data = data_path if data_path is not None else 'combo11_min_neighbors3_scale1.08_groupFalse_downsizedFalse_removeOffTrue_mergeFalsePosFalse_rotateTrue_separateDetectionsTrue'
+        path = utils.get_path(data_fold=utils.TRAINING, neural=True, in_or_out = utils.IN)
+        self.background_FP_viola_path = '{}{}/falsepos/'.format(path, self.viola_detector_data)
+        self.thatch_metal_TP_viola_path = '{}{}/truepos/'.format(path, self.viola_detector_data)
+
+
 
     def load_data(self, non_roofs=np.inf, roof_type=None):
         '''

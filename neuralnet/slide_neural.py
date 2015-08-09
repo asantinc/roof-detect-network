@@ -8,17 +8,29 @@ from reporting import Evaluation, Detections
 from collections import defaultdict
 
 class SlidingWindowNeural(object):
-    def __init__(self, scale=1.5, minSize=(200,200), windowSize=(40,40), stepSize=15):
+    def __init__(self, in_path, out_path, scale=1.5, minSize=(200,200), windowSize=(40,40), stepSize=15):
+        self.in_path = in_path
+        out_path = out_path
         self.scale = scale
         self.minSize = minSize
         self.windowSize = windowSize
         self.stepSize = stepSize
+        self.total_window_num = 0
 
-    def slide_classify(self, image, img_name):
-        #loop over the image pyramid
+    def get_windows(self, img_name):
+        try:
+            image = cv2.imread(self.in_path+img_name)
+        except IOError:
+            print 'Could not open file'
+            sys.exit(-1)
+
         window_num = 0
-        coordinates_metal = list()
-        coordinates_thatch = list()
+        polygons_metal = list()
+        polygons_thatch = list()
+        rects_metal = list()
+        rects_thatch = list()
+
+        #loop through pyramid
         for level, resized in enumerate(utils.pyramid(image, scale=self.scale, minSize=self.minSize)):
             for (x, y, window) in utils.sliding_window(resized, stepSize=self.stepSize, windowSize=self.windowSize):
                 # if the window does not meet our desired window size, ignore it
@@ -28,10 +40,15 @@ class SlidingWindowNeural(object):
 
                 #save the correctly translated coordinates of this window
                 polygon = self.get_translated_coords(x, y, level)
-                coordinates_metal.append(polygon)
+                polygons_metal.append(polygon)
+                rects_metal.append((x,y,self.windowSize[1], self.windowSize[0]))
                 if level == 0: #for thatch we only get polygons at the smallest scale
-                    coordinates_thatch.append(polygon)
-        return coordinates_thatch, coordinates_metal, window_num
+                    polygons_thatch.append(polygon)
+                    rects_thatch.append((x,y,self.windowSize[1], self.windowSize[0]))
+        self.total_window_num += window_num
+        rects = {'thatch': rects_thatch, 'metal': rects_metal}
+        polygons = {'thatch': polygons_thatch, 'metal': polygons_metal}
+        return polygons, rects
 
 
     def get_translated_coords(self, x, y, pyramid_level):
@@ -73,22 +90,18 @@ if __name__ == '__main__':
     output_patches = False
     data_fold = utils.TRAINING if output_patches else utils.VALIDATION
 
-    slider = SlidingWindowNeural(scale=scale, minSize=minSize, stepSize=stepSize)
     in_path = utils.get_path(in_or_out=utils.IN, data_fold=data_fold)
+    slider = SlidingWindowNeural(in_path=in_path, scale=scale, minSize=minSize, stepSize=stepSize)
     img_names = [img_name for img_name in os.listdir(in_path) if img_name.endswith('.jpg')]
-    total_windows = 0
     all_coordinates = dict()
+
     with Timer() as t:
         for img_name in img_names:
             all_coordinates[img_name] = dict()
-            image = cv2.imread(in_path+img_name)
-            coordinates_thatch, coordinates_metal, window_num = slider.slide_classify(image, img_name)
-            all_coordinates[img_name]['thatch'] = coordinates_thatch
-            all_coordinates[img_name]['metal'] = coordinates_metal
-            print img_name, str(window_num)
-            total_windows = total_windows+window_num
+            polygons, _ = slider.get_windows(img_name)
+            all_coordinates[img_name] = polygons
     print t.secs
-    print total_windows
+    print slider.total_window_num
 
     #EVALUATION
     detections = Detections()
