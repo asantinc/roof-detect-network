@@ -107,7 +107,7 @@ class ViolaDetector(object):
         self.save_imgs = save_imgs
         self.output_patches = output_patches
         self.strict = strict
-        self.neg_thres = negThres
+        self.negThres = negThres
         self.mergeFalsePos = mergeFalsePos
 
         self.rotateRectOnly = rotateRectOnly
@@ -128,7 +128,7 @@ class ViolaDetector(object):
 
         self.pickled_evaluation = pickled_evaluation
         if pickled_evaluation == False:
-            self.evaluation = Evaluation(method='viola', folder_name=folder_name, 
+            self.evaluation = Evaluation(negThres=self.negThres, method='viola', folder_name=folder_name, 
                         out_path=self.out_folder, detections=self.viola_detections, 
                         in_path=self.in_path, detector_names=detector_names, 
                         mergeFalsePos=mergeFalsePos, vocGood=vocGood)
@@ -178,15 +178,8 @@ class ViolaDetector(object):
             pickle.dump(self.evaluation, f) 
 
         if self.output_patches:
-            self.save_training_TP_FP_using_voc()
-            '''
-            if self.strict:
-                #self.strict_save_training_FP_and_TP(viola=True)
-                self.strict_save_training_FP_and_TP(neural=True)
-            else:
-                #self.save_training_FP_and_TP(viola=True)
-                self.save_training_FP_and_TP(neural=True)
-            '''
+            self.evaluation.save_training_TP_FP_using_voc()
+            
         open(self.out_folder+'DONE', 'w').close() 
 
 
@@ -291,171 +284,6 @@ class ViolaDetector(object):
                 print 'Detections for {0}'.format(roof_type)
                 print len(self.viola_detections.get_detections(roof_type=roof_type, img_name=img_name))
             return rgb_unrotated
-
-
-    def save_training_TP_FP_using_voc(self, neural=True, viola=False):
-        '''use the voc scores to decide if a patch should be saved as a TP or FP or not
-        '''
-        general_path = utils.get_path(neural=neural, viola=viola, data_fold=utils.TRAINING, in_or_out=utils.IN, out_folder_name=self.out_folder_name)
-        path_true = general_path+'truepos_from_viola_training/'
-        utils.mkdir(path_true)
-
-        path_false = general_path+'falsepos_from_viola_training/'
-        utils.mkdir(path_false)
-
-        for img_name in self.img_names:
-            good_detections = defaultdict(list)
-            bad_detections = defaultdict(list)
-            try:
-                if viola: #viola training will need grayscale patches
-                    img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
-                    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                    img = cv2.equalizeHist(img)
-                else: #neural network will need RGB
-                    img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
-            except:
-                print 'Cannot open image'
-                sys.exit(-1)
-
-            for roof_type in utils.ROOF_TYPES:
-                detection_scores = self.viola_detections.best_score_per_detection[img_name][roof_type]
-                for detection, score in detection_scores:
-                    if score > 0.5:
-                        #true positive
-                        good_detections[roof_type].append(detection)
-                    if score < self.neg_thres:
-                        #false positive
-                        bad_detections[roof_type].append(detection)
-                    
-            for roof_type in utils.ROOF_TYPES:
-                extraction_type = 'good'
-                self.save_training_FP_and_TP_helper(img_name, good_detections[roof_type], path_true, general_path, img, roof_type, extraction_type, (0,255,0))               
-                extraction_type = 'background'
-                self.save_training_FP_and_TP_helper(img_name, bad_detections[roof_type], path_false, general_path, img, roof_type, extraction_type, (0,0,255))               
-
-
-    def strict_save_training_FP_and_TP(self, viola=False, neural=False):
-        '''Save the correct and incorrect detections so that the neural network can train on it
-        In this case we only save TP detections if they are actually true positives. If the roof is a partial detection, we don't accept it as a roof
-        '''
-        #we want to write to the params folder of neuralnet
-        assert viola or neural
-        general_path = utils.get_path(neural=neural, viola=viola, data_fold=utils.TRAINING, in_or_out=utils.IN, out_folder_name=self.out_folder_name) 
-
-        path_true = general_path+'truepos_from_viola_training/'
-        utils.mkdir(path_true)
-         
-        path_false = general_path+'falsepos_from_viola_training/'
-        utils.mkdir(path_false)
-
-        for img_name in self.img_names:
-            try:
-                if viola: #viola training will need grayscale patches
-                    img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
-                    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                    img = cv2.equalizeHist(img)
-                else: #neural network will need RGB
-                    img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
-            except:
-                print 'Cannot open image'
-                sys.exit(-1)
-            patches_path= path_false
-            extraction_type = 'bad'
-
-            for roof_type in utils.ROOF_TYPES:
-                if self.pickled_evaluation == False:
-                    detections = self.viola_detections.false_positives[roof_type][img_name]
-                else:
-                    detections = self.evaluation.detections.false_positives[roof_type][img_name] 
-                self.save_training_FP_and_TP_helper(img_name, detections, patches_path, general_path, img, roof_type, extraction_type, (0,0,255)) 
-
-            if neural:
-                #for viola we only need to save the negatives, since the positives can't be used (they'd need to be annotated and rectified)
-                for roof_type in utils.ROOF_TYPES:
-                    if self.pickled_evaluation == False:
-                        detections = self.viola_detections.true_positives[roof_type][img_name] 
-                    else:
-                        detections = self.evaluation.detections.true_positives[roof_type][img_name]
-                    patches_path = path_true
-                    extraction_type = 'good' 
-                    self.save_training_FP_and_TP_helper(img_name, detections, patches_path, general_path, img, roof_type, extraction_type, (0,255,0))               
-
-
-    def save_training_FP_and_TP(self, viola=False, neural=False):
-        '''Save the correct and incorrect detections so that the neural network can train on it
-        '''
-        #we want to write to the params folder of neuralnet
-        assert viola or neural
-        general_path = utils.get_path(neural=neural, viola=viola, data_fold=utils.TRAINING, in_or_out=utils.IN, out_folder_name=self.out_folder_name) 
-
-        path_true = general_path+'truepos_from_viola_training/'
-        utils.mkdir(path_true)
-         
-        path_false = general_path+'falsepos_from_viola_training/'
-        utils.mkdir(path_false)
-
-        for img_name in self.img_names:
-            try:
-                if viola: #viola training will need grayscale patches
-                    img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
-                    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                    img = cv2.equalizeHist(img)
-                else: #neural network will need RGB
-                    img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
-            except:
-                print 'Cannot open image'
-                sys.exit(-1)
-            patches_path= path_false
-            extraction_type = 'bad'
-            if self.mergeFalsePos:
-                roof_type = 'background'
-                if self.pickled_evaluation == False:
-                    detections = self.viola_detections.bad_detections[img_name]
-                else:
-                    detections = self.evaluation.detections.bad_detections[img_name]
-                self.save_training_FP_and_TP_helper(img_name, detections, patches_path, general_path, img, roof_type, extraction_type, (0,0,255)) 
-            else:
-                for roof_type in utils.ROOF_TYPES:
-                    if self.pickled_evaluation == False:
-                        detections = self.viola_detections.bad_detections[roof_type][img_name]
-                    else:
-                        detections = self.evaluation.detections.bad_detections[roof_type][img_name]
-                    self.save_training_FP_and_TP_helper(img_name, detections, patches_path, general_path, img, roof_type, extraction_type, (0,0,255)) 
-            if neural:
-                #for viola we only need to save the negatives, since the positives can't be used (they'd need to be annotated and rectified)
-                for roof_type in utils.ROOF_TYPES:
-                    if self.pickled_evaluation == False:
-                        detections = self.viola_detections.good_detections[roof_type][img_name] 
-                    else:
-                        detections = self.evaluation.detections.good_detections[roof_type][img_name]
-                    patches_path = path_true
-                    extraction_type = 'good' 
-                    self.save_training_FP_and_TP_helper(img_name, detections, patches_path, general_path, img, roof_type, extraction_type, (0,255,0))               
-
-
-    def save_training_FP_and_TP_helper(self, img_name, detections, patches_path, general_path, img, roof_type, extraction_type, color):
-        #this is where we write the detections we're extraction. One image per roof type
-        #we save: 1. the patches and 2. the image with marks of what the detections are, along with the true roofs (for debugging)
-        img_debug = np.copy(img) 
-
-        if roof_type == 'background':
-            utils.draw_detections(self.evaluation.correct_roofs['metal'][img_name], img_debug, color=(0, 0, 0), thickness=2)
-            utils.draw_detections(self.evaluation.correct_roofs['thatch'][img_name], img_debug, color=(0, 0, 0), thickness=2)
-        else:
-            utils.draw_detections(self.evaluation.correct_roofs[roof_type][img_name], img_debug, color=(0, 0, 0), thickness=2)
-
-        for i, detection in enumerate(detections):
-            #extract the patch, rotate it to a horizontal orientation, save it
-            bitmap = np.zeros((img.shape[:2]), dtype=np.uint8)
-            padded_detection = utils.add_padding_polygon(detection, bitmap)
-            warped_patch = utils.four_point_transform(img, padded_detection)
-            cv2.imwrite('{0}{1}_{2}_roof{3}.jpg'.format(patches_path, roof_type, img_name[:-4], i), warped_patch)
-            
-            #mark where roofs where taken out from for debugging
-            utils.draw_polygon(padded_detection, img_debug, fill=False, color=color, thickness=2, number=i)
-
-        #write this type of extraction and the roofs to an image
-        cv2.imwrite('{0}{1}_{2}_extract_{3}.jpg'.format(general_path, img_name[:-4], roof_type, extraction_type), img_debug)
 
 
     def mark_save_current_rotation(self, img_name, img, detections, angle, out_folder=None):

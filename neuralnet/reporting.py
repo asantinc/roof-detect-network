@@ -126,7 +126,7 @@ class Evaluation(object):
                         detector_names=None, 
                         mergeFalsePos=False,
                         separateDetections=True,
-                        vocGood=0.1):
+                        vocGood=0.1, negThres = 0.3):
         '''
         Will score the detections class it contains.
 
@@ -154,6 +154,7 @@ class Evaluation(object):
         self.VOC_good_detection_threshold['metal'] = utils.VOC_threshold 
         self.VOC_good_detection_threshold['thatch'] = utils.VOC_threshold
         self.detection_portion_threshold = 0.50
+        self.negThres = negThres
 
         self.detections = detections    #detection class
 
@@ -341,38 +342,6 @@ class Evaluation(object):
         return voc_score, detection_roof_portion
 
 
-    def print_report_old(self, write_to_file=True):
-        log_to_file = list() 
-        print '*************** FINAL REPORT *****************'
-        log_to_file.append('Total Detection Time:\t\t{0}'.format(self.detections.total_time))
-
-        for roof_type in utils.ROOF_TYPES:
-            log_to_file.append('Roof type: {0}'.format(roof_type))
-            log_to_file.append('Total roofs\tDetections\tRecall\tPrecision\tF1 score\t')
-
-            detection_num = self.detections.total_detection_num[roof_type]
-            true_pos = self.detections.true_positive_num[roof_type]
-            false_pos = self.detections.false_positive_num[roof_type]
-            cur_type_roofs = self.detections.roof_num[roof_type] 
-
-            if detection_num > 0 and cur_type_roofs > 0:
-                recall = float(true_pos) / cur_type_roofs 
-                precision = float(true_pos) / detection_num
-                if precision+recall > 0:
-                    F1 = (2.*precision*recall)/(precision+recall)
-                else:
-                    F1 = 0
-            else:
-                recall = precision = F1 = 0
-
-            log_to_file.append('{0}\t\t{1}\t\t{2}\t\t{3}\t\t{4}\n'.format(cur_type_roofs, detection_num, recall, precision,F1)) 
-           
-        log_to_file.append('\n\n\n')
-        log = '\n'.join(log_to_file)
-        print log
-        with open(self.out_path+'report.txt', 'a') as report:
-            report.write(log)
- 
     def print_report(self, print_header=True, stage=None, report_name='report.txt', write_to_file=True):
         '''
         Parameters:
@@ -475,5 +444,70 @@ class Evaluation(object):
             cv2.imwrite(bounding_path, output_bounds)
         return bounding_rects
 
+
+    def save_training_TP_FP_using_voc(self, neural=True, viola=False, img_names=None):
+        '''use the voc scores to decide if a patch should be saved as a TP or FP or not
+        '''
+        general_path = utils.get_path(neural=neural, viola=viola, data_fold=utils.TRAINING, in_or_out=utils.IN, out_folder_name=self.folder_name)
+        path_true = general_path+'truepos/'
+        utils.mkdir(path_true)
+
+        path_false = general_path+'falsepos/'
+        utils.mkdir(path_false)
+        img_names = img_names if img_names is not None else self.img_names
+        for img_name in img_names:
+            good_detections = defaultdict(list)
+            bad_detections = defaultdict(list)
+            try:
+                if viola: #viola training will need grayscale patches
+                    img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    img = cv2.equalizeHist(img)
+                else: #neural network will need RGB
+                    img = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
+            except:
+                print 'Cannot open image'
+                sys.exit(-1)
+
+            for roof_type in utils.ROOF_TYPES:
+                detection_scores = self.detections.best_score_per_detection[img_name][roof_type]
+                for detection, score in detection_scores:
+                    if score > 0.5:
+                        #true positive
+                        good_detections[roof_type].append(detection)
+                    if score < self.negThres:
+                        #false positive
+                        bad_detections[roof_type].append(detection)
+                    
+            for roof_type in utils.ROOF_TYPES:
+                extraction_type = 'good'
+                self.save_training_FP_and_TP_helper(img_name, good_detections[roof_type], path_true, general_path, img, roof_type, extraction_type, (0,255,0))               
+                extraction_type = 'background'
+                self.save_training_FP_and_TP_helper(img_name, bad_detections[roof_type], path_false, general_path, img, roof_type, extraction_type, (0,0,255))               
+
+
+    def save_training_FP_and_TP_helper(self, img_name, detections, patches_path, general_path, img, roof_type, extraction_type, color):
+        #this is where we write the detections we're extraction. One image per roof type
+        #we save: 1. the patches and 2. the image with marks of what the detections are, along with the true roofs (for debugging)
+        img_debug = np.copy(img) 
+
+        if roof_type == 'background':
+            utils.draw_detections(self.correct_roofs['metal'][img_name], img_debug, color=(0, 0, 0), thickness=2)
+            utils.draw_detections(self.correct_roofs['thatch'][img_name], img_debug, color=(0, 0, 0), thickness=2)
+        else:
+            utils.draw_detections(self.correct_roofs[roof_type][img_name], img_debug, color=(0, 0, 0), thickness=2)
+
+        for i, detection in enumerate(detections):
+            #extract the patch, rotate it to a horizontal orientation, save it
+            bitmap = np.zeros((img.shape[:2]), dtype=np.uint8)
+            padded_detection = utils.add_padding_polygon(detection, bitmap)
+            warped_patch = utils.four_point_transform(img, padded_detection)
+            cv2.imwrite('{0}{1}_{2}_roof{3}.jpg'.format(patches_path, roof_type, img_name[:-4], i), warped_patch)
+            
+            #mark where roofs where taken out from for debugging
+            utils.draw_polygon(padded_detection, img_debug, fill=False, color=color, thickness=2, number=i)
+
+        #write this type of extraction and the roofs to an image
+        cv2.imwrite('{0}{1}_{2}_extract_{3}.jpg'.format(general_path, img_name[:-4], roof_type, extraction_type), img_debug)
 
 

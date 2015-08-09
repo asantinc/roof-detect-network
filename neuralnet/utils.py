@@ -105,9 +105,10 @@ def mkdir(out_folder_path=None, confirm=False):
                 sys.exit(-1)
         subprocess.check_call('mkdir {0}'.format(out_folder_path), shell=True)
     else:
-        overwrite = raw_input('Folder {0} exists; overwrite, y or n?'.format(out_folder_path))
-        if overwrite == 'n':
-            sys.exit(-1)
+        if confirm:
+            overwrite = raw_input('Folder {0} exists; overwrite, y or n?'.format(out_folder_path))
+            if overwrite == 'n':
+                sys.exit(-1)
     print 'The following folder has been created: {0}'.format(out_folder_path)
 
 

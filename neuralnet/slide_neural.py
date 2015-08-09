@@ -7,8 +7,11 @@ from timer import Timer
 from reporting import Evaluation, Detections
 from collections import defaultdict
 
+DEBUG = False
+
+
 class SlidingWindowNeural(object):
-    def __init__(self,  out_path=None, in_path=None, output_patches=False, scale=1.5, minSize=(200,200), windowSize=(40,40), stepSize=15):
+    def __init__(self,  out_path=None, in_path=None, output_patches=False, scale=1.5, minSize=(200,200), windowSize=(40,40), stepSize=30):
         self.scale = scale
         self.minSize = minSize
         self.windowSize = windowSize
@@ -18,12 +21,13 @@ class SlidingWindowNeural(object):
 
         self.in_path = in_path if in_path is not None else utils.get_path(in_or_out=utils.IN, data_fold=self.data_fold)
         self.img_names = [img_name for img_name in os.listdir(self.in_path) if img_name.endswith('.jpg')]
+        self.img_names = self.img_names[:1] if DEBUG else self.img_names
 
         self.detections = Detections()
         folder_name = 'scale{}_minSize{}-{}_stepSize{}/'.format(self.scale, self.minSize[0], self.minSize[1], self.stepSize) 
 
-        self.out_path = out_path if out_path is not None else '{}{}'.format(utils.get_path(in_or_out=utils.OUT, slide=True, data_fold=self.data_fold), folder_name)
-        evaluation = Evaluation(method='slide',folder_name=folder_name, save_imgs=False, out_path=self.out_path, 
+        self.out_path = out_path if out_path is not None else '{}'.format(utils.get_path(in_or_out=utils.OUT, slide=True, data_fold=self.data_fold, out_folder_name=folder_name))
+        self.evaluation = Evaluation(method='slide',folder_name=folder_name, save_imgs=False, out_path=self.out_path, 
                             detections=self.detections, in_path=self.in_path)
 
 
@@ -70,8 +74,13 @@ class SlidingWindowNeural(object):
                     polygons_thatch.append(polygon)
                     rects_thatch.append((x,y,self.windowSize[1], self.windowSize[0]))
         self.total_window_num += window_num
-        rects = {'thatch': rects_thatch, 'metal': rects_metal}
-        polygons = {'thatch': polygons_thatch, 'metal': polygons_metal}
+        if DEBUG == False:
+            rects = {'thatch': rects_thatch, 'metal': rects_metal}
+            polygons = {'thatch': polygons_thatch, 'metal': polygons_metal}
+        else:
+            rects = {'thatch': rects_thatch[:10], 'metal': rects_metal[:10]}
+            polygons = {'thatch': polygons_thatch[:10], 'metal': polygons_metal[:10]}
+
         return polygons, rects
 
 
@@ -104,24 +113,27 @@ class SlidingWindowNeural(object):
         cv2.rectangle(clone, start, end, (0, 255, 0), 2)
         cv2.imwrite('debug/{}_level{}_L.jpg'.format(img_name[:-4], level), clone)
 
-    def evaluation(self):
+    def run_evaluation(self):
         #EVALUATION
         for img_name in self.img_names:
             #set the detections
-            detections.set_detections(roof_type='thatch', detection_list=self.all_coordinates[img_name]['thatch'], img_name=img_name)
-            detections.set_detections(roof_type='metal', detection_list=self.all_coordinates[img_name]['metal'], img_name=img_name)
+            self.detections.set_detections(roof_type='thatch', detection_list=self.all_coordinates[img_name]['thatch'], img_name=img_name)
+            self.detections.set_detections(roof_type='metal', detection_list=self.all_coordinates[img_name]['metal'], img_name=img_name)
             #score the image
-            evaluation.score_img(img_name=img_name, img_shape=(1200,2000))
-        evaluation.print_report()
+            self.evaluation.score_img(img_name=img_name, img_shape=(1200,2000))
+        self.evaluation.print_report()
 
 
 def main():
-    output_patches = False
-    slider = SlidingWindowNeural(output_patches)
+    output_patches = True
+    slider = SlidingWindowNeural(output_patches=output_patches)
     slider.get_windows_in_folder()
-    pdb.set_trace()
-    slider.evaluation()
+    slider.run_evaluation()
+    if output_patches:
+        slider.evaluation.save_training_TP_FP_using_voc(img_names=slider.img_names)
 
 
 if __name__ == '__main__':
     main()
+
+
