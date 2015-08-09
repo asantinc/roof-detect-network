@@ -51,21 +51,21 @@ class Experiment(object):
         adaptive: boolean
             Whether learning rate and momentum should adapt over time
         '''
-
-        #Load data
-        print 'Loading data...\n'
-        self.X, self.y = NeuralDataLoad(viola_data=viola_data).load_data(roof_type=roof_type, non_roofs=non_roofs) 
-        print 'Data is loaded \n'
-        #set up the data scaler
-        self.scaler = DataScaler()
-        self.X = self.scaler.fit_transform(self.X)
-        print self.X.shape
-
         self.pipeline = pipeline
+       
         #if we are doing the pipeline, we already have a good name for the network, no need to add more info
         if self.pipeline:
             self.net_name = net_name
         else:
+            #Load data
+            print 'Loading data...\n'
+            self.X, self.y = NeuralDataLoad(viola_data=viola_data).load_data(roof_type=roof_type, non_roofs=non_roofs) 
+            print 'Data is loaded \n'
+            #set up the data scaler
+            self.scaler = DataScaler()
+            self.X = self.scaler.fit_transform(self.X)
+            print self.X.shape
+     
             #count the number of each type of class, add it to the network name
             if roof_type == 'Both':
                 nonroof_num, metal_num, thatch_num = np.bincount(self.y)
@@ -79,6 +79,13 @@ class Experiment(object):
                 raise ValueError('You have given an unknown roof_type to the network')
             self.net_name = 'conv{0}_{1}_metal{2}_thatch{3}_nonroof{4}'.format(num_layers, net_name, metal_num, thatch_num, nonroof_num)
             self.roof_type = roof_type
+
+            #pickle the scaler so we can reuse it later
+            pdb.set_trace()
+            path = utils.get_path(params=True, in_or_out=utils.IN, neural_weights=True) 
+            with open('{0}{1}.pickle'.format(path, self.net_name), 'wb') as f:
+                pickle.dump(self.scaler, f, -1)
+ 
 
         self.num_layers = num_layers
         print 'Final network name is: {0}'.format(self.net_name)

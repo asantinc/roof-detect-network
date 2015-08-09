@@ -229,11 +229,13 @@ class Evaluation(object):
             bad_detection_logical[roof_type] = np.ones(len(detections[roof_type]), dtype=bool) #[roof_type]
 
             for r, roof in enumerate(self.correct_roofs[roof_type][img_name]):
+
                 best_voc_score = -1 
                 best_detection = -1 
 
-
                 for d, detection in enumerate(detections[roof_type]):                             #for each patch found
+                    if d%1000 ==0:
+                        print 'Roof {}/{} Detection {}/{}'.format(r, len(self.correct_roofs[roof_type][img_name]), d, len(detections[roof_type]))
                     if r == 0:#first roof, so insert the current detection and a negative score
                         best_score_per_detection[roof_type].append([detection, -1])
 

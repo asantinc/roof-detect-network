@@ -121,7 +121,7 @@ def check_append(path_being_constructed, addition):
 
 
 def get_path(in_or_out=None, out_folder_name=None, params=False, full_dataset=False, 
-                    pipe=False, viola=False, template=False, neural=False, neural_weights=False, data_fold=None):
+                    slide=False, pipe=False, viola=False, template=False, neural=False, neural_weights=False, data_fold=None):
     '''
     Return path to either input, output or parameter files. If a folder does not exit, ask user for confirmation and create it
     '''
@@ -175,6 +175,8 @@ def get_path(in_or_out=None, out_folder_name=None, params=False, full_dataset=Fa
                 check_append(path,'neural/')
             elif pipe:
                 check_append(path,'pipe/')
+            elif slide:
+                check_append(path,'slide/')
             else:
                 raise ValueError('Cannot create path. Try setting viola, pipe, template or neural to True to get a path')
             
@@ -598,7 +600,7 @@ def rects2boxes(rects):
     w = rects[:,2]
     h = rects[:,3]
 
-    boxes[:,:2] = rects[:,:2]
+    boxes[:,:2] = rects[:,:]
     boxes[:,2] = x1+w 
     boxes[:,3] = y1+h
     return boxes
@@ -814,7 +816,8 @@ def pyramid(image, scale=1.5, minSize=(30, 30)):
     while True:
         # compute the new dimensions of the image and resize it
         w = int(image.shape[1] / scale)
-        image = utils.resize_rgb(image, w=w, h=h)
+        h = int(image.shape[0] / scale)
+        image = resize_rgb(image, w=w, h=h)
 
         # if the resized image does not meet the supplied minimum
         # size, then stop constructing the pyramid
