@@ -8,14 +8,38 @@ from reporting import Evaluation, Detections
 from collections import defaultdict
 
 class SlidingWindowNeural(object):
-    def __init__(self, in_path, out_path, scale=1.5, minSize=(200,200), windowSize=(40,40), stepSize=15):
-        self.in_path = in_path
-        out_path = out_path
+    def __init__(self,  out_path=None, in_path=None, output_patches=False, scale=1.5, minSize=(200,200), windowSize=(40,40), stepSize=15):
         self.scale = scale
         self.minSize = minSize
         self.windowSize = windowSize
         self.stepSize = stepSize
         self.total_window_num = 0
+        self.data_fold = utils.TRAINING if output_patches else utils.VALIDATION
+
+        self.in_path = in_path if in_path is not None else utils.get_path(in_or_out=utils.IN, data_fold=self.data_fold)
+        self.img_names = [img_name for img_name in os.listdir(self.in_path) if img_name.endswith('.jpg')]
+
+        self.detections = Detections()
+        folder_name = 'scale{}_minSize{}-{}_stepSize{}/'.format(self.scale, self.minSize[0], self.minSize[1], self.stepSize) 
+
+        self.out_path = out_path if out_path is not None else '{}{}'.format(utils.get_path(in_or_out=utils.OUT, slide=True, data_fold=self.data_fold), folder_name)
+        evaluation = Evaluation(method='slide',folder_name=folder_name, save_imgs=False, out_path=self.out_path, 
+                            detections=self.detections, in_path=self.in_path)
+
+
+
+    def get_windows_in_folder(self, folder=None):
+        folder = folder if folder is not None else self.in_path
+        self.all_coordinates = dict()
+        with Timer() as t:
+            for img_name in self.img_names:
+                self.all_coordinates[img_name] = dict()
+                polygons, _ = self.get_windows(img_name)
+                self.all_coordinates[img_name] = polygons
+        print t.secs
+        print self.total_window_num
+
+
 
     def get_windows(self, img_name):
         try:
@@ -80,41 +104,24 @@ class SlidingWindowNeural(object):
         cv2.rectangle(clone, start, end, (0, 255, 0), 2)
         cv2.imwrite('debug/{}_level{}_L.jpg'.format(img_name[:-4], level), clone)
 
+    def evaluation(self):
+        #EVALUATION
+        for img_name in self.img_names:
+            #set the detections
+            detections.set_detections(roof_type='thatch', detection_list=self.all_coordinates[img_name]['thatch'], img_name=img_name)
+            detections.set_detections(roof_type='metal', detection_list=self.all_coordinates[img_name]['metal'], img_name=img_name)
+            #score the image
+            evaluation.score_img(img_name=img_name, img_shape=(1200,2000))
+        evaluation.print_report()
 
+
+def main():
+    output_patches = False
+    slider = SlidingWindowNeural(output_patches)
+    slider.get_windows_in_folder()
+    pdb.set_trace()
+    slider.evaluation()
 
 
 if __name__ == '__main__':
-    scale = 1.5
-    minSize = (200,200)
-    stepSize= 15
-    output_patches = False
-    data_fold = utils.TRAINING if output_patches else utils.VALIDATION
-
-    in_path = utils.get_path(in_or_out=utils.IN, data_fold=data_fold)
-    slider = SlidingWindowNeural(in_path=in_path, scale=scale, minSize=minSize, stepSize=stepSize)
-    img_names = [img_name for img_name in os.listdir(in_path) if img_name.endswith('.jpg')]
-    all_coordinates = dict()
-
-    with Timer() as t:
-        for img_name in img_names:
-            all_coordinates[img_name] = dict()
-            polygons, _ = slider.get_windows(img_name)
-            all_coordinates[img_name] = polygons
-    print t.secs
-    print slider.total_window_num
-
-    #EVALUATION
-    detections = Detections()
-    folder_name = 'scale{}_minSize{}-{}_stepSize{}/'.format(scale, minSize[0], minSize[1], stepSize) 
-    out_path = utils.get_path(in_or_out=utils.OUT, slide=True, data_fold=data_fold)
-    evaluation = Evaluation(method='slide',folder_name=folder_name, save_imgs=False, out_path=out_path, 
-                        detections=detections, in_path=in_path)
-    pdb.set_trace()
-    for img_name in img_names:
-        #set the detections
-        detections.set_detections(roof_type='thatch', detection_list=all_coordinates[img_name]['thatch'], img_name=img_name)
-        detections.set_detections(roof_type='metal', detection_list=all_coordinates[img_name]['metal'], img_name=img_name)
-        #score the image
-        evaluation.score_img(img_name=img_name, img_shape=(1200,2000))
-    evaluation.print_report()
-
+    main()
