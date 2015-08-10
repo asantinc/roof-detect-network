@@ -253,10 +253,10 @@ class Evaluation(object):
                     if (voc_score > best_score_per_detection[roof_type][d][1]): #keep track of best match with some roof for each detection
                         best_score_per_detection[roof_type][d][1] = voc_score
                         
-
-                #store the best detection for this roof regardless of whether it is over 0.5
-                if voc_score > best_voc_score:
-                    self.detections.set_best_voc(img_name=img_name, roof_type=roof_type, roof_polygon=roof, best_detection=detections[roof_type][d], score=best_voc_score)  
+                    #store the best detection for this roof regardless of whether it is over 0.5
+                    if voc_score > best_voc_score:
+                        self.detections.set_best_voc(img_name=img_name, roof_type=roof_type, 
+                                            roof_polygon=roof, best_detection=detections[roof_type][d], score=best_voc_score)  
 
                 if best_detection != -1:
                     false_pos_logical[roof_type][best_detection] = 0 #this detection is not a false positive

@@ -122,6 +122,7 @@ class NeuralDataLoad(object):
                     if roof_type in file.lower():
                         patch = cv2.imread(self.background_FP_viola_path+file)
                         background_FP_viola_path.append(patch) 
+        np.random.shuffle(np.array(background_FP_viola_path))
         return background_FP_viola_path 
 
 

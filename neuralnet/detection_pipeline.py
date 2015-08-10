@@ -143,7 +143,6 @@ class Pipeline(object):
                 print 'Unknown detection method {}'.format(self.method)
                 sys.exit(-1)
 
-            pdb.set_trace()
             #NEURALNET
             with Timer() as t:
                 classified_detections  = self.neural_classification(proposal_patches, proposal_coords) 
@@ -173,17 +172,17 @@ class Pipeline(object):
                                                         detection_list=classified_detections[roof_type])
             print 'Grouping took {} seconds'.format(t.secs)
             neural_time += t.secs 
-            pdb.set_trace()
 
             self.evaluation_after_neural.score_img(img_name, img_shape[:2], contours=self.groupBounds)
             self.evaluation_after_neural.save_images(img_name, 'posNeural')
         
-        if self.pickle_viola is None:
-            self.viola.evaluation.print_report(print_header=True, stage='viola')
-        else:
-            self.viola_evaluation.print_report(print_header=True, stage='viola')
+        if self.method == 'viola': 
+            if self.pickle_viola is None:
+                self.viola.evaluation.print_report(print_header=True, stage='viola')
+            else:
+                self.viola_evaluation.print_report(print_header=True, stage='viola')
 
-        self.evaluation_after_neural.detections.total_time = (neural_time)
+        self.evaluation_after_neural.detections.total_time = neural_time
         self.evaluation_after_neural.print_report(print_header=False, stage='neural')
         
 
@@ -467,7 +466,7 @@ if __name__ == '__main__':
     suppress = False 
     overlapThresh = 1 
     groupBounds = False
-    erosion = 0 
+    erosion = 0  
 
     #get the parameters from the pipeline
     if viola_num > 0:

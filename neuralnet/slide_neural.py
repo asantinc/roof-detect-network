@@ -7,11 +7,11 @@ from timer import Timer
 from reporting import Evaluation, Detections
 from collections import defaultdict
 
-DEBUG = False
+DEBUG = False 
 
 
 class SlidingWindowNeural(object):
-    def __init__(self,  out_path=None, in_path=None, output_patches=False, scale=1.5, minSize=(200,200), windowSize=(40,40), stepSize=30):
+    def __init__(self,  out_path=None, in_path=None, output_patches=False, scale=1.5, minSize=(200,200), windowSize=(40,40), stepSize=15):
         self.scale = scale
         self.minSize = minSize
         self.windowSize = windowSize
@@ -21,7 +21,7 @@ class SlidingWindowNeural(object):
 
         self.in_path = in_path if in_path is not None else utils.get_path(in_or_out=utils.IN, data_fold=self.data_fold)
         self.img_names = [img_name for img_name in os.listdir(self.in_path) if img_name.endswith('.jpg')]
-        self.img_names = self.img_names[:1] if DEBUG else self.img_names
+        #self.img_names = self.img_names[:2] if DEBUG else self.img_names
 
         self.detections = Detections()
         folder_name = 'scale{}_minSize{}-{}_stepSize{}/'.format(self.scale, self.minSize[0], self.minSize[1], self.stepSize) 
@@ -41,6 +41,7 @@ class SlidingWindowNeural(object):
                 polygons, _ = self.get_windows(img_name)
                 self.all_coordinates[img_name] = polygons
         print t.secs
+        self.detections.total_time = t.secs
         print self.total_window_num
 
 
@@ -115,7 +116,8 @@ class SlidingWindowNeural(object):
 
     def run_evaluation(self):
         #EVALUATION
-        for img_name in self.img_names:
+        for i, img_name in enumerate(self.img_names):
+            print 'Evaluating image {}/{}'.format(i+1, len(self.img_names))
             #set the detections
             self.detections.set_detections(roof_type='thatch', detection_list=self.all_coordinates[img_name]['thatch'], img_name=img_name)
             self.detections.set_detections(roof_type='metal', detection_list=self.all_coordinates[img_name]['metal'], img_name=img_name)
@@ -126,7 +128,8 @@ class SlidingWindowNeural(object):
 
 def main():
     output_patches = True
-    slider = SlidingWindowNeural(output_patches=output_patches)
+    stepSize = 30 if output_patches else 15
+    slider = SlidingWindowNeural(output_patches=output_patches, stepSize=stepSize)
     slider.get_windows_in_folder()
     slider.run_evaluation()
     if output_patches:
