@@ -119,7 +119,7 @@ class DataLoader(object):
 
 
     @staticmethod
-    def get_all_roofs_full_dataset(merge_tiled=False, xml_name=None, xml_path=None):
+    def get_all_roofs_full_dataset(xml_name=None, xml_path=None, merge_tiled=True):
         '''Return list of Roofs
         '''
         tree = ET.parse(xml_path+xml_name)

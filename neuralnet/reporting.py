@@ -121,6 +121,7 @@ class Detections(object):
 
 class Evaluation(object):
     def __init__(self, report_name=None, method=None, 
+                        full_dataset=True, 
                         folder_name=None, save_imgs=True, out_path=None, 
                         detections=None, in_path=None, 
                         detector_names=None, 
@@ -165,11 +166,24 @@ class Evaluation(object):
         self.correct_roofs = dict()
         for roof_type in utils.ROOF_TYPES:
             self.correct_roofs[roof_type] = dict()
-        for img_name in self.img_names:
-            for roof_type in utils.ROOF_TYPES:
-                self.correct_roofs[roof_type][img_name] = DataLoader.get_polygons(roof_type=roof_type, 
-                                                            xml_name=img_name[:-3]+'xml' , xml_path=self.in_path)
-                self.detections.update_roof_num(self.correct_roofs[roof_type][img_name], roof_type)
+        self.full_dataset = full_dataset
+        if full_dataset == False:
+            for img_name in self.img_names:
+                for roof_type in utils.ROOF_TYPES:
+                    self.correct_roofs[roof_type][img_name] = DataLoader.get_polygons(roof_type=roof_type, 
+                                                                xml_name=img_name[:-3]+'xml' , xml_path=self.in_path)
+                    self.detections.update_roof_num(self.correct_roofs[roof_type][img_name], roof_type)
+        else:
+            for img_name in self.img_names:
+                current_roofs = DataLoader.get_all_roofs_full_dataset(xml_name=img_name[:-3]+'xml' , xml_path=self.in_path)
+                for roof_type in utils.ROOF_TYPES:
+                    if roof_type not in current_roofs:
+                        self.correct_roofs[roof_type][img_name] = []
+                    else:
+                        self.correct_roofs[roof_type][img_name] = current_roofs[roof_type] 
+
+                    self.detections.update_roof_num(self.correct_roofs[roof_type][img_name], roof_type)
+ 
 
         #init the report file
         self.out_path = out_path
@@ -200,11 +214,11 @@ class Evaluation(object):
             report.close()
 
     
-    def score_img(self, img_name, img_shape, contours=False):
+    def score_img(self, img_name, img_shape, contours=False, fast_scoring=False):
         '''Find best overlap between each roof in an img and the detections,
         according the VOC score
         '''
-        print 'Scoring.....'
+        print 'Scoring {}.....'.format(img_name)
         #start with all detections as false pos; as we find matches, we increase the true_pos, decrese the false_pos numbers
         false_pos_logical = dict()
         bad_detection_logical = dict()
@@ -236,12 +250,16 @@ class Evaluation(object):
 
                 for d, detection in enumerate(detections[roof_type]):                             #for each patch found
                     if d%1000 ==0:
-                        print 'Roof {}/{} Detection {}/{}'.format(r, len(self.correct_roofs[roof_type][img_name]), d, len(detections[roof_type]))
+                        #print 'Roof {}/{} Detection {}/{}'.format(r, len(self.correct_roofs[roof_type][img_name]), d, len(detections[roof_type]))
+                        pass
                     if r == 0:#first roof, so insert the current detection and a negative score
                         best_score_per_detection[roof_type].append([detection, -1])
 
                     #detection_roof_portion is how much of the detection is covered by roof
-                    voc_score, detection_roof_portion = self.get_score(contours=work_with_contours, 
+                    if fast_scoring:
+                         voc_score, detection_roof_portion = self.get_score_fast(roof=roof, detection=detection)
+                    else:
+                        voc_score, detection_roof_portion = self.get_score(contours=work_with_contours, 
                                                         rows=img_shape[0], cols=img_shape[1], roof=roof, detection=detection)
                     if (voc_score > self.VOC_threshold) and (voc_score > best_voc_score):#this may be a true pos
                         best_voc_score = voc_score
@@ -262,6 +280,7 @@ class Evaluation(object):
                     false_pos_logical[roof_type][best_detection] = 0 #this detection is not a false positive
 
         self.update_scores(img_name, detections, false_pos_logical, bad_detection_logical, best_score_per_detection)
+        
         self.save_images(img_name)
 
        
@@ -342,6 +361,27 @@ class Evaluation(object):
         return voc_score, detection_roof_portion
 
 
+    def get_score_fast(self, roof, detection):
+        '''Can use this method if we don't have rotated rectangles
+        '''
+        intersection_area = 0
+        dx = min(roof.xmax, detection.xmax) - max(roof.xmin, detection.xmin)
+        dy = min(roof.ymax, detection.ymax) - max(roof.ymin, detection.ymin)
+        if (dx>=0) and (dy>=0):
+            intersection_area = dx*dy
+
+        #VOC measure
+        roof_area = (roof.xmax - roof.xmin) * (roof.ymax - roof.ymin)
+        detection_area = (detection.xmax - detection.xmin) * (detection.ymax - detection.ymin)
+        union_area = (roof_area + detection_area) - intersection_area
+        voc_score = float(intersection_area)/union_area
+
+        #How much of the detection is roof? If it's high, they this detection is mostly covering a roof
+        detection_roof_portion = float(intersection_area)/detection_area 
+        return voc_score, detection_roof_portion
+
+       
+
     def print_report(self, print_header=True, stage=None, report_name='report.txt', write_to_file=True):
         '''
         Parameters:
@@ -382,6 +422,8 @@ class Evaluation(object):
         log = '\n'.join(log_to_file)
         with open(self.out_path+report_name, 'a') as report:
             report.write(log)
+        print 'FINAL REPORT'
+        print log
  
 
 
@@ -394,10 +436,14 @@ class Evaluation(object):
         except IOError:
             print 'Cannot open {0}'.format(self.in_path+img_name)
             sys.exit(-1)
+
+        rects = True if self.full_dataset else False
+        #for roof_type in utils.ROOF_TYPES:
+        #    utils.draw_detections(self.detections.false_positives[roof_type][img_name], img, color=(0, 0, 255), rects=rects)
         for roof_type in utils.ROOF_TYPES:
-            utils.draw_detections(self.detections.false_positives[roof_type][img_name], img, color=(0, 0, 255))
-            utils.draw_detections(self.correct_roofs[roof_type][img_name], img, color=(0, 0, 0))
-            utils.draw_detections(self.detections.true_positives[roof_type][img_name], img, color=(0, 255, 0))
+            utils.draw_detections(self.correct_roofs[roof_type][img_name], img, color=(255, 0, 0), rects=rects)
+        for roof_type in utils.ROOF_TYPES:
+            utils.draw_detections(self.detections.true_positives[roof_type][img_name], img, color=(0, 255, 0), rects=rects)
 
 
         cv2.imwrite('{0}{1}{2}.jpg'.format(self.out_path, img_name[:-4], fname), img)

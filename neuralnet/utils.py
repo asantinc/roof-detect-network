@@ -12,6 +12,8 @@ import numpy as np
 import warnings
 import re
 
+from matplotlib import pyplot as plt
+
 ###################################
 #types of roof
 ###################################
@@ -768,10 +770,14 @@ def draw_polygon(polygon, img, fill=False, color=(0,0,255), thickness=2, number=
 
 
 
-def draw_detections(polygon_list, img, fill=False, color=(0, 0, 255), number=False, thickness=2):
-    for i, polygon in enumerate(polygon_list):
-        num = i if number else None
-        draw_polygon(polygon, img, fill=fill, color=color, number=num, thickness=thickness)
+def draw_detections(polygon_list, img, rects=False, fill=False, color=(0, 0, 255), number=False, thickness=2):
+    if rects == False:
+        for i, polygon in enumerate(polygon_list):
+            num = i if number else None
+            draw_polygon(polygon, img, fill=fill, color=color, number=num, thickness=thickness)
+    else:
+        for i, rect in enumerate(polygon_list):
+            cv2.rectangle(img, (rect[0], rect[1]), (rect[2], rect[3]), color=color)
 
 
 ############################
@@ -829,11 +835,27 @@ def pyramid(image, scale=1.5, minSize=(30, 30)):
         yield image
 
 
-def sliding_window(image, stepSize, windowSize):
+def sliding_window(image, stepSize, windowSize, debug_image=None):
     # slide a window across the image
     for y in xrange(0, image.shape[0], stepSize):
         for x in xrange(0, image.shape[1], stepSize):
             # yield the current window
+            '''
+            if y+windowSize[0]>image.shape[0]:
+                pass
+                if debug_image is not None:
+                    b,g,r = cv2.split(debug_image)
+                    img2 = cv2.merge([r,g,b])
+                    plt.imshow(img2)
+                    plt.show()
+
+            if x+windowSize[1]> image.shape[1]:
+                if debug_image is not None:
+                    b,g,r = cv2.split(debug_image)
+                    img2 = cv2.merge([r,g,b])
+                    plt.imshow(img2)
+                    plt.show()
+            '''
             yield (x, y, image[y:y + windowSize[1], x:x + windowSize[0]])
 
 
