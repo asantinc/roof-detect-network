@@ -147,7 +147,7 @@ def get_path(in_or_out=None, out_folder_name=None, params=False, full_dataset=Fa
             if full_dataset==False:
                 path.append('/afs/inf.ed.ac.uk/group/ANC/s0839470/data_original/')
             else:
-                path.append('../data/')
+                path.append('/afs/inf.ed.ac.uk/group/ANC/s0839470/data/')
             assert data_fold is not None
             if data_fold == TRAINING:
                 path.append('training/')

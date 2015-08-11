@@ -10,6 +10,7 @@ import pdb
 import csv
 from operator import itemgetter
 import cv2
+import cPickle as pickle
 
 import lasagne
 import theano
@@ -35,11 +36,11 @@ from timer import Timer
 
 
 class Experiment(object):
-    def __init__(self, flip=True, dropout=False, adaptive=False,
+    def __init__(self, flip=True, dropout=False, adaptive=True,
                     preloaded_path=None, pipeline=False, 
                     print_out=True, preloaded=False,  
                     log=True, plot_loss=True, plot=True,epochs=3000,  
-                    roof_type=None, non_roofs=2, viola_data=None,
+                    roof_type=None, non_roofs=2, data_folder=None,
                     net_name=None, num_layers=None, max_roofs=None):
         '''
         Parameters:
@@ -55,7 +56,7 @@ class Experiment(object):
         self.pipeline = pipeline
         #Load data
         print 'Loading data...\n'
-        self.X, self.y = NeuralDataLoad(data_path=viola_data).load_data(roof_type=roof_type, non_roofs=non_roofs) 
+        self.X, self.y = NeuralDataLoad(data_path=data_folder).load_data(roof_type=roof_type, non_roofs=non_roofs) 
         print 'Data is loaded \n'
         #set up the data scaler
         self.scaler = DataScaler()
@@ -81,9 +82,8 @@ class Experiment(object):
             self.roof_type = roof_type
 
             #pickle the scaler so we can reuse it later
-            pdb.set_trace()
             path = utils.get_path(params=True, in_or_out=utils.IN, neural_weights=True) 
-            with open('{0}{1}.pickle'.format(path, self.net_name), 'wb') as f:
+            with open('{0}{1}_scaler.pickle'.format(path, self.net_name), 'wb') as f:
                 pickle.dump(self.scaler, f, -1)
  
 
@@ -358,32 +358,36 @@ def get_neural_training_params_from_file(file_name):
         for par in reader:
             if len(par) == 2: 
                 key = par[0].strip()
-                if key == 'viola_data' or key == 'roof_type':
+                if key == 'data_folder' or key == 'viola_data' or key == 'roof_type':
                     parameters[key] = (par[1].strip())
                 else:
                     parameters[key] = int(float(par[1].strip()))
     return parameters
 
 
-def get_parameter_file():
+def get_parameter_file_and_ensemble_number():
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "f:")
+        opts, args = getopt.getopt(sys.argv[1:], "f:e:")
     except getopt.GetoptError:
         sys.exit(2)
         print 'Command line failed'
     for opt, arg in opts:
         if opt == '-f':
             param_file = arg
-    return param_file
+        if opt == '-e':
+            ensemble_num = arg
+    return param_file, ensemble_num
+
 
 
 if __name__ == '__main__':
-    param_file = 'params'+get_parameter_file()+'.csv'
-    
+    param_file_num, ensemble_num = get_parameter_file_and_ensemble_number()
+
+    param_file = 'params{}.csv'.format(param_file_num)
     params_path = '{0}{1}'.format(utils.get_path(params=True, neural=True), param_file)
     params = get_neural_training_params_from_file(params_path) 
 
-    params['net_name'] = '{}_flip{}_dropout{}_adapt{}'.format(param_file[:-4], params['flip'], params['dropout'], params['adaptive'])
+    params['net_name'] = '{}_flip{}_dropout{}_adapt{}_ensemble{}'.format(params['data_folder'], params['flip'], params['dropout'], params['adaptive'], ensemble_num)
     print 'Network name is: {0}'.format(params['net_name'])
 
     experiment = Experiment(print_out=True, **params)

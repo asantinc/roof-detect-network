@@ -312,9 +312,12 @@ class Pipeline(object):
             
             if proposal_patches[roof_type].shape[0] > 1:
                 if self.single_detector: #we have a single net
-                    classes = self.net.test(proposal_patches[roof_type])
+                    classes = np.array(self.net.test(proposal_patches[roof_type]))
 
                     #filter according to classification         
+                    backgroun_indeces = 
+                    metal_indeces = 
+                    thatch_indeces = 
                     for detection, classification in zip(proposal_coords[roof_type], classes):
                         if classification == utils.NON_ROOF:
                             classified_detections['background'].append(detection)

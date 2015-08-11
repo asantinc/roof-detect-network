@@ -17,14 +17,17 @@ import json
 from pprint import pprint
 import utils
 
+from collections import namedtuple
+
+Rectangle = namedtuple('Rectangle', 'xmin ymin xmax ymax')
+
 
 
 class DataLoader(object):
-    def __init__(self, labels_path=None, out_path=None, in_path=None):
+    def __init__(self, out_path=None, in_path=None):
         self.total_patch_no = 0
         self.step_size = float(utils.PATCH_W)/2
 
-        self.labels_path = labels_path
         self.out_path = out_path
         self.in_path = in_path
 
@@ -114,6 +117,51 @@ class DataLoader(object):
                 polygon_list.append(utils.convert_rect_to_polygon(rect))
         return polygon_list
 
+
+    @staticmethod
+    def get_all_roofs_full_dataset(merge_tiled=False, xml_name=None, xml_path=None):
+        '''Return list of Roofs
+        '''
+        tree = ET.parse(xml_path+xml_name)
+        root = tree.getroot()
+        rect_list = defaultdict(list)
+        
+        for child in root:
+            thatch = False
+            if child.tag == 'object':
+                xmin, xmax, ymin, ymax = -1, -1, -1, -1
+                for grandchild in child:
+                    if grandchild.tag == 'action':
+                        roof_type = grandchild.text[:6].lower()
+                        if roof_type.startswith('metal'):
+                            roof_type = 'metal'
+                        elif roof_type.startswith('thatch'):
+                            roof_type = 'thatch'
+                        elif roof_type.startswith('tiled'):
+                            if merge_tiled:
+                                roof_type = 'metal'
+                            else:
+                                roof_type = 'tiled'
+                    #get positions of bounding box
+                    if grandchild.tag == 'bndbox':
+                        for item in grandchild:
+                            pos = int(float(item.text))
+                            pos = pos if pos >= 0 else 0
+                            if item.tag == 'xmax':
+                                xmax = pos
+                            elif item.tag == 'xmin':
+                                xmin = pos
+                            elif item.tag  == 'ymax':
+                                ymax = pos
+                            elif item.tag  == 'ymin':
+                                ymin = pos
+                rect = Rectangle(xmin, ymin, xmax, ymax)
+                #w, h = xmax-xmin, ymax-ymin
+                #rect = (xmin, ymin, w, h) 
+                rect_list[roof_type].append(rect)
+        return rect_list
+
+       
 
     @staticmethod
     def get_metal_polygons(fix_polygons=True, xml_path=utils.RECTIFIED_COORDINATES, xml_name=None, padding=0):

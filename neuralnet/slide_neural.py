@@ -11,7 +11,7 @@ DEBUG = False
 
 
 class SlidingWindowNeural(object):
-    def __init__(self,  out_path=None, in_path=None, output_patches=False, scale=1.5, minSize=(200,200), windowSize=(40,40), stepSize=15):
+    def __init__(self,  full_dataset=False, out_path=None, in_path=None, output_patches=False, scale=1.5, minSize=(200,200), windowSize=(40,40), stepSize=15):
         self.scale = scale
         self.minSize = minSize
         self.windowSize = windowSize
@@ -19,7 +19,7 @@ class SlidingWindowNeural(object):
         self.total_window_num = 0
         self.data_fold = utils.TRAINING if output_patches else utils.VALIDATION
 
-        self.in_path = in_path if in_path is not None else utils.get_path(in_or_out=utils.IN, data_fold=self.data_fold)
+        self.in_path = in_path if in_path is not None else utils.get_path(in_or_out=utils.IN, data_fold=self.data_fold, full_dataset=full_dataset)
         self.img_names = [img_name for img_name in os.listdir(self.in_path) if img_name.endswith('.jpg')]
         #self.img_names = self.img_names[:2] if DEBUG else self.img_names
 
@@ -127,9 +127,12 @@ class SlidingWindowNeural(object):
 
 
 def main():
-    output_patches = True
-    stepSize = 30 if output_patches else 15
-    slider = SlidingWindowNeural(output_patches=output_patches, stepSize=stepSize)
+    full_dataset = True
+    output_patches = False 
+    #stepSize = 30 if output_patches else 15
+    stepSize = 20 
+    scale = 1.8
+    slider = SlidingWindowNeural(full_dataset=True, output_patches=output_patches, stepSize=stepSize, scale=scale)
     slider.get_windows_in_folder()
     slider.run_evaluation()
     if output_patches:
