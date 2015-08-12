@@ -32,22 +32,46 @@ class DataLoader(object):
         self.in_path = in_path
 
     @staticmethod
-    def get_all_patches_folder(folder_path=None, grayscale=False, merge_imgs=False):
+    def get_all_patches_folder(folder_path=None, grayscale=False, merge_imgs=False, full_dataset=False):
         '''If merge_imgs is True, we merge all roofs for a given roof type together, regardless of which image the roof came from
         '''
-        folder_path = folder_path if folder_path is not None else utils.get_path(in_or_out=utils.IN, data_fold=utils.TRAINING)
-        img_names = [f for f in os.listdir(folder_path) if f.endswith('.jpg')]
-        all_patches = defaultdict(list)
-        for img_name in img_names:
-            if merge_imgs == False:
-                all_patches[img_name] = dict()
-            for roof_type in utils.ROOF_TYPES:
-                polygons = DataLoader.get_polygons(roof_type=roof_type, xml_path=folder_path, xml_name=img_name[:-3]+'xml')
+        if full_dataset==False:
+            folder_path = folder_path if folder_path is not None else utils.get_path(in_or_out=utils.IN, data_fold=utils.TRAINING)
+            img_names = [f for f in os.listdir(folder_path) if f.endswith('.jpg')]
+            all_patches = defaultdict(list)
+            for img_name in img_names:
                 if merge_imgs == False:
-                    all_patches[img_name][roof_type] = DataLoader.extract_patches(polygons, img_path=folder_path+img_name, grayscale=grayscale)
-                else:
-                    all_patches[roof_type].extend(DataLoader.extract_patches(polygons, img_path=folder_path+img_name, grayscale=grayscale))
+                    all_patches[img_name] = dict()
+                for roof_type in utils.ROOF_TYPES:
+                    polygons = DataLoader.get_polygons(roof_type=roof_type, xml_path=folder_path, xml_name=img_name[:-3]+'xml')
+                    if merge_imgs == False:
+                        all_patches[img_name][roof_type] = DataLoader.extract_patches(polygons, img_path=folder_path+img_name, grayscale=grayscale)
+                    else:
+                        all_patches[roof_type].extend(DataLoader.extract_patches(polygons, img_path=folder_path+img_name, grayscale=grayscale))
+        else:
+            #FOR THE FULL DATASET WE RECEIVE RECTS INSTEAD OF POLYGONS....
+            folder_path = folder_path if folder_path is not None else utils.get_path(in_or_out=utils.IN, data_fold=utils.TRAINING, full_dataset=True)
+            img_names = [f for f in os.listdir(folder_path) if f.endswith('.jpg')]
+            all_patches = defaultdict(list)
+            for img_name in img_names:
+                if merge_imgs == False:
+                    all_patches[img_name] = dict()
+                #for roof_type in utils.ROOF_TYPES:
+
+                rects = DataLoader.get_all_roofs_full_dataset(xml_name=img_name[:-3]+'xml', xml_path=folder_path, merge_tiled=True) 
+                for roof_type in utils.ROOF_TYPES:
+                    if merge_imgs == False:
+                        current_rects = []
+                        if roof_type in rects:
+                            current_rects = DataLoader.extract_patches_from_rects(rects[roof_type], img_path=folder_path+img_name, grayscale=grayscale) 
+                        all_patches[img_name][roof_type] = current_rects 
+                    else:
+                        current_rects = []
+                        if roof_type in rects:
+                            current_rects = DataLoader.extract_patches_from_rects(rects[roof_type], img_path=folder_path+img_name, grayscale=grayscale) 
+                        all_patches[roof_type].extend(current_rects)
         return all_patches 
+
 
     @staticmethod
     def get_polygons(roof_type=None, xml_name=None, xml_path=None, padding=0, fix_polygons=True):
@@ -56,6 +80,26 @@ class DataLoader(object):
         elif roof_type == 'thatch':
             polygon_list = DataLoader.get_thatch_polygons(xml_name=xml_name, xml_path=xml_path)
         return polygon_list
+
+    @staticmethod
+    def extract_patches_from_rects(rects, img_path=None, grayscale=False):
+        '''
+        Extract polygons from the image and array of patches
+        '''
+        assert img_path is not None
+        try:
+            img = cv2.imread(img_path, flags=cv2.IMREAD_COLOR)
+            assert img is not None
+            if grayscale:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                img = cv2.equalizeHist(img)
+        except IOError as e:
+            print e
+            sys.exit(-1)
+        patches = list()
+        for i, rect in enumerate(rects):
+            patches.append(img[rect.ymin:rect.ymax, rect.xmin:rect.xmax, :])
+        return patches
 
 
     @staticmethod

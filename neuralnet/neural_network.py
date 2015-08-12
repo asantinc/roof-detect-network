@@ -36,7 +36,8 @@ from timer import Timer
 
 
 class Experiment(object):
-    def __init__(self, flip=True, dropout=False, adaptive=True,
+    def __init__(self, full_dataset=False,
+                    flip=True, dropout=False, adaptive=True,
                     preloaded_path=None, pipeline=False, 
                     print_out=True, preloaded=False,  
                     log=True, plot_loss=True, plot=True,epochs=3000,  
@@ -56,7 +57,8 @@ class Experiment(object):
         self.pipeline = pipeline
         #Load data
         print 'Loading data...\n'
-        self.X, self.y = NeuralDataLoad(data_path=data_folder).load_data(roof_type=roof_type, non_roofs=non_roofs) 
+        self.full_dataset=full_dataset
+        self.X, self.y = NeuralDataLoad(data_path=data_folder).load_data(full_dataset=self.full_dataset, roof_type=roof_type, non_roofs=non_roofs) 
         print 'Data is loaded \n'
         #set up the data scaler
         self.scaler = DataScaler()

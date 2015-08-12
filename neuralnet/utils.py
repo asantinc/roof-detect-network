@@ -835,7 +835,7 @@ def pyramid(image, scale=1.5, minSize=(30, 30)):
         yield image
 
 
-def sliding_window(image, stepSize, windowSize, debug_image=None):
+def sliding_window(image, stepSize, windowSize):
     # slide a window across the image
     for y in xrange(0, image.shape[0], stepSize):
         for x in xrange(0, image.shape[1], stepSize):

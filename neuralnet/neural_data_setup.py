@@ -38,7 +38,7 @@ class NeuralDataLoad(object):
 
 
 
-    def load_data(self, non_roofs=np.inf, roof_type=None):
+    def load_data(self, non_roofs=np.inf, roof_type=None, full_dataset=False):
         '''
         Parameters:
         ----------
@@ -50,7 +50,8 @@ class NeuralDataLoad(object):
         '''
         assert roof_type=='metal' or roof_type=='thatch' or roof_type=='Both'
 
-        self.ground_truth_metal_thatch = DataLoader.get_all_patches_folder(merge_imgs=True)
+        self.ground_truth_metal_thatch = DataLoader.get_all_patches_folder(merge_imgs=True, full_dataset=full_dataset)
+
         self.viola_metal_thatch = self.get_viola_positive_patches(self.thatch_metal_TP_viola_path)
         if roof_type != 'Both':
             print 'Will load {0} data only'.format(roof_type)
