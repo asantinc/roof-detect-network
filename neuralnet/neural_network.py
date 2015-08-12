@@ -215,6 +215,14 @@ class Experiment(object):
             X_test_cropped[i, :, :, :] = utils.resize_neural_patch(x)
         return self.net.predict(X_test_cropped)
 
+    def predict_proba(self, X_test):
+        X_test_scaled = self.scaler.transform2(X_test)
+        X_test_cropped = np.empty((X_test_scaled.shape[0], X_test_scaled.shape[1], utils.CROP_SIZE, utils.CROP_SIZE))
+        for i, x in enumerate(X_test_scaled):
+            X_test_cropped[i, :, :, :] = utils.resize_neural_patch(x)
+        return self.net.predict_proba(X_test_cropped)
+
+
 
     def test_preloaded(self, plot_loss=True, test_case=None):  
         '''Preload weights, classify roofs and write evaluation
@@ -389,7 +397,7 @@ if __name__ == '__main__':
     params_path = '{0}{1}'.format(utils.get_path(params=True, neural=True), param_file)
     params = get_neural_training_params_from_file(params_path) 
 
-    params['net_name'] = '{}_flip{}_dropout{}_adapt{}_ensemble{}'.format(params['data_folder'], params['flip'], params['dropout'], params['adaptive'], ensemble_num)
+    params['net_name'] = '{}_{}_flip{}_dropout{}_adapt{}_ensemble{}'.format(param_file[:-4], params['data_folder'], params['flip'], params['dropout'], params['adaptive'], ensemble_num)
     print 'Network name is: {0}'.format(params['net_name'])
 
     experiment = Experiment(print_out=True, **params)

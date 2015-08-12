@@ -126,10 +126,10 @@ class MyNeuralNet(NeuralNet):
         
 
         @staticmethod
-        def produce_layers(num_layers=1, dropout=False):
+        def produce_layers(num_layers=1, dropout=0):
             assert num_layers<=5 and num_layers>=0
             if num_layers<5:
-                assert dropout==False
+                assert dropout==0
 
             if num_layers==0:
                 net_layers=[
@@ -190,7 +190,7 @@ class MyNeuralNet(NeuralNet):
                         'conv3_num_filters':128, 'conv3_filter_size':(2, 2), 'pool3_pool_size':(2, 2),
                         'hidden4_num_units':500}
             elif num_layers==5:
-                if dropout:
+                if dropout>0:
                     net_layers=[
                         ('input', layers.InputLayer),
                         ('conv1', layers.Conv2DLayer),
@@ -224,12 +224,16 @@ class MyNeuralNet(NeuralNet):
                         'conv2_num_filters':64, 'conv2_filter_size':(2, 2), 'pool2_pool_size':(2, 2),
                         'conv3_num_filters':128, 'conv3_filter_size':(2, 2), 'pool3_pool_size':(2, 2),
                         'hidden4_num_units':500, 'hidden5_num_units':500}
-                if dropout:
+                if dropout == 1:
                     params_dict['dropout1_p'] =0.1 
                     params_dict['dropout2_p'] =0.2 
                     params_dict['dropout3_p'] =0.3 
                     params_dict['dropout4_p'] =0.4 
-
+                elif dropout == 2:
+                    params_dict['dropout1_p'] =0.3 
+                    params_dict['dropout2_p'] =0.4 
+                    params_dict['dropout3_p'] =0.5 
+                    params_dict['dropout4_p'] =0.5 
             return net_layers, params_dict 
 
 

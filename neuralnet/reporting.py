@@ -5,6 +5,8 @@ import sys
 import pdb
 import cv2
 import pickle
+from sklearn.metrics import precision_recall_curve, average_precision_score
+from matplotlib import pyplot as plt
 
 from get_data import DataLoader #for get_roofs
 import utils
@@ -295,6 +297,7 @@ class Evaluation(object):
             bad_d = detects[truly_bad_detections]
             self.detections.update_bad_detections(bad_detections=bad_d, img_name=img_name) 
 
+        print '----- METHOD: {}'.format(self.method)
         for roof_type in utils.ROOF_TYPES: 
             detects = np.array(detections[roof_type])
             false_d = detects[false_pos_logical[roof_type]]
@@ -365,14 +368,17 @@ class Evaluation(object):
         '''Can use this method if we don't have rotated rectangles
         '''
         intersection_area = 0
-        dx = min(roof.xmax, detection.xmax) - max(roof.xmin, detection.xmin)
-        dy = min(roof.ymax, detection.ymax) - max(roof.ymin, detection.ymin)
+        roof_xmin, roof_ymin, roof_xmax, roof_ymax = roof
+        detection_xmin, detection_ymin, detection_xmax, detection_ymax = detection
+
+        dx = min(roof_xmax, detection_xmax) - max(roof_xmin, detection_xmin)
+        dy = min(roof_ymax, detection_ymax) - max(roof_ymin, detection_ymin)
         if (dx>=0) and (dy>=0):
             intersection_area = dx*dy
 
         #VOC measure
-        roof_area = (roof.xmax - roof.xmin) * (roof.ymax - roof.ymin)
-        detection_area = (detection.xmax - detection.xmin) * (detection.ymax - detection.ymin)
+        roof_area = (roof_xmax - roof_xmin) * (roof_ymax - roof_ymin)
+        detection_area = (detection_xmax - detection_xmin) * (detection_ymax - detection_ymin)
         union_area = (roof_area + detection_area) - intersection_area
         voc_score = float(intersection_area)/union_area
 
@@ -568,5 +574,29 @@ class Evaluation(object):
                     print 'Saved {} patches'.format(self.TOTAL)
         #write this type of extraction and the roofs to an image
         #cv2.imwrite('{0}{1}_{2}_extract_{3}.jpg'.format(general_path, img_name[:-4], roof_type, extraction_type), img_debug)
+
+
+    def auc_plot(self,correct_classes, class_probs):
+        prec = dict()
+        recall = dict()
+        average_precision = dict()
+        for roof_type in utils.ROOF_TYPES:
+            prec[roof_type], recall[roof_type], _ = precision_recall_curve(np.array(correct_classes[roof_type]),
+                                                                        np.array(class_probs[roof_type]))
+            average_precision[roof_type] = average_precision_score(np.array(correct_classes[roof_type]),
+                                                                        np.array(class_probs[roof_type]))
+
+        plt.clf()
+        for roof_type in utils.ROOF_TYPES:
+            plt.plot(recall[roof_type], precision[roof_type],
+                    label='Precision-recall curve of class {0} (area = {1:0.2f})'
+                                       ''.format(roof_type, average_precision[roof_type]))
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+        plt.legend(loc="lower right")
+        path = self.out_path+'AUC.jpg'
+        plt.savefig(path)
 
 

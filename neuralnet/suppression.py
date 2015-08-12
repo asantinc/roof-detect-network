@@ -3,7 +3,7 @@ import numpy as np
  
 
 # Malisiewicz et al.
-def non_max_suppression(boxes, overlapThresh=0.3):
+def non_max_suppression(boxes, class_probs, overlapThres=0.3):
     #required boxes in the form of x1, y1, x2, y2
     # if there are no boxes, return an empty list
     if len(boxes) == 0:
@@ -54,7 +54,7 @@ def non_max_suppression(boxes, overlapThresh=0.3):
 
         # delete all indexes from the index list that have
         idxs = np.delete(idxs, np.concatenate(([last],
-            np.where(overlap > overlapThresh)[0])))
+            np.where(overlap > overlapThres)[0])))
 
     # return only the bounding boxes that were picked using the
     # integer data type
