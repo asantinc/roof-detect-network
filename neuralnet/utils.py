@@ -756,7 +756,7 @@ def draw_polygon(polygon, img, fill=False, color=(0,0,255), thickness=2, number=
         polygon = np.array(polygon, dtype='int32')
         if fill:
             #color in this case must be an integer, not a tuple
-            cv2.fillConvexPoly(img, polygon, color)
+            cv2.fillConvexPoly(img, polygon.astype('int32'), color)
         else:
             cv2.polylines(img, [polygon], 1, color, thickness)
 

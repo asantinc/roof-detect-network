@@ -25,6 +25,7 @@ DEBUG = False
 
 class ViolaDetector(object):
     def __init__(self, 
+            TESTING=False, #you can delete this parameter!
             pipeline=False,
             in_path=None, 
             out_path=None,
@@ -120,7 +121,7 @@ class ViolaDetector(object):
         self.group = group
         self.overlapThresh = overlapThresh
         if rotate:
-            self.angles = utils.VIOLA_ANGLES if fullAngles==False else [0, 90, 180] 
+            self.angles = utils.VIOLA_ANGLES  
         else:
             self.angles = [0]
         self.remove_off_img = removeOff
@@ -128,7 +129,8 @@ class ViolaDetector(object):
 
         self.pickled_evaluation = pickled_evaluation
         if pickled_evaluation == False:
-            self.evaluation = Evaluation(negThres=self.negThres, method='viola', folder_name=folder_name, 
+            self.evaluation = Evaluation(full_dataset=False, 
+                        negThres=self.negThres, method='viola', folder_name=folder_name, 
                         out_path=self.out_folder, detections=self.viola_detections, 
                         in_path=self.in_path, detector_names=detector_names, 
                         mergeFalsePos=mergeFalsePos, vocGood=vocGood)
@@ -345,11 +347,10 @@ if __name__ == '__main__':
 
     # removeOff: whether to remove the roofs that fall off the image when rotating (especially the ones on the edge
     # group: can be None, group_rectangles, group_bounding
-    # if check_both_detectors is True we check if either the metal or the thatch detector has found a detection that matches either type of roof 
     detector_params = {'min_neighbors':3, 'scale':1.08, 'mergeFalsePos':mergeFalsePos, 'negThres':negThres,
                         'group': False, 'downsized':False, 
                         'rotate':True, 'fullAngles':True, 'removeOff':True,
-                        'separateDetections':True} 
+                        'separateDetections':True, 'TESTING':True} 
     viola = main(pickled_evaluation=pickled_evaluation, output_patches=output_patches,  
                 detector_params=detector_params, save_imgs=False, data_fold=data_fold, original_dataset=True)
 

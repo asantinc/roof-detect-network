@@ -19,6 +19,10 @@ class Detections(object):
         self.true_positive_num =  defaultdict(int)
         self.good_detection_num =  defaultdict(int)
 
+        self.easy_false_neg_num = defaultdict(int)
+        self.easy_false_pos_num = defaultdict(int)
+        self.easy_true_pos_num = defaultdict(int) 
+
         if mergeFalsePos:
             self.bad_detection_num = 0 #we count the metal and thatch false positives together 
         else:
@@ -29,6 +33,13 @@ class Detections(object):
         self.true_positives = dict()
         self.false_positives = dict()
         self.good_detections =dict()#all the detections above the VOC threshold
+
+        #this metrics do not have double detections count negatively, and
+        #they consider a roof to have been detected if a detection has 'mostly' roof on it
+        self.easy_false_pos = dict()
+        self.easy_false_neg = dict()
+        self.easy_true_pos = dict()
+
         #index with the roof polygon coordinates
         #stores the best score and detection for each grount true roof
         self.roof_detections_voc = dict() 
@@ -44,9 +55,14 @@ class Detections(object):
             self.true_positives[roof_type] = defaultdict(list)
             self.false_positives[roof_type] = defaultdict(list)
             self.good_detections[roof_type] = defaultdict(list)
+
             if mergeFalsePos == False:
                 self.bad_detections[roof_type] = defaultdict(list)
 
+            #more lenient metrics
+            self.easy_false_pos[roof_type] = defaultdict(list)
+            self.easy_false_neg[roof_type] = defaultdict(list)
+            self.easy_true_pos[roof_type] = defaultdict(list)
         self.total_time = 0
         self.imgs = set()
 
@@ -118,6 +134,17 @@ class Detections(object):
                 #turn detections for this roof type AND angle
                 detections = self.detections[roof_type][img_name][angle]
         return detections
+
+
+    def update_easy_metrics(self, img_name, roof_type, easy_false_neg, easy_true_pos, easy_false_pos):
+        self.easy_false_neg[roof_type][img_name].extend(easy_false_neg)
+        self.easy_true_pos[roof_type][img_name].extend(easy_true_pos)
+        self.easy_false_pos[roof_type][img_name].extend(easy_false_pos) 
+
+        self.easy_false_neg_num[roof_type] += len(easy_false_neg)
+        self.easy_false_pos_num[roof_type] += len(easy_false_pos)
+        self.easy_true_pos_num[roof_type] += len(easy_true_pos)
+        
 
 
 
@@ -228,6 +255,9 @@ class Evaluation(object):
         best_score_per_detection = defaultdict(list) #for the current image
         detections = dict()
 
+        easy_false_pos_logical = dict() #keeps track of the detections that are VOC>0.5 or cover mostly a roof
+        easy_false_negative_logical=dict()
+
         for roof_type in utils.ROOF_TYPES:
             #this will only be necessary if we work with the neural network
             #and we want to score roofs by merging nearby detections
@@ -243,8 +273,16 @@ class Evaluation(object):
                 detections[roof_type] = self.detections.get_detections(img_name=img_name)
 
             print 'Scoring {0}'.format(roof_type)
+            #detections that are wrong accoring to VOC metric
             false_pos_logical[roof_type] = np.ones(len(detections[roof_type]), dtype=bool) #[roof_type]
+            #this is used to get the training data for TP and FP
             bad_detection_logical[roof_type] = np.ones(len(detections[roof_type]), dtype=bool) #[roof_type]
+
+            #how many detections are wrong
+            easy_false_pos_logical[roof_type] = np.ones(len(detections[roof_type]), dtype=bool)
+            #how many roofs we have missed
+            easy_false_negative_logical[roof_type] = np.ones(len(self.correct_roofs[roof_type][img_name]), 
+                                                            dtype=bool)
 
             for r, roof in enumerate(self.correct_roofs[roof_type][img_name]):
 
@@ -267,6 +305,10 @@ class Evaluation(object):
                     if (voc_score > self.VOC_threshold) and (voc_score > best_voc_score):#this may be a true pos
                         best_voc_score = voc_score
                         best_detection = d 
+                    
+                    if (voc_score > self.VOC_threshold) or (detection_roof_portion > 0.5):
+                        easy_false_pos_logical[roof_type][d] = 0
+                        easy_false_negative_logical[roof_type][r] = 0 
 
                     if (voc_score > self.VOC_good_detection_threshold[roof_type]): # or detection_roof_portion>self.detection_portion_threshold):
                         bad_detection_logical[roof_type][d] = 0 #we already know that this wasn't a bad detection
@@ -282,12 +324,14 @@ class Evaluation(object):
                 if best_detection != -1:
                     false_pos_logical[roof_type][best_detection] = 0 #this detection is not a false positive
 
-        self.update_scores(img_name, detections, false_pos_logical, bad_detection_logical, best_score_per_detection)
+        self.update_scores(img_name, detections, false_pos_logical, bad_detection_logical, 
+                                    best_score_per_detection, easy_false_pos_logical, easy_false_negative_logical)
         self.save_images(img_name)
 
        
 
-    def update_scores(self, img_name, detections, false_pos_logical, bad_detection_logical, best_score_per_detection):
+    def update_scores(self, img_name, detections, false_pos_logical, bad_detection_logical, 
+                                                best_score_per_detection, easy_false_pos_logical, easy_false_negative_logical):
         self.detections.best_score_per_detection[img_name] = best_score_per_detection
 
         if self.mergeFalsePos: #self.output_patches 
@@ -310,10 +354,22 @@ class Evaluation(object):
             good_d = detects[np.invert(bad_detection_logical[roof_type])]
             self.detections.update_good_detections(good_detections=good_d, roof_type=roof_type, img_name=img_name) 
 
+            #NEW METRICS ADDED THAT ARE MORE LENIENT
+            roofs = np.array(self.correct_roofs[roof_type][img_name])
+            #how many roofs we have missed
+            easy_false_neg = roofs[easy_false_negative_logical[roof_type]]
+            #how many roofs we found
+            easy_true_pos = roofs[np.invert(easy_false_negative_logical[roof_type])]
+            #how many bad detections
+            easy_false_pos = detects[easy_false_pos_logical[roof_type]] 
+            #the true neg are everything that was detected as background... we don't care much about this?
+            self.detections.update_easy_metrics(img_name, roof_type, easy_false_neg, easy_true_pos, easy_false_pos)
+
+
             if self.mergeFalsePos == False:
                 bad_d = detects[bad_detection_logical[roof_type]]
                 self.detections.update_bad_detections(roof_type=roof_type,bad_detections=bad_d, img_name=img_name) 
-
+            
             print '-------- Roof Type: {0} --------'.format(roof_type)
             print 'Roofs: {0}'.format(len(self.correct_roofs[roof_type][img_name]))
             print 'False pos: {0}'.format(len(false_d))
@@ -322,6 +378,10 @@ class Evaluation(object):
             print 'Good det: {0}'.format(len(good_d))
             if self.mergeFalsePos == False:
                 print 'Bad detections: {0}'.format(len(bad_d))
+            print 'EASIER METRICS'
+            print 'True pos: {}'.format(len(easy_true_pos))
+            print 'False neg: {}'.format(len(easy_false_neg))
+            print 'False pos: {}'.format(len(easy_false_pos))
 
         print '---'
         print 'All Detections: {0}'.format(len(detections['metal']+detections['thatch']))
@@ -404,6 +464,7 @@ class Evaluation(object):
                 log_to_file.append('roof_type\ttotal_roofs\ttotal_time\tdetections\trecall\tprecision\tf1')
             else:
                 log_to_file.append('stage\troof_type\ttotal_roofs\ttotal_time\tdetections\trecall\tprecision\tf1')
+            easy_log.append('roof_type\ttotal_roofs\ttotal_time\tdetections\trecall\tprecision\tf1')
 
 
         for roof_type in utils.ROOF_TYPES:
@@ -422,15 +483,35 @@ class Evaluation(object):
             else:
                 recall = precision = F1 = 0
             if stage is None:
-                log_to_file.append('{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(roof_type, cur_type_roofs, self.detections.total_time, detection_num, recall, precision,F1)) 
+                log_to_file.append('{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(roof_type, 
+                                cur_type_roofs, self.detections.total_time, detection_num, recall, precision,F1)) 
             else:
-                log_to_file.append('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(stage, roof_type, cur_type_roofs, self.detections.total_time, detection_num, recall, precision,F1)) 
+                log_to_file.append('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(stage, roof_type, 
+                                cur_type_roofs, self.detections.total_time, detection_num, recall, precision,F1)) 
+
+            #EASIER METRICS
+            easy_true_pos = self.detections.easy_true_pos_num[roof_type]
+            easy_false_pos = self.detections.easy_false_pos_num[roof_type]
+            easy_detection_num = easy_true_pos+easy_false_pos
+            if easy_detection_num > 0 and cur_type_roofs > 0:
+                easy_recall = float(easy_true_pos) / cur_type_roofs 
+                easy_precision = float(easy_true_pos) / (easy_detection_num)
+                if precision+recall > 0:
+                    F1 = (2.*easy_precision*easy_recall)/(easy_precision+easy_recall)
+                else:
+                    F1 = 0
+            else:
+                recall = precision = F1 = 0
+            easy_log.append('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(stage, roof_type, 
+                        cur_type_roofs, self.detections.total_time, detection_num, easy_recall, easy_precision,easy_F1))
 
         log = '\n'.join(log_to_file)
+        easy_log = '\n'.join(easy_log)
         with open(self.out_path+report_name, 'a') as report:
             report.write(log)
         print 'FINAL REPORT'
         print log
+        print easy_log
  
 
 
