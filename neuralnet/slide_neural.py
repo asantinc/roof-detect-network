@@ -65,7 +65,7 @@ class SlidingWindowNeural(object):
         except IOError:
             print 'Could not open file'
             sys.exit(-1)
-        if self.is_small_image(image):
+        if self.is_small_image(image) or self.output_patches:
             return self.detect(img_name, image)
         else:
             stepSize = 30 if self.output_patches == False else 15
@@ -172,5 +172,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-

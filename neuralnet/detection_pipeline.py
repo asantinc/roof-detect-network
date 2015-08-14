@@ -30,6 +30,7 @@ from reporting import Detections, Evaluation
 from timer import Timer
 import suppression
 from slide_neural import SlidingWindowNeural
+from ensemble import Ensemble
 
 DEBUG = True
 
@@ -37,9 +38,10 @@ class Pipeline(object):
     def __init__(self, method=None,
                     full_dataset=True,
                     groupThres=0, groupBounds=False, erosion=0, suppress=None, overlapThresh=0.3,
-                    pickle_viola=None, single_detector=True, 
+                    pickle_viola=None,# single_detector=True, 
                     in_path=None, out_path=None, neural=None, 
-                    detector_params=None, pipe=None, out_folder_name=None):
+                    ensemble=None, 
+                    detector_params=None, pipe=None, out_folder_name=None, net_threshold=0.5):
         '''
         Parameters:
         ------------------
@@ -62,7 +64,7 @@ class Pipeline(object):
         self.suppress = pipe['suppress']
         self.overlapThresh = overlapThresh
 
-        self.single_detector = single_detector
+        #self.single_detector = single_detector
         self.in_path = in_path
         self.img_names = [img_name for img_name in os.listdir(self.in_path) if img_name.endswith('jpg')]
         self.out_path = out_path
@@ -86,14 +88,8 @@ class Pipeline(object):
         else:
             raise ValueError('Need to specific either viola or sliding window')
 
-        #Setup Neural network(s)
-        if self.single_detector:
-            self.net = Experiment(pipeline=True, **neural['metal'])
-        else: 
-            self.net = dict()
-            self.net['metal'] = Experiment(pipeline=True, **neural['metal'])
-            self.net['thatch'] = Experiment(pipeline=True, **neural['thatch'])
-        
+       
+        self.ensemble = ensemble
         #so we can evaluate by how much the neural network is helping us improve
         self.detections_after_neural = Detections()
         #self.evaluation_before_neural = Evaluation(detections=self.detections_before_neural, 
@@ -150,6 +146,7 @@ class Pipeline(object):
                 print 'Unknown detection method {}'.format(self.method)
                 sys.exit(-1)
 
+            self.print_detections(None, img_name, '')
             self.print_detections(rect_detections, img_name, '_initial')
             
             #FIND CORRECT CLASSIFICATION FOR EACH PATCH
@@ -224,11 +221,16 @@ class Pipeline(object):
             #compare the predictions made by viola and by viola+neural network
 
     def print_detections(self, detections, img_name, title):
-        for roof_type, detects in detections.iteritems():
-            color = (0,0,255) if roof_type == 'metal' else (0,255,0)
+        if detections is not None:
+            for roof_type, detects in detections.iteritems():
+                color = (0,0,255) if roof_type == 'metal' else (0,255,0)
+                img = cv2.imread(self.in_path+img_name)
+                utils.draw_detections(detects, img, rects=True)
+                cv2.imwrite('debug/{}{}.jpg'.format(img_name[:-4], title), img)
+        else:
             img = cv2.imread(self.in_path+img_name)
-            utils.draw_detections(detects, img, rects=True)
-            cv2.imwrite('debug/{}{}.jpg'.format(img_name[:-4], title), img)
+            cv2.imwrite('debug/{}'.format(img_name, title), img)
+
 
 
     def get_correct_class_per_detection(self,rect_detections, img_name): 
@@ -412,6 +414,7 @@ class Pipeline(object):
             #classify with neural network
             
             if proposal_patches[roof_type].shape[0] > 1:
+                '''
                 if self.single_detector: #we have a single net
                     raise ValueError('Not implemented with a single net, only if distinct nets for metal/thatch')
                     classes = np.array(self.net.test(proposal_patches[roof_type]))
@@ -425,24 +428,18 @@ class Pipeline(object):
                             classified_detections['thatch'].append(detection)
 
                 else: #we have one net per roof type
-                    specific_net = self.net[roof_type]
-
-                    #classes = specific_net.test(proposal_patches[roof_type])
-                    #print np.bincount(classes)
-                    coords = np.array(proposal_coords[roof_type])
-                    #classified_detections[roof_type] = coords[classes==1]
-
-                    all_probs = specific_net.predict_proba(proposal_patches[roof_type])
-                    probs[roof_type] = all_probs[:, 1] #only get the prob for the roof class
-                    classified_detections[roof_type] = coords[probs[roof_type]>=0.5]
-                    probs_of_roofs_only[roof_type] = probs[roof_type][probs[roof_type]>=0.5]
+                '''
+                coords = np.array(proposal_coords[roof_type])
+                all_probs = self.ensemble.predict_proba(proposal_patches[roof_type], roof_type=roof_type)
+                probs[roof_type] = all_probs[:, 1] #only get the prob for the roof class
+                classified_detections[roof_type] = coords[probs[roof_type]>=self.net_threshold]
+                probs_of_roofs_only[roof_type] = probs[roof_type][probs[roof_type]>=self.net_threshold]
 
             else:
                 print 'No {0} detections'.format(roof_type)
                 raise ValueError('Need to fix this to support this case')
         return classified_detections, probs, probs_of_roofs_only 
-
-   
+ 
 
     def save_img_detections(self, img_name, proposal_coords, predictions):
         raise ValueError('Incorrect method')
@@ -455,35 +452,6 @@ class Pipeline(object):
             cv2.rectangle(img, (x,y), (x+w, y+h), color, 2) 
         cv2.imwrite(self.out_path+img_name, img)
 
-def check_preloaded_paths_correct(preloaded_paths): 
-    #ensure that if we have only one detector, that the network was trained with both types of roof
-    #if we have more than one detector, ensure that each was trained on only one type of roof
-    metal_network = None 
-    thatch_network = None
-    for i, path in enumerate(preloaded_paths):
-
-        metal_num = (int(float(utils.get_param_value_from_filename(path, 'metal'))))
-        thatch_num = (int(float(utils.get_param_value_from_filename(path,'thatch'))))
-        nonroof_num = (int(float(utils.get_param_value_from_filename(path,'nonroof'))))
-
-        assert nonroof_num > 0
-        if len(preloaded_paths) == 1:
-            assert metal_num > 0 and thatch_num > 0  
-            metal_network = path
-            thatch_network = path
-        elif len(preloaded_paths) == 2:
-            if (metal_num == 0 and thatch_num > 0):
-                thatch_network = path
-            if (metal_num > 0 and thatch_num == 0):
-                metal_network = path
-        else:
-            raise ValueError('You passed in too many network weights to the pipeline.')
-
-    #if we passed in two neural networks, ensure that we actually 
-    #have one for metal and one for thatch    
-    assert metal_network is not None and thatch_network is not None
-    return metal_network, thatch_network
-
 
 def setup_params(parameters, pipe_fname, method=None):
     '''
@@ -494,31 +462,19 @@ def setup_params(parameters, pipe_fname, method=None):
     single_detector_boolean = False if len(preloaded_paths) == 2 else True
 
     #PIPE PARAMS:the step size (probably not needed) and the neural nets to be used
-    metal_net, thatch_net = check_preloaded_paths_correct(preloaded_paths)
+    #metal_net, thatch_net = check_preloaded_paths_correct(preloaded_paths)
+    #preloaded_paths_dict = {'metal': metal_net, 'thatch': thatch_net}
     pipe_params = dict() 
-    preloaded_paths_dict = {'metal': metal_net, 'thatch': thatch_net}
-    pipe_params = {'preloaded_paths': preloaded_paths_dict, 'suppress':parameters['suppress']}
+    pipe_params = {'suppress':parameters['suppress']}#, 'preloaded_paths': preloaded_paths_dict}
 
-    neural_params = dict() #one set of parameters per roof type
-    for roof_type, path in preloaded_paths_dict.iteritems():
-        #NEURAL parameters: there could be two neural networks trained and used
-        neural_param_num = (utils.get_param_value_from_filename(path, 'params'))
-        if neural_param_num is None:
-            neural_param_num = int(float(raw_input('What net param_file to use with {}?'.format(path))))
-        neural_params_fname = 'params{0}.csv'.format(int(neural_param_num)) 
-
-        params_path = '{0}{1}'.format(utils.get_path(params=True, neural=True), neural_params_fname)
-        neural_params[roof_type] = neural_network.get_neural_training_params_from_file(params_path)
-        neural_params[roof_type]['preloaded_path'] = path
-        neural_params[roof_type]['net_name'] = path[:-len('.pickle')] 
-        if single_detector_boolean:
-            neural_params[roof_type]['roof_type'] = 'Both'
+    neural_ensemble = Ensemble(preloaded_paths)
+    assert neural_ensemble is not None
 
     if method=='viola':
         #VIOLA PARAMS
         viola_params = dict()
         #I think this refers to where the data comes from
-        viola_data = neural_params['metal']['viola_data']
+        viola_data = parameters['viola_data']
         combo_fname = 'combo{0}'.format(int(utils.get_param_value_from_filename(viola_data,'combo')))
         viola_params['detector_names'] = viola_detector_helpers.get_detectors(combo_fname)
 
@@ -542,7 +498,7 @@ def setup_params(parameters, pipe_fname, method=None):
     else:
         print 'Unknown method of detection {}'.format(method)
         sys.exit(-1)
-    return neural_params, detector_params, pipe_params, single_detector_boolean
+    return neural_ensemble, detector_params, pipe_params, single_detector_boolean
 
 
 def get_main_param_filenum():
@@ -563,13 +519,16 @@ def get_main_param_filenum():
 
 
 if __name__ == '__main__':
-
     viola_num, sliding_num = get_main_param_filenum()
     pickle_viola = False
     overlapThresh = 1 
     groupBounds = False
     groupThres = 0
     erosion = 0  
+
+    full_dataset = True
+    if full_dataset:
+        print 'WARNING: USING FULL DATASET !!!!!!!!!!!!!!!!!!! '
 
     #get the parameters from the pipeline
     if viola_num > 0:
@@ -580,12 +539,12 @@ if __name__ == '__main__':
         method = 'sliding_window'
 
     parameters = utils.get_params_from_file( '{0}{1}'.format(utils.get_path(params=True, pipe=True), pipe_fname))
-    neural_params, detector_params, pipe_params, single_detector_bool = setup_params(parameters, pipe_fname[:-len('.csv')], method=method)
-    full_dataset = True
-    if full_dataset:
-        print 'WARNING: USING FULL DATASET !!!!!!!!!!!!!!!!!!! '
+    neural_ensemble, detector_params, pipe_params, single_detector_bool = setup_params(parameters, pipe_fname[:-len('.csv')], method=method)
+
+    #I/O
     in_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.IN, pipe=True, full_dataset=full_dataset) 
-    out_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.OUT, pipe=True, out_folder_name=pipe_fname[:-len('.csv')], full_dataset=full_dataset)   
+    out_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.OUT, 
+                                pipe=True, out_folder_name=pipe_fname[:-len('.csv')], full_dataset=full_dataset)   
 
     if method=='viola' and pickle_viola: 
         pickle_viola = utils.get_path(neural=True, in_or_out=utils.IN, data_fold=utils.TRAINING)+'evaluation_validation_set_combo11.pickle' 
@@ -594,11 +553,11 @@ if __name__ == '__main__':
 
     pipe = Pipeline(method=method, 
                     full_dataset=full_dataset,
-                    pickle_viola=pickle_viola, single_detector=single_detector_bool, 
+                    pickle_viola=pickle_viola,# single_detector=single_detector_bool, 
                     in_path=in_path, out_path=out_path, 
                     pipe=pipe_params, 
                     groupThres = groupThres, groupBounds=groupBounds,overlapThresh=overlapThresh, 
-                    neural=neural_params, 
+                    ensemble=neural_ensemble, 
                     detector_params=detector_params, out_folder_name=pipe_fname)
     pipe.run()
 

@@ -341,6 +341,7 @@ class Evaluation(object):
         detection_area = utils.sum_mask(count_detection_area_mask)
 
         #binary mask of ground truth roof on the original image, non-rotated
+        
         matching_mask = np.zeros((rows, cols), dtype='uint8')
         utils.draw_detections(np.array([roof]), matching_mask, fill=True, color=1)
         roof_area = utils.sum_mask(matching_mask)
@@ -501,13 +502,20 @@ class Evaluation(object):
         '''use the voc scores to decide if a patch should be saved as a TP or FP or not
         '''
         general_path = utils.get_path(neural=neural, viola=viola, data_fold=utils.TRAINING, in_or_out=utils.IN, out_folder_name=self.folder_name)
+        general_path = '../training_data_full_dataset_neural/{}'.format(self.folder_name)
+        utils.mkdir(out_folder_path=general_path)
+        
         path_true = general_path+'truepos/'
         utils.mkdir(path_true)
 
         path_false = general_path+'falsepos/'
         utils.mkdir(path_false)
         img_names = img_names if img_names is not None else self.img_names
-        for img_name in img_names:
+
+        num_patches = 0 #we can only save around 30000 images per folder!!!
+        for i, img_name in enumerate(img_names):
+            print 'Saving patches for {} {}/{}'.format(img_name, i+1, len(img_names))
+
             good_detections = defaultdict(list)
             bad_detections = defaultdict(list)
             try:
@@ -533,18 +541,18 @@ class Evaluation(object):
                     
             for roof_type in utils.ROOF_TYPES:
                 extraction_type = 'good'
-                self.save_training_FP_and_TP_helper(img_name, good_detections[roof_type], path_true, 
+                num_patches = self.save_training_FP_and_TP_helper(num_patches, img_name, good_detections[roof_type], path_true, 
                                                     general_path, img, roof_type, extraction_type, (0,255,0), rects=rects)               
                 extraction_type = 'background'
-                self.save_training_FP_and_TP_helper(img_name, bad_detections[roof_type], path_false, 
+                num_patches = self.save_training_FP_and_TP_helper(num_patches, img_name, bad_detections[roof_type], path_false, 
                                                     general_path, img, roof_type, extraction_type, (0,0,255), rects=rects)               
 
 
-    def save_training_FP_and_TP_helper(self, img_name, detections, patches_path, general_path, img, roof_type, extraction_type, color, rects=False):
+    def save_training_FP_and_TP_helper(self, num_patches, img_name, detections, patches_path, 
+                                        general_path, img, roof_type, extraction_type, color, rects=False):
         #this is where we write the detections we're extraction. One image per roof type
         #we save: 1. the patches and 2. the image with marks of what the detections are, along with the true roofs (for debugging)
         img_debug = np.copy(img) 
-
         if roof_type == 'background':
             utils.draw_detections(self.correct_roofs['metal'][img_name], img_debug, color=(0, 0, 0), thickness=2, rects=rects)
             utils.draw_detections(self.correct_roofs['thatch'][img_name], img_debug, color=(0, 0, 0), thickness=2, rects=rects)
@@ -552,12 +560,20 @@ class Evaluation(object):
             utils.draw_detections(self.correct_roofs[roof_type][img_name], img_debug, color=(0, 0, 0), thickness=2, rects=rects)
 
         for i, detection in enumerate(detections):
+            batch_path =  'batch{}/'.format(int(num_patches/20000))  
+            if num_patches % 20000 == 0:
+                utils.mkdir('{}falsepos/batch{}/'.format(general_path, num_patches/20000))
+                utils.mkdir('{}truepos/batch{}/'.format(general_path, num_patches/20000))
+            num_patches += 1
+
+            current_patch_path = patches_path+batch_path
+
             #extract the patch, rotate it to a horizontal orientation, save it
             if rects == False:
                 bitmap = np.zeros((img.shape[:2]), dtype=np.uint8)
                 padded_detection = utils.add_padding_polygon(detection, bitmap)
                 warped_patch = utils.four_point_transform(img, padded_detection)
-                cv2.imwrite('{0}{1}_{2}_roof{3}.jpg'.format(patches_path, roof_type, img_name[:-4], i), warped_patch)
+                cv2.imwrite('{0}{1}_{2}_roof{3}.jpg'.format(current_patch_path, roof_type, img_name[:-4], i), warped_patch)
                 
                 #mark where roofs where taken out from for debugging
                 utils.draw_polygon(padded_detection, img_debug, fill=False, color=color, thickness=2, number=i)
@@ -568,10 +584,12 @@ class Evaluation(object):
                 xmax = (detection.xmax+pad) if (detection.xmax+pad)<img.shape[1] else detection.xmax
                 ymax = (detection.ymax+pad) if (detection.ymax+pad)<img.shape[0] else detection.ymax
                 patch = img[ymin:ymax, xmin:xmax, :]
-                cv2.imwrite('{0}{1}_{2}_roof{3}.jpg'.format(patches_path, roof_type, img_name[:-4], i), patch)
+                #print 'saving {0}{1}_{2}_roof{3}.jpg'.format(current_patch_path, roof_type, img_name[:-4], i) 
+                cv2.imwrite('{0}{1}_{2}_roof{3}.jpg'.format(current_patch_path, roof_type, img_name[:-4], i), patch)
                 self.TOTAL += 1
                 if self.TOTAL % 1000 == 0:
                     print 'Saved {} patches'.format(self.TOTAL)
+        return num_patches
         #write this type of extraction and the roofs to an image
         #cv2.imwrite('{0}{1}_{2}_extract_{3}.jpg'.format(general_path, img_name[:-4], roof_type, extraction_type), img_debug)
 

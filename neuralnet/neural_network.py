@@ -11,6 +11,7 @@ import csv
 from operator import itemgetter
 import cv2
 import cPickle as pickle
+import os.path
 
 import lasagne
 import theano
@@ -36,7 +37,8 @@ from timer import Timer
 
 
 class Experiment(object):
-    def __init__(self, full_dataset=False,
+    def __init__(self, 
+                    full_dataset=False, starting_batch=0,
                     flip=True, dropout=False, adaptive=True,
                     preloaded_path=None, pipeline=False, 
                     print_out=True, preloaded=False,  
@@ -52,19 +54,24 @@ class Experiment(object):
             whether we should perform dropout
         adaptive: boolean
             Whether learning rate and momentum should adapt over time
+        starting_batch: int
+            At which point in the data we want to start processing. 
         '''
-        #TODO: for now we don't have the scalers saved, but from now on we should be saving them so we don't have to load the data every time we want to do a prediction!
+        #preload weights if a path to weights was provided
         self.pipeline = pipeline
+
+        #we always load the data, because pickling the scaler is not working
         #Load data
         print 'Loading data...\n'
         self.full_dataset=full_dataset
-        self.X, self.y = NeuralDataLoad(data_path=data_folder).load_data(full_dataset=self.full_dataset, roof_type=roof_type, non_roofs=non_roofs) 
+        self.X, self.y = NeuralDataLoad(data_path=data_folder, full_dataset=self.full_dataset).load_data(roof_type=roof_type, 
+                                                        non_roofs=non_roofs, starting_batch=starting_batch) 
         print 'Data is loaded \n'
         #set up the data scaler
         self.scaler = DataScaler()
         self.X = self.scaler.fit_transform(self.X)
         print self.X.shape
- 
+     
         #if we are doing the pipeline, we already have a good name for the network, no need to add more info
         if self.pipeline:
             self.net_name = net_name
@@ -80,13 +87,14 @@ class Experiment(object):
                 metal_num = 0
             else:
                 raise ValueError('You have given an unknown roof_type to the network')
-            self.net_name = 'conv{0}_{1}_metal{2}_thatch{3}_nonroof{4}'.format(num_layers, net_name, metal_num, thatch_num, nonroof_num)
+            self.net_name = 'conv{0}_{1}_metal{2}_thatch{3}_nonroof{4}_batch{5}'.format(num_layers, net_name, 
+                                                                        metal_num, thatch_num, nonroof_num, starting_batch)
             self.roof_type = roof_type
 
             #pickle the scaler so we can reuse it later
-            path = utils.get_path(params=True, in_or_out=utils.IN, neural_weights=True) 
-            with open('{0}{1}_scaler.pickle'.format(path, self.net_name), 'wb') as f:
-                pickle.dump(self.scaler, f, -1)
+            #path = utils.get_path(params=True, in_or_out=utils.IN, neural_weights=True) 
+            #with open('{0}{1}_scaler.pickle'.format(path, self.net_name), 'wb') as f:
+            #    pickle.dump(self.scaler, f, -1)
  
 
         self.num_layers = num_layers
@@ -377,30 +385,30 @@ def get_neural_training_params_from_file(file_name):
 
 def get_parameter_file_and_ensemble_number():
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "f:e:")
+        opts, args = getopt.getopt(sys.argv[1:], "f:b:")
     except getopt.GetoptError:
         sys.exit(2)
         print 'Command line failed'
     for opt, arg in opts:
         if opt == '-f':
             param_file = arg
-        if opt == '-e':
-            ensemble_num = arg
-    return param_file, ensemble_num
+        if opt == '-b':
+            batch_num = int(float(arg))
+    return param_file, batch_num
 
 
 
 if __name__ == '__main__':
-    param_file_num, ensemble_num = get_parameter_file_and_ensemble_number()
+    param_file_num, batch_num = get_parameter_file_and_ensemble_number()
 
     param_file = 'params{}.csv'.format(param_file_num)
     params_path = '{0}{1}'.format(utils.get_path(params=True, neural=True), param_file)
     params = get_neural_training_params_from_file(params_path) 
 
-    params['net_name'] = '{}_{}_flip{}_dropout{}_adapt{}_ensemble{}'.format(param_file[:-4], params['data_folder'], params['flip'], params['dropout'], params['adaptive'], ensemble_num)
+    params['net_name'] = '{}_{}_flip{}_dropout{}_adapt{}'.format(param_file[:-4], params['data_folder'], params['flip'], params['dropout'], params['adaptive'])
     print 'Network name is: {0}'.format(params['net_name'])
 
-    experiment = Experiment(print_out=True, **params)
+    experiment = Experiment(starting_batch=batch_num, print_out=True, **params)
 
     to_do = 't'
     if to_do == 'o':
