@@ -107,7 +107,9 @@ class Experiment(object):
         self.log = log
         self.plot_loss = True
 
+        #this is only for the output of training
         self.out_file = utils.get_path(in_or_out=utils.OUT, neural=True, data_fold=utils.TRAINING)+self.net_name
+
         print 'Setting up the Neural Net \n'
         self.adaptive_learning = adaptive
         self.setup_net(print_out=print_out)

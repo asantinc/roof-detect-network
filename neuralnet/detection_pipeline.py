@@ -107,8 +107,6 @@ class Pipeline(object):
                                     folder_name=out_folder_name, 
                                     in_path=self.in_path)
 
-
-   
     def run(self):
         '''
         1. Find proposals using ViolaJones or sliding window
@@ -126,7 +124,7 @@ class Pipeline(object):
                     self.viola.detect_roofs(img_name=img_name)
                     #this next line will fail because you dont get the image shape!
                     self.viola.evaluation.score_img(img_name, img_shape[:2])
-                    self.viola.evaluation.save_images(img_name, fname='beforeNeural')
+                    #self.viola.evaluation.save_images(img_name, fname='beforeNeural')
                     current_viola_detections = self.viola.viola_detections 
                     viola_time = self.viola.evaluation.detections.total_time
                 else:#use the pickled detections for speed in testing the neural network
@@ -146,8 +144,8 @@ class Pipeline(object):
                 print 'Unknown detection method {}'.format(self.method)
                 sys.exit(-1)
 
-            self.print_detections(None, img_name, '')
-            self.print_detections(rect_detections, img_name, '_initial')
+            #self.print_detections(None, img_name, '')
+            #self.print_detections(rect_detections, img_name, '_initial')
             
             #FIND CORRECT CLASSIFICATION FOR EACH PATCH
             correct_classes = self.get_correct_class_per_detection(rect_detections, img_name)
@@ -162,7 +160,7 @@ class Pipeline(object):
             print 'Classification took {} secs'.format(t.secs)
             neural_time += t.secs
 
-            self.print_detections(classified_detections, img_name, '_neural')
+            #self.print_detections(classified_detections, img_name, '_neural')
 
             #ADD THE CLASS PROBABIILITY TO DRAW ROC CURVE 
             for roof_type in utils.ROOF_TYPES:
@@ -191,7 +189,7 @@ class Pipeline(object):
                                                         detection_list=classified_detections[roof_type])
             print 'Grouping took {} seconds'.format(t.secs)
             neural_time += t.secs 
-            self.print_detections(classified_detections, img_name, '_nonMax')
+            #self.print_detections(classified_detections, img_name, '_nonMax')
 
             #we with rects if we're using the full dataset (it's faster)
             fast_scoring = False
@@ -199,7 +197,7 @@ class Pipeline(object):
                 fast_scoring = True
 
             self.evaluation_after_neural.score_img(img_name, img_shape[:2], fast_scoring=fast_scoring, contours=self.groupBounds)
-            self.evaluation_after_neural.save_images(img_name, 'posNeural')
+            #self.evaluation_after_neural.save_images(img_name, 'posNeural')
         
         if self.method == 'viola': 
             if self.pickle_viola is None:
@@ -208,9 +206,10 @@ class Pipeline(object):
                 self.viola_evaluation.print_report(print_header=True, stage='viola')
 
         self.evaluation_after_neural.detections.total_time = neural_time
-        self.evaluation_after_neural.print_report(print_header=False, stage='neural')
+        header = False if self.method=='viola' else True
+        self.evaluation_after_neural.print_report(print_header=header, stage='neural')
 
-        self.evaluation_after_neural.auc_plot(self.AUC.correct_classes, self.AUC.neural_probabilities)
+        #self.evaluation_after_neural.auc_plot(self.AUC.correct_classes, self.AUC.neural_probabilities)
 
                 
         
@@ -430,10 +429,10 @@ class Pipeline(object):
                 else: #we have one net per roof type
                 '''
                 coords = np.array(proposal_coords[roof_type])
-                all_probs = self.ensemble.predict_proba(proposal_patches[roof_type], roof_type=roof_type)
-                probs[roof_type] = all_probs[:, 1] #only get the prob for the roof class
-                classified_detections[roof_type] = coords[probs[roof_type]>=self.net_threshold]
-                probs_of_roofs_only[roof_type] = probs[roof_type][probs[roof_type]>=self.net_threshold]
+                probs[roof_type] = self.ensemble.predict_proba(proposal_patches[roof_type], roof_type=roof_type)
+                #probs[roof_type] = all_probs[:, 1] #only get the prob for the roof class
+                classified_detections[roof_type] = coords[probs[roof_type]>=self.ensemble.net_threshold]
+                probs_of_roofs_only[roof_type] = probs[roof_type][probs[roof_type]>=self.ensemble.net_threshold]
 
             else:
                 print 'No {0} detections'.format(roof_type)
@@ -505,8 +504,9 @@ def get_main_param_filenum():
     #get the pipeline number
     viola_num = -1
     sliding_num = -1
+    decision = None
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "v:s:g:")
+        opts, args = getopt.getopt(sys.argv[1:], "v:s:d:")
     except getopt.GetoptError:
         print 'Command line error'
         sys.exit(2)  
@@ -515,11 +515,18 @@ def get_main_param_filenum():
             viola_num = int(float(arg))
         elif opt == '-s':
             sliding_num = int(float(arg))
-    return viola_num, sliding_num 
+        elif opt == '-d':
+            if arg == 'a':
+                decision = 'decideAll'
+            elif arg == 'm':
+                decision = 'decideMean'
+            elif arg == 'j':
+                decision = 'decideMajor'
+    return viola_num, sliding_num, decision 
 
 
 if __name__ == '__main__':
-    viola_num, sliding_num = get_main_param_filenum()
+    viola_num, sliding_num, decision = get_main_param_filenum()
     pickle_viola = False
     overlapThresh = 1 
     groupBounds = False
@@ -542,9 +549,10 @@ if __name__ == '__main__':
     neural_ensemble, detector_params, pipe_params, single_detector_bool = setup_params(parameters, pipe_fname[:-len('.csv')], method=method)
 
     #I/O
+    out_folder_name = pipe_fname[:-len('.csv')] if decision is None else pipe_fname[:-len('.csv')]+decision
     in_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.IN, pipe=True, full_dataset=full_dataset) 
     out_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.OUT, 
-                                pipe=True, out_folder_name=pipe_fname[:-len('.csv')], full_dataset=full_dataset)   
+                                pipe=True, out_folder_name=out_folder_name, full_dataset=full_dataset)   
 
     if method=='viola' and pickle_viola: 
         pickle_viola = utils.get_path(neural=True, in_or_out=utils.IN, data_fold=utils.TRAINING)+'evaluation_validation_set_combo11.pickle' 

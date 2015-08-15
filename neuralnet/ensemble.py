@@ -10,9 +10,11 @@ from collections import defaultdict
 
 
 class Ensemble(object):
-    def __init__(self, preloaded_paths):
+    def __init__(self, preloaded_paths, scoring_strategy=None):
         self.process_preloaded_paths(preloaded_paths)
         self.process_paths_get_nets()
+        self.net_threshold = 0.5
+        self.scoring_strategy = scoring_strategy
 
     def predict_proba(self, X, roof_type=None):
         if roof_type is None:
@@ -24,11 +26,24 @@ class Ensemble(object):
                 avg_probs[roof_type] = np.mean(probs, axis[1])
             return avg_probs
         else:
-            probs = np.array((len(self.neural_nets[roof_type]), X.shape[0]))
+            probs = np.zeros((len(self.neural_nets[roof_type]), X.shape[0]))
+            print len(self.neural_nets[roof_type]), X.shape[0]
             for n, net in enumerate(self.neural_nets[roof_type]):
-                probs[n, :]  = net.predict_proba(X)
-            avg_probs = np.mean(probs, axis=1)
-            return avg_probs
+                all_probs = net.predict_proba(X)
+                probs[n, :]  = all_probs[:,1]
+            return self.get_score(probs, roof_type)
+
+    def get_score(self, probs, roof_type):
+        if self.scoring_strategy == 'majority':
+            threshold_probs = np.array(probs >= self.net_threshold, dtype=int)    
+            sum_threshold = np.sum(threshold_probs, axis=0)
+            return np.array(sum_threshold>=math.ceil(self.num_nets[roof_type]/2))
+        elif self.scoring_strategy == 'all':
+            threshold_probs = probs[probs >= self.net_threshold]     
+            sum_threshold =  np.sum(threshold_probs, axis=0)
+            return np.array(sum_threshold==self.num_nets[roof_type])
+        else:
+            return np.mean(probs, axis=0)
 
 
     def test(self, X, roof_type, threshold=0.5):
@@ -55,17 +70,18 @@ class Ensemble(object):
 
     def process_paths_get_nets(self):
         self.neural_nets = defaultdict(list)
+        self.num_nets = defaultdict(int)
         
         for roof_type, net_paths in self.net_paths.iteritems():
             for p, path in enumerate(net_paths):
-                if 'ensemble' in path:
-                    start = len('ensemble')+path.find('ensemble')
-                    end = path[start:].find('_')
-                    starting_batch = int(float(path[start:end]))
+                self.num_nets[roof_type] += 1
+                if 'batch' in path:
+                    start = len('batch')+path.find('batch')
+                    end = path[start:].find('.')
+                    starting_batch = int(float(path[start:-len('.pickle')]))
                 else:
                     starting_batch = 0
                 print 'Starting batch is:{}'.format(starting_batch)
-                pdb.set_trace()
                 neural_params = dict() #one set of parameters per roof type
                 neural_param_num = (utils.get_param_value_from_filename(path, 'params'))
 

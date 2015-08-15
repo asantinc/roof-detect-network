@@ -326,7 +326,7 @@ class Evaluation(object):
 
         self.update_scores(img_name, detections, false_pos_logical, bad_detection_logical, 
                                     best_score_per_detection, easy_false_pos_logical, easy_false_negative_logical)
-        self.save_images(img_name)
+        #self.save_images(img_name)
 
        
 
@@ -458,13 +458,16 @@ class Evaluation(object):
             as is the case of the pipeline detection
         '''
         log_to_file = list() 
+        easy_log = list()
         if print_header: 
             open(self.out_path+report_name, 'w').close() 
+            open(self.out_path+report_name[:-len('.txt')]+'_easy.txt', 'w').close() 
             if stage is None:
                 log_to_file.append('roof_type\ttotal_roofs\ttotal_time\tdetections\trecall\tprecision\tf1')
+                easy_log.append('roof_type\ttotal_roofs\ttotal_time\tdetections\trecall\tprecision\tf1')
             else:
                 log_to_file.append('stage\troof_type\ttotal_roofs\ttotal_time\tdetections\trecall\tprecision\tf1')
-            easy_log.append('roof_type\ttotal_roofs\ttotal_time\tdetections\trecall\tprecision\tf1')
+                easy_log.append('stage\troof_type\ttotal_roofs\ttotal_time\tdetections\trecall\tprecision\tf1')
 
 
         for roof_type in utils.ROOF_TYPES:
@@ -497,18 +500,25 @@ class Evaluation(object):
                 easy_recall = float(easy_true_pos) / cur_type_roofs 
                 easy_precision = float(easy_true_pos) / (easy_detection_num)
                 if precision+recall > 0:
-                    F1 = (2.*easy_precision*easy_recall)/(easy_precision+easy_recall)
+                    easy_F1 = (2.*easy_precision*easy_recall)/(easy_precision+easy_recall)
                 else:
-                    F1 = 0
+                    easy_F1 = 0
             else:
                 recall = precision = F1 = 0
-            easy_log.append('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(stage, roof_type, 
+            if stage is None:
+                easy_log.append('{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(roof_type, 
+                        cur_type_roofs, self.detections.total_time, detection_num, easy_recall, easy_precision,easy_F1))
+            else:
+                easy_log.append('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(stage, roof_type, 
                         cur_type_roofs, self.detections.total_time, detection_num, easy_recall, easy_precision,easy_F1))
 
         log = '\n'.join(log_to_file)
         easy_log = '\n'.join(easy_log)
         with open(self.out_path+report_name, 'a') as report:
             report.write(log)
+        with open(self.out_path+report_name[:-len('.txt')]+'_easy.txt', 'a') as report:
+            report.write(easy_log)
+
         print 'FINAL REPORT'
         print log
         print easy_log
