@@ -75,6 +75,8 @@ class Experiment(object):
         #if we are doing the pipeline, we already have a good name for the network, no need to add more info
         if self.pipeline:
             self.net_name = net_name
+            self.X = None
+            self.y = None
         else:
             #count the number of each type of class, add it to the network name
             if roof_type == 'Both':

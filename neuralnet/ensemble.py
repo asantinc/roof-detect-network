@@ -5,6 +5,7 @@ import my_net
 import neural_network
 from neural_network import Experiment
 import utils
+import math
 
 from collections import defaultdict
 
@@ -34,16 +35,18 @@ class Ensemble(object):
             return self.get_score(probs, roof_type)
 
     def get_score(self, probs, roof_type):
-        if self.scoring_strategy == 'majority':
+        if self.scoring_strategy == 'decideMajority':
             threshold_probs = np.array(probs >= self.net_threshold, dtype=int)    
             sum_threshold = np.sum(threshold_probs, axis=0)
-            return np.array(sum_threshold>=math.ceil(self.num_nets[roof_type]/2))
-        elif self.scoring_strategy == 'all':
-            threshold_probs = probs[probs >= self.net_threshold]     
+            return np.array(sum_threshold>=math.ceil(float(self.num_nets[roof_type])/2))
+        elif self.scoring_strategy == 'decideAll':
+            threshold_probs = np.array(probs >= self.net_threshold, dtype=int)     
             sum_threshold =  np.sum(threshold_probs, axis=0)
             return np.array(sum_threshold==self.num_nets[roof_type])
-        else:
+        elif self.scoring_strategy == 'decideMean':
             return np.mean(probs, axis=0)
+        else:
+            raiseValueError('Unknown scoring strategy {} for ensemble')
 
 
     def test(self, X, roof_type, threshold=0.5):

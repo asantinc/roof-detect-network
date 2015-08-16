@@ -80,6 +80,7 @@ def process_viola_reports(viola_paths, fold=None, title=''):
 
 
 def main():
+    '''
     paths = defaultdict(list)
     #for fold in [utils.TRAINING, utils.TESTING, utils.VALIDATION]:
     for full_dataset in [True, False]:
@@ -94,7 +95,7 @@ def main():
                         paths[fold].append((path, folder))
             #print viola_paths
             process_viola_reports(paths[fold], fold=fold)
-
+    '''
 
     #same but with the easy reports
     print '\n\n\n'

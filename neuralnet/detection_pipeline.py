@@ -6,6 +6,7 @@ import pdb
 import re
 from collections import defaultdict
 import pickle
+import cProfile
 
 import numpy as np
 from scipy import misc
@@ -114,7 +115,7 @@ class Pipeline(object):
         3. Net returns a list of the roof coordinates of each type - saved in roof_coords
         '''
         neural_time = 0
-        images = self.img_names[:1] if DEBUG else self.img_names
+        self.img_names = self.img_names[:15] if DEBUG else self.img_names
         for i, img_name in enumerate(self.img_names):
             print '***************** Image {0}: {1}/{2} *****************'.format(img_name, i, len(self.img_names)-1)
 
@@ -160,7 +161,7 @@ class Pipeline(object):
             print 'Classification took {} secs'.format(t.secs)
             neural_time += t.secs
 
-            #self.print_detections(classified_detections, img_name, '_neural')
+            self.print_detections(classified_detections, img_name, '_neural')
 
             #ADD THE CLASS PROBABIILITY TO DRAW ROC CURVE 
             for roof_type in utils.ROOF_TYPES:
@@ -187,6 +188,7 @@ class Pipeline(object):
                     self.detections_after_neural.set_detections(img_name=img_name, 
                                                         roof_type=roof_type, 
                                                         detection_list=classified_detections[roof_type])
+
             print 'Grouping took {} seconds'.format(t.secs)
             neural_time += t.secs 
             #self.print_detections(classified_detections, img_name, '_nonMax')
@@ -452,7 +454,7 @@ class Pipeline(object):
         cv2.imwrite(self.out_path+img_name, img)
 
 
-def setup_params(parameters, pipe_fname, method=None):
+def setup_params(parameters, pipe_fname, method=None, decision='decideMean'):
     '''
     Get parameters for the pipeline and the components of the pipeline:
     the neural network(s) and the viola detector(s)
@@ -466,7 +468,7 @@ def setup_params(parameters, pipe_fname, method=None):
     pipe_params = dict() 
     pipe_params = {'suppress':parameters['suppress']}#, 'preloaded_paths': preloaded_paths_dict}
 
-    neural_ensemble = Ensemble(preloaded_paths)
+    neural_ensemble = Ensemble(preloaded_paths, scoring_strategy=decision)
     assert neural_ensemble is not None
 
     if method=='viola':
@@ -521,7 +523,7 @@ def get_main_param_filenum():
             elif arg == 'm':
                 decision = 'decideMean'
             elif arg == 'j':
-                decision = 'decideMajor'
+                decision = 'decideMajority'
     return viola_num, sliding_num, decision 
 
 
@@ -546,7 +548,7 @@ if __name__ == '__main__':
         method = 'sliding_window'
 
     parameters = utils.get_params_from_file( '{0}{1}'.format(utils.get_path(params=True, pipe=True), pipe_fname))
-    neural_ensemble, detector_params, pipe_params, single_detector_bool = setup_params(parameters, pipe_fname[:-len('.csv')], method=method)
+    neural_ensemble, detector_params, pipe_params, single_detector_bool = setup_params(parameters, pipe_fname[:-len('.csv')], method=method, decision=decision)
 
     #I/O
     out_folder_name = pipe_fname[:-len('.csv')] if decision is None else pipe_fname[:-len('.csv')]+decision
@@ -567,6 +569,6 @@ if __name__ == '__main__':
                     groupThres = groupThres, groupBounds=groupBounds,overlapThresh=overlapThresh, 
                     ensemble=neural_ensemble, 
                     detector_params=detector_params, out_folder_name=pipe_fname)
-    pipe.run()
+    cProfile.run('pipe.run()')
 
 

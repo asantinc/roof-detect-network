@@ -326,7 +326,7 @@ class Evaluation(object):
 
         self.update_scores(img_name, detections, false_pos_logical, bad_detection_logical, 
                                     best_score_per_detection, easy_false_pos_logical, easy_false_negative_logical)
-        #self.save_images(img_name)
+        self.save_images(img_name)
 
        
 
@@ -475,6 +475,7 @@ class Evaluation(object):
             true_pos = self.detections.true_positive_num[roof_type]
             false_pos = self.detections.false_positive_num[roof_type]
             cur_type_roofs = self.detections.roof_num[roof_type] 
+            pdb.set_trace()
 
             if detection_num > 0 and cur_type_roofs > 0:
                 recall = float(true_pos) / cur_type_roofs 
@@ -526,7 +527,7 @@ class Evaluation(object):
 
 
 
-    def save_images(self, img_name, fname=''):
+    def save_images(self, img_name, fname='', out_path='debug/'):
         '''Displays the ground truth, along with the true and false positives for a given image
         '''
         try:
@@ -536,15 +537,16 @@ class Evaluation(object):
             sys.exit(-1)
 
         rects = True if self.full_dataset else False
-        #for roof_type in utils.ROOF_TYPES:
-        #    utils.draw_detections(self.detections.false_positives[roof_type][img_name], img, color=(0, 0, 255), rects=rects)
         for roof_type in utils.ROOF_TYPES:
+            #false pos
+            false_pos = self.detections.easy_false_pos[roof_type][img_name] 
+            utils.draw_detections(false_pos, img, color=(0, 0, 255), rects=rects)
+            #ground truth
             utils.draw_detections(self.correct_roofs[roof_type][img_name], img, color=(255, 0, 0), rects=rects)
-        for roof_type in utils.ROOF_TYPES:
-            utils.draw_detections(self.detections.true_positives[roof_type][img_name], img, color=(0, 255, 0), rects=rects)
-
-
-        cv2.imwrite('{0}{1}{2}.jpg'.format(self.out_path, img_name[:-4], fname), img)
+            #true pos
+            true_pos = self.detections.easy_true_pos[roof_type][img_name]
+            utils.draw_detections(true_pos, img, color=(0, 255, 0), rects=rects)
+            cv2.imwrite('{0}{1}{2}_{3}.jpg'.format(out_path, img_name[:-4], fname, roof_type), img)
 
 
 
