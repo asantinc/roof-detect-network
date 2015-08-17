@@ -123,7 +123,7 @@ def check_append(path_being_constructed, addition):
         mkdir(out_folder_path=''.join(path_being_constructed)) 
 
 
-def get_path(in_or_out=None, out_folder_name=None, params=False, full_dataset=False, 
+def get_path(in_or_out=None, out_folder_name=None, params=False, full_dataset=False, method=None,  
                     slide=False, pipe=False, viola=False, template=False, neural=False, neural_weights=False, data_fold=None):
     '''
     Return path to either input, output or parameter files. If a folder does not exit, ask user for confirmation and create it
@@ -136,6 +136,16 @@ def get_path(in_or_out=None, out_folder_name=None, params=False, full_dataset=Fa
             path.append('net_params/') 
         elif neural_weights:
             path.append('saved_weights/')
+            if full_dataset:
+                path.append('with_dataset/')
+            else:
+                path.append('with_original_dataset/')
+            if method=='viola':
+                path.append('viola/')
+            elif method=='slide':
+                path.append('slide/')
+            else:
+                path.append('{}/'.format(method))
         elif pipe:
             path.append('pipe_params/')
         elif viola:
@@ -155,6 +165,13 @@ def get_path(in_or_out=None, out_folder_name=None, params=False, full_dataset=Fa
                 path.append('training/')
                 if neural:
                     path.append('neural/')
+                    if method == 'viola':
+                       path.append('viola/')#combo11_min_neighbors3_scale1.08_groupFalse_removeOffTrue_downsizedFalse_rotateTrue_mergeFalsePosFalse') 
+                    elif method == 'slide':
+                        if full_dataset:
+                            raise ValueError('this data is in the disk drive')
+                        else:
+                            path = '../slide_training_data_neural/'
                 elif viola:
                     path.append('viola/')
                 else:
@@ -174,8 +191,20 @@ def get_path(in_or_out=None, out_folder_name=None, params=False, full_dataset=Fa
                 check_append(path,'viola/')
             elif template:
                 check_append(path,'templating/')
-            elif neural:
+
+            elif neural:#for neural we always output training set related info
                 check_append(path,'neural/')
+                if full_dataset:
+                    check_append(path,'with_training_set/')
+                else:
+                    check_append(path,'with_original_training_set/')
+                if method == 'viola':
+                    check_append(path, 'viola/')
+                elif method == 'slide':
+                    check_append(path, 'slide/')
+                else:
+                    method = raw_input('Which type of neural weight do you want? Slide or viola?')
+                    check_append(path, '{}/'.format(method))
             elif pipe:
                 check_append(path,'pipe/')
             elif slide:
@@ -183,17 +212,18 @@ def get_path(in_or_out=None, out_folder_name=None, params=False, full_dataset=Fa
             else:
                 raise ValueError('Cannot create path. Try setting viola, pipe, template or neural to True to get a path')
             
-            original = 'original_' if full_dataset == False else ''
-            if data_fold==TRAINING:
-                check_append(path,'with_{0}training_set/'.format(original))
-            elif data_fold==TESTING:
-                check_append(path,'with_{0}testing_set/'.format(original))
-            elif data_fold==VALIDATION:
-                check_append(path,'with_{0}validation_set/'.format(original))
-            elif data_fold==SMALL_TEST:
-                check_append(path,'with_small_test/')
-            else:
-                raise ValueError('Even though you requested the path of an output folder, you have to specify if you created the output from training, validation or testing data')
+            if neural == False:#for neural we arrange it a little differently
+                original = 'original_' if full_dataset == False else ''
+                if data_fold==TRAINING:
+                    check_append(path,'with_{0}training_set/'.format(original))
+                elif data_fold==TESTING:
+                    check_append(path,'with_{0}testing_set/'.format(original))
+                elif data_fold==VALIDATION:
+                    check_append(path,'with_{0}validation_set/'.format(original))
+                elif data_fold==SMALL_TEST:
+                    check_append(path,'with_small_test/')
+                else:
+                    raise ValueError('Even though you requested the path of an output folder, you have to specify if you created the output from training, validation or testing data')
         else:
             raise ValueError('Must specify input or output folder.')
         if out_folder_name is not None:
@@ -581,6 +611,7 @@ def convert_detections_to_polygons(detections):
 
 def get_bounding_boxes(detections):
     #get a polygon, return a boundin box in form x, y, w, h
+    detections = np.array(detections)
     bounding_boxes = np.empty((detections.shape[0], 4))
     xmax = np.maximum.reduce([detections[:,0,0], detections[:,1,0], detections[:,2,0],detections[:,3,0]])
     xmin = np.minimum.reduce([detections[:,0,0], detections[:,1,0], detections[:,2,0],detections[:,3,0]])
@@ -592,7 +623,23 @@ def get_bounding_boxes(detections):
     bounding_boxes[:,1] = ymin
     bounding_boxes[:,2] = w
     bounding_boxes[:,3] = h
-    return bounding_boxes
+    return bounding_boxes.astype(int)
+
+def polygons2boxes(detections):
+     #get a polygon, return a boundin box in form xmin, ymin, xmax, ymax
+    detections = np.array(detections)
+    bounding_boxes = np.empty((detections.shape[0], 4))
+    xmax = np.maximum.reduce([detections[:,0,0], detections[:,1,0], detections[:,2,0],detections[:,3,0]])
+    xmin = np.minimum.reduce([detections[:,0,0], detections[:,1,0], detections[:,2,0],detections[:,3,0]])
+    ymax = np.maximum.reduce([detections[:,0,1], detections[:,1,1], detections[:,2,1],detections[:,3,1]])
+    ymin = np.minimum.reduce([detections[:,0,1], detections[:,1,1], detections[:,2,1],detections[:,3,1]])
+    bounding_boxes[:,0] = xmin
+    bounding_boxes[:,1] = ymin
+    bounding_boxes[:,2] = xmax
+    bounding_boxes[:,3] = ymax
+    return bounding_boxes.astype(int)
+
+    
 
 def rects2boxes(rects):
     # rects are passed in as x,y,w,h and boxes are returned
@@ -808,6 +855,36 @@ def neural_to_cv2(x):
         raise ValueError
     else:
         return img
+
+
+def display_matplot(cv2_img):
+    b, g, r = cv2.split(cv2_img)
+    img = cv2.merge((r,g,b))
+    plt.imshow(img,'im_recovered')
+    plt.show()
+
+
+def debug_data(X, y, num, roof_type, flip=None):
+    '''
+    Method to debug the loading of the data to the neural network, and the data augmentation
+    '''
+    print roof_type
+    X_temp = np.copy(X)
+    for i, (x, roof_type) in enumerate(zip(list(X_temp[:num]), list(y[:num]))):
+        x = neural_to_cv2(x)
+        t = 'roof' if roof_type==1 else 'back'
+        cv2.imwrite('debug/{}_{}.jpg'.format(i, t), x)
+    pdb.set_trace()
+
+    if flip is not None:
+        X, y = flip.transform(X, y)
+        
+    for i, (x, roof_type) in enumerate(zip(list(X[:num]), list(y[:num]))):
+        x = neural_to_cv2(x)
+        t = 'roof' if roof_type==1 else 'back'
+        cv2.imwrite('debug/{}_{}_flip.jpg'.format(i, t), x)
+    pdb.set_trace()
+
 
 
 ############################

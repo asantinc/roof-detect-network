@@ -25,7 +25,7 @@ def save_patches(patch_names, patch_paths, path):
 
 if __name__ == '__main__':
     #training_path = utils.get_path(in_or_out=utils.IN, data_fold=utils.TRAINING, neural=True)+'falsepos/'
-    training_path = '../training_data_full_dataset_neural/scale1.3_minSize50-50_windowSize15-15_stepSize30_dividedSizes/falsepos/'
+    training_path = '../slide_training_data_neural/scale1.3_minSize50-50_windowSize15-15_stepSize30_dividedSizes/falsepos/'
     print training_path
     metal_names = list()
     metal_paths = list()

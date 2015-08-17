@@ -89,24 +89,19 @@ class Pipeline(object):
         else:
             raise ValueError('Need to specific either viola or sliding window')
 
-       
         self.ensemble = ensemble
-        #so we can evaluate by how much the neural network is helping us improve
-        self.detections_after_neural = Detections()
-        #self.evaluation_before_neural = Evaluation(detections=self.detections_before_neural, 
-                                #method='pipeline', save_imgs=False, out_path=self.out_path, 
-                                #report_name='before_neural.txt', folder_name=out_folder_name, 
-                                #in_path=self.in_path, detector_names=viola['detector_names'])
-        if self.method == 'viola':
-            self.evaluation_after_neural = Evaluation(detections=self.detections_after_neural, 
-                                    method='pipeline', save_imgs=True, out_path=self.out_path,
-                                    folder_name=out_folder_name, 
-                                    in_path=self.in_path, detector_names=viola['detector_names'])
-        else:
-            self.evaluation_after_neural = Evaluation(detections=self.detections_after_neural, 
-                                    method='pipeline', save_imgs=True, out_path=self.out_path,
-                                    folder_name=out_folder_name, 
-                                    in_path=self.in_path)
+
+        #EVALUATION OBJECTS
+        self.auc_thresholds = [0.1,.2,.3,.4,.5,.6,.7,.8,.9]
+        self.detections_after_neural = list()
+        self.evaluation_after_neural = list()
+        detector_names = detector_params['detector_names'] if self.method=='viola' else None
+        for thres in self.auc_thresholds:
+            detections = Detections()
+            self.detections_after_neural.append(detections)
+            self.evaluation_after_neural.append(Evaluation(detections=detections, 
+                                        method='pipeline', save_imgs=True, out_path=self.out_path,
+                                        auc_threshold=thres, folder_name=out_folder_name, in_path=self.in_path, detector_names=detector_names))
 
     def run(self):
         '''
@@ -120,11 +115,12 @@ class Pipeline(object):
             print '***************** Image {0}: {1}/{2} *****************'.format(img_name, i, len(self.img_names)-1)
 
             #VIOLA
+            rect_detections = dict()
             if self.method == 'viola':
                 if self.pickle_viola is None:
-                    self.viola.detect_roofs(img_name=img_name)
+                    img = self.viola.detect_roofs(img_name=img_name)
                     #this next line will fail because you dont get the image shape!
-                    self.viola.evaluation.score_img(img_name, img_shape[:2])
+                    #self.viola.evaluation.score_img(img_name, img.shape[:2])
                     #self.viola.evaluation.save_images(img_name, fname='beforeNeural')
                     current_viola_detections = self.viola.viola_detections 
                     viola_time = self.viola.evaluation.detections.total_time
@@ -132,6 +128,8 @@ class Pipeline(object):
                     current_viola_detections = self.viola_evaluation.detections
                     viola_time = self.viola_evaluation.detections.total_time 
                 proposal_patches, proposal_coords, img_shape = self.find_viola_proposals(current_viola_detections, img_name=img_name)
+                for roof_type in utils.ROOF_TYPES:
+                    rect_detections[roof_type] = utils.polygons2boxes(proposal_coords[roof_type])
 
             #SLIDING WINDOW
             elif self.method == 'sliding_window':
@@ -146,91 +144,54 @@ class Pipeline(object):
                 sys.exit(-1)
 
             #self.print_detections(None, img_name, '')
-            #self.print_detections(rect_detections, img_name, '_initial')
-            
-            #FIND CORRECT CLASSIFICATION FOR EACH PATCH
-            correct_classes = self.get_correct_class_per_detection(rect_detections, img_name)
-            for roof_type in utils.ROOF_TYPES:
-                self.AUC.correct_classes[roof_type].extend(correct_classes[roof_type])
-                   
-
+            self.print_detections(rect_detections, img_name, '_viola')
+           
             #NEURALNET
             print 'Starting neural classification of image {}'.format(img_name)
             with Timer() as t:
-                classified_detections, class_probabilities, probs_of_roofs_only  = self.neural_classification_AUC(proposal_patches, rect_detections) 
+                classified_detections  = self.neural_classification_AUC(proposal_patches, rect_detections) 
             print 'Classification took {} secs'.format(t.secs)
             neural_time += t.secs
 
-            self.print_detections(classified_detections, img_name, '_neural')
-
-            #ADD THE CLASS PROBABIILITY TO DRAW ROC CURVE 
-            for roof_type in utils.ROOF_TYPES:
-                self.AUC.neural_probabilities[roof_type].extend(class_probabilities[roof_type])
-
-            with Timer() as t:
-                #set detections and score
+            #SCORING THE CURRENT IMAGE
+            fast_scoring = True# False
+            #if self.full_dataset:
+            #    fast_scoring = True           
+            for t, thres in enumerate(self.auc_thresholds):
                 for roof_type in utils.ROOF_TYPES:
-                    if self.groupThreshold > 0 and roof_type == 'metal':
-                        #need to covert to rectangles
-                        boxes = utils.get_bounding_boxes(np.array(classified_detections[roof_type]))
-                        grouped_boxes, weights = cv2.groupRectangles(np.array(boxes).tolist(), self.groupThreshold)
-                        classified_detections[roof_type] = utils.convert_detections_to_polygons(grouped_boxes) 
-                        #convert back to polygons
+                    detections = classified_detections[roof_type][t]
+                    print 'NEURAL SCORING FOR THRESHOLD {}'.format(thres)
+                    self.detections_after_neural[t].set_detections(img_name=img_name, 
+                                                            roof_type=roof_type, 
+                                                            detection_list=detections)
+                self.evaluation_after_neural[t].score_img(img_name, img_shape[:2], fast_scoring=fast_scoring, contours=self.groupBounds)
 
-                    elif self.groupBounds and roof_type == 'metal':
-                        #grouping with the minimal bound of all overlapping rects
-                        classified_detections[roof_type] = self.group_min_bound(classified_detections[roof_type], img_shape[:2], erosion=self.erosion)
-
-                    elif self.suppress is not None  and roof_type == 'metal':
-                        #proper non max suppression from Felzenszwalb et al.
-                        classified_detections[roof_type] = self.non_max_suppression_rects(classified_detections[roof_type], probs_of_roofs_only[roof_type])
-
-                    self.detections_after_neural.set_detections(img_name=img_name, 
-                                                        roof_type=roof_type, 
-                                                        detection_list=classified_detections[roof_type])
-
-            print 'Grouping took {} seconds'.format(t.secs)
-            neural_time += t.secs 
-            #self.print_detections(classified_detections, img_name, '_nonMax')
-
-            #we with rects if we're using the full dataset (it's faster)
-            fast_scoring = False
-            if self.full_dataset:
-                fast_scoring = True
-
-            self.evaluation_after_neural.score_img(img_name, img_shape[:2], fast_scoring=fast_scoring, contours=self.groupBounds)
-            #self.evaluation_after_neural.save_images(img_name, 'posNeural')
         
+            self.print_detections({'metal':classified_detections['metal'][4],'thatch':classified_detections['thatch'][4] }, 
+                                                        img_name, '_neural0.5')
+
+        #FINAL EVALUATION
         if self.method == 'viola': 
             if self.pickle_viola is None:
                 self.viola.evaluation.print_report(print_header=True, stage='viola')
             else:
                 self.viola_evaluation.print_report(print_header=True, stage='viola')
+        for t, thres in enumerate(self.auc_thresholds):
+            self.evaluation_after_neural[t].detections.total_time = neural_time+viola_time
+            header = False if self.method=='viola' else True
+            self.evaluation_after_neural[t].print_report(print_header=header, stage='neural', report_name='report_thres{}.txt'.format(thres))
 
-        self.evaluation_after_neural.detections.total_time = neural_time
-        header = False if self.method=='viola' else True
-        self.evaluation_after_neural.print_report(print_header=header, stage='neural')
-
-        #self.evaluation_after_neural.auc_plot(self.AUC.correct_classes, self.AUC.neural_probabilities)
-
-                
-        
-
-        #mark roofs on image
-        #evaluate predictions
-            #filter the thatched and metal roofs
-            #compare the predictions made by viola and by viola+neural network
 
     def print_detections(self, detections, img_name, title):
+        img = cv2.imread(self.in_path+img_name)
         if detections is not None:
             for roof_type, detects in detections.iteritems():
-                color = (0,0,255) if roof_type == 'metal' else (0,255,0)
-                img = cv2.imread(self.in_path+img_name)
-                utils.draw_detections(detects, img, rects=True)
-                cv2.imwrite('debug/{}{}.jpg'.format(img_name[:-4], title), img)
-        else:
-            img = cv2.imread(self.in_path+img_name)
-            cv2.imwrite('debug/{}'.format(img_name, title), img)
+                color = (0,0,255) if roof_type == 'metal' else (255,0,0)
+                utils.draw_detections(detects, img, rects=True, color=color)
+
+                color = (0, 0,0) if roof_type == 'metal' else (255,255,255)
+                utils.draw_detections(self.evaluation_after_neural[0].correct_roofs[roof_type][img_name], img, rects=True, color=color, thickness=10)
+            cv2.imwrite('debug/{}{}.jpg'.format(img_name[:-4], title), img)
 
 
 
@@ -298,9 +259,6 @@ class Pipeline(object):
         except IOError as e:
             print e
             sys.exit(-1)
-
-        #if DEBUG:
-        #    self.viola.evaluation.save_images(img_name)
 
         all_proposal_patches = dict()
         all_proposal_coords = dict()
@@ -407,39 +365,21 @@ class Pipeline(object):
     def neural_classification_AUC(self, proposal_patches, proposal_coords):
         #get the classification by evaluating it compared to the real roofs
         #get the probability of it being that type of roof
-        
-        classified_detections = defaultdict(list)
+        classified_detections = dict()
         probs = dict()
-        probs_of_roofs_only = dict()
         for roof_type in utils.ROOF_TYPES:
-            #classify with neural network
-            
+            classified_detections[roof_type] = list()
             if proposal_patches[roof_type].shape[0] > 1:
-                '''
-                if self.single_detector: #we have a single net
-                    raise ValueError('Not implemented with a single net, only if distinct nets for metal/thatch')
-                    classes = np.array(self.net.test(proposal_patches[roof_type]))
-                    #filter according to classification         
-                    for detection, classification in zip(proposal_coords[roof_type], classes):
-                        if classification == utils.NON_ROOF:
-                            classified_detections['background'].append(detection)
-                        elif classification == utils.METAL:
-                            classified_detections['metal'].append(detection)
-                        elif classification == utils.THATCH:
-                            classified_detections['thatch'].append(detection)
-
-                else: #we have one net per roof type
-                '''
-                coords = np.array(proposal_coords[roof_type])
                 probs[roof_type] = self.ensemble.predict_proba(proposal_patches[roof_type], roof_type=roof_type)
-                #probs[roof_type] = all_probs[:, 1] #only get the prob for the roof class
-                classified_detections[roof_type] = coords[probs[roof_type]>=self.ensemble.net_threshold]
-                probs_of_roofs_only[roof_type] = probs[roof_type][probs[roof_type]>=self.ensemble.net_threshold]
-
+                #different detections depending on threshold
+                coords = np.array(proposal_coords[roof_type])
+                for thres in self.auc_thresholds:
+                    detections_logical = probs[roof_type]>=thres   
+                    classified_detections[roof_type].append(coords[detections_logical]) 
             else:
                 print 'No {0} detections'.format(roof_type)
                 raise ValueError('Need to fix this to support this case')
-        return classified_detections, probs, probs_of_roofs_only 
+        return classified_detections 
  
 
     def save_img_detections(self, img_name, proposal_coords, predictions):
@@ -474,8 +414,9 @@ def setup_params(parameters, pipe_fname, method=None, decision='decideMean'):
     if method=='viola':
         #VIOLA PARAMS
         viola_params = dict()
-        #I think this refers to where the data comes from
-        viola_data = parameters['viola_data']
+        viola_data = neural_ensemble.data_path
+        #a little messy, but we no longer call viola_data that, we call it data_path
+
         combo_fname = 'combo{0}'.format(int(utils.get_param_value_from_filename(viola_data,'combo')))
         viola_params['detector_names'] = viola_detector_helpers.get_detectors(combo_fname)
 
@@ -495,7 +436,6 @@ def setup_params(parameters, pipe_fname, method=None, decision='decideMean'):
                 detector_params[param] = int(float(parameters[param]))
             else:
                 detector_params[param] = (int(float(parameters[param])),int(float(parameters[param])))
-
     else:
         print 'Unknown method of detection {}'.format(method)
         sys.exit(-1)
@@ -529,23 +469,32 @@ def get_main_param_filenum():
 
 if __name__ == '__main__':
     viola_num, sliding_num, decision = get_main_param_filenum()
+    if decision is None:
+        decision = 'decideMean'
+
     pickle_viola = False
     overlapThresh = 1 
     groupBounds = False
     groupThres = 0
     erosion = 0  
 
-    full_dataset = True
-    if full_dataset:
-        print 'WARNING: USING FULL DATASET !!!!!!!!!!!!!!!!!!! '
 
     #get the parameters from the pipeline
     if viola_num > 0:
-        pipe_fname = 'pipe{}.csv'.format(viola_num)
+        pipe_fname = 'viola{}.csv'.format(viola_num)
         method = 'viola'
     elif sliding_num > 0:
         pipe_fname = 'slide{}.csv'.format(sliding_num)
         method = 'sliding_window'
+
+
+    full_dataset = False 
+    if full_dataset:
+        print 'WARNING: USING FULL DATASET !!!!!!!!!!!!!!!!!!! '
+    if method=='viola' and pickle_viola: 
+        pickle_viola = utils.get_path(neural=True, in_or_out=utils.IN, data_fold=utils.TRAINING)+'evaluation_validation_set_combo11.pickle' 
+    else:
+        pickle_viola = None
 
     parameters = utils.get_params_from_file( '{0}{1}'.format(utils.get_path(params=True, pipe=True), pipe_fname))
     neural_ensemble, detector_params, pipe_params, single_detector_bool = setup_params(parameters, pipe_fname[:-len('.csv')], method=method, decision=decision)
@@ -555,12 +504,7 @@ if __name__ == '__main__':
     in_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.IN, pipe=True, full_dataset=full_dataset) 
     out_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.OUT, 
                                 pipe=True, out_folder_name=out_folder_name, full_dataset=full_dataset)   
-
-    if method=='viola' and pickle_viola: 
-        pickle_viola = utils.get_path(neural=True, in_or_out=utils.IN, data_fold=utils.TRAINING)+'evaluation_validation_set_combo11.pickle' 
-    else:
-        pickle_viola = None
-
+    print out_path
     pipe = Pipeline(method=method, 
                     full_dataset=full_dataset,
                     pickle_viola=pickle_viola,# single_detector=single_detector_bool, 
@@ -569,6 +513,6 @@ if __name__ == '__main__':
                     groupThres = groupThres, groupBounds=groupBounds,overlapThresh=overlapThresh, 
                     ensemble=neural_ensemble, 
                     detector_params=detector_params, out_folder_name=pipe_fname)
-    cProfile.run('pipe.run()')
+    pipe.run()
 
 

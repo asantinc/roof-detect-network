@@ -272,9 +272,9 @@ class EarlyStopping(object):
 
 
 class SaveBestWeights(object):
-    def __init__(self, patience=100):
+    def __init__(self, method=None, full_dataset=None, patience=100):
         self.best_valid = np.inf
-        self.weight_path = utils.get_path(params=True, neural_weights=True)
+        self.weight_path = utils.get_path(params=True, full_dataset=full_dataset, neural_weights=True, method=method)
 
     def __call__(self, nn, train_history):
         current_valid = train_history[-1]['valid_loss']

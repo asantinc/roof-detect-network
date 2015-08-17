@@ -43,10 +43,8 @@ class Ensemble(object):
             threshold_probs = np.array(probs >= self.net_threshold, dtype=int)     
             sum_threshold =  np.sum(threshold_probs, axis=0)
             return np.array(sum_threshold==self.num_nets[roof_type])
-        elif self.scoring_strategy == 'decideMean':
-            return np.mean(probs, axis=0)
         else:
-            raiseValueError('Unknown scoring strategy {} for ensemble')
+            return np.mean(probs, axis=0)
 
 
     def test(self, X, roof_type, threshold=0.5):
@@ -99,11 +97,16 @@ class Ensemble(object):
 
                 params_path = '{0}{1}'.format(utils.get_path(params=True, neural=True), neural_params_fname)
                 neural_params = neural_network.get_neural_training_params_from_file(params_path)
+
+                if 'viola_data' in neural_params.keys():
+                    self.data_path = neural_params['viola_data']
+                elif 'data_folder' in neural_params.keys():
+                    self.data_path = neural_params['data_folder']
+
                 neural_params['preloaded_path'] = path
                 neural_params['net_name'] = path[:-len('.pickle')] 
                 neural_params['roof_type'] = roof_type
                 #for each net in the ensemble, we start at a different data batch, that way we get a variety of data for training
                 current_net = Experiment(pipeline=True, starting_batch=starting_batch, **neural_params) 
                 self.neural_nets[roof_type].append(current_net) 
-
 

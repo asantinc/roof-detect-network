@@ -65,10 +65,10 @@ class SlidingWindowNeural(object):
         except IOError:
             print 'Could not open file'
             sys.exit(-1)
-        if self.is_small_image(image) or self.output_patches:
+        if self.is_small_image(image):# or self.output_patches:
             return self.detect(img_name, image)
         else:
-            stepSize = 30 if self.output_patches == False else 15
+            stepSize = 15 if self.output_patches==False else 50 
             return self.detect(img_name, image, stepSize=stepSize, windowSize=(40,40), scale=1.5, minSize=(200,200))             
 
 
@@ -155,14 +155,14 @@ class SlidingWindowNeural(object):
 
 
 def main():
-    full_dataset = True
+    full_dataset = False 
     output_patches = True 
     stepSize = 50 if output_patches else 4
     scale = 1.3
     minSize = (50,50)
     windowSize = (15,15)
     data_fold = None #utils.VALIDATION
-    slider = SlidingWindowNeural(data_fold=data_fold, windowSize=windowSize, full_dataset=True, 
+    slider = SlidingWindowNeural(data_fold=data_fold, windowSize=windowSize, full_dataset=full_dataset, 
                                 output_patches=output_patches, stepSize=stepSize, scale=scale, minSize=minSize)
     slider.get_windows_in_folder()
     slider.run_evaluation()

@@ -41,9 +41,9 @@ class Experiment(object):
                     full_dataset=False, starting_batch=0,
                     flip=True, dropout=False, adaptive=True,
                     preloaded_path=None, pipeline=False, 
-                    print_out=True, preloaded=False,  
+                    print_out=True, preloaded=False,method='viola',   
                     log=True, plot_loss=True, plot=True,epochs=3000,  
-                    roof_type=None, non_roofs=2, data_folder=None,
+                    roof_type=None, non_roofs=2, data_folder=None, viola_data=None,
                     net_name=None, num_layers=None, max_roofs=None):
         '''
         Parameters:
@@ -59,13 +59,18 @@ class Experiment(object):
         '''
         #preload weights if a path to weights was provided
         self.pipeline = pipeline
+        self.method = method
+
+        data_folder = data_folder if viola_data is None else viola_data 
 
         #we always load the data, because pickling the scaler is not working
         #Load data
         print 'Loading data...\n'
         self.full_dataset=full_dataset
-        self.X, self.y = NeuralDataLoad(data_path=data_folder, full_dataset=self.full_dataset).load_data(roof_type=roof_type, 
+        self.roof_type = roof_type
+        self.X, self.y = NeuralDataLoad(data_path=data_folder, full_dataset=self.full_dataset, method=method).load_data(roof_type=self.roof_type, 
                                                         non_roofs=non_roofs, starting_batch=starting_batch) 
+
         print 'Data is loaded \n'
         #set up the data scaler
         self.scaler = DataScaler()
@@ -110,7 +115,8 @@ class Experiment(object):
         self.plot_loss = True
 
         #this is only for the output of training
-        self.out_file = utils.get_path(in_or_out=utils.OUT, neural=True, data_fold=utils.TRAINING)+self.net_name
+        self.out_file = utils.get_path(full_dataset=full_dataset, in_or_out=utils.OUT, method=self.method, 
+                                    neural=True, data_fold=utils.TRAINING)+self.net_name
 
         print 'Setting up the Neural Net \n'
         self.adaptive_learning = adaptive
@@ -120,15 +126,15 @@ class Experiment(object):
         self.preloaded_path = preloaded_path 
         if preloaded_path is not None:
             preloaded_path = preloaded_path if preloaded_path.endswith('.pickle') else preloaded_path+'.pickle'
-            self.preloaded_path = utils.get_path(neural_weights=True, params=True)+preloaded_path
+            self.preloaded_path = utils.get_path(neural_weights=True, params=True, method=self.method, full_dataset=full_dataset)+preloaded_path
             self.net.load_params_from(self.preloaded_path)      
-
 
 
     def setup_net(self, print_out=True):
         if print_out:
             self.printer = PrintLogSave(out_file=self.out_file)
-            on_epoch_finished = [self.printer, SaveBestWeights(), EarlyStopping(patience=200, out_file=self.out_file)]
+            on_epoch_finished = [self.printer, SaveBestWeights(method=self.method, full_dataset=self.full_dataset), 
+                                            EarlyStopping(patience=200, out_file=self.out_file)]
             on_training_started = [SaveLayerInfo(out_file=self.out_file)]
         else:
             on_epoch_finished = [EarlyStopping(patience=200, out_file=self.out_file)]
@@ -202,7 +208,7 @@ class Experiment(object):
             self.net.fit(self.X, self.y)
 
         self.save_params_to_file(timer=t)
-        self.net.save_weights()
+        #self.net.save_weights()
 
 
 
@@ -378,9 +384,10 @@ def get_neural_training_params_from_file(file_name):
     with open(file_name, 'r') as f:
         reader = csv.reader(f, delimiter=',')
         for par in reader:
+            print par
             if len(par) == 2: 
                 key = par[0].strip()
-                if key == 'data_folder' or key == 'viola_data' or key == 'roof_type':
+                if key == 'data_folder' or key == 'data_path' or key == 'viola_data' or key == 'roof_type':
                     parameters[key] = (par[1].strip())
                 else:
                     parameters[key] = int(float(par[1].strip()))
@@ -388,31 +395,40 @@ def get_neural_training_params_from_file(file_name):
 
 
 def get_parameter_file_and_ensemble_number():
+    viola_param_file =-1
+    slide_param_file = -1
+    batch_num=0
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "f:b:")
+        opts, args = getopt.getopt(sys.argv[1:], "v:s:b:")
     except getopt.GetoptError:
         sys.exit(2)
         print 'Command line failed'
     for opt, arg in opts:
-        if opt == '-f':
-            param_file = arg
+        if opt == '-v':
+            viola_param_file = arg
+        if opt == '-s':
+            slide_param_file = arg
         if opt == '-b':
             batch_num = int(float(arg))
-    return param_file, batch_num
+    return viola_param_file, slide_param_file,  batch_num
 
 
 
 if __name__ == '__main__':
-    param_file_num, batch_num = get_parameter_file_and_ensemble_number()
+    method = 'viola'
+    viola_param_file_num, slide_param_file_num, batch_num = get_parameter_file_and_ensemble_number()
+    if slide_param_file_num> 0:
+        param_file = 'params{}.csv'.format(slide_param_file_num)
+    else:
+        param_file = 'violaNet{}.csv'.format(viola_param_file_num)
 
-    param_file = 'params{}.csv'.format(param_file_num)
     params_path = '{0}{1}'.format(utils.get_path(params=True, neural=True), param_file)
     params = get_neural_training_params_from_file(params_path) 
 
     params['net_name'] = '{}_{}_flip{}_dropout{}_adapt{}'.format(param_file[:-4], params['data_folder'], params['flip'], params['dropout'], params['adaptive'])
     print 'Network name is: {0}'.format(params['net_name'])
 
-    experiment = Experiment(starting_batch=batch_num, print_out=True, **params)
+    experiment = Experiment(method=method, starting_batch=batch_num, print_out=True, **params)
 
     to_do = 't'
     if to_do == 'o':

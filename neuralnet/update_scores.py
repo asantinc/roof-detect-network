@@ -80,23 +80,22 @@ def process_viola_reports(viola_paths, fold=None, title=''):
 
 
 def main():
-    '''
     paths = defaultdict(list)
     #for fold in [utils.TRAINING, utils.TESTING, utils.VALIDATION]:
-    for full_dataset in [True, False]:
-        for fold in [utils.VALIDATION]:
-            viola_path = utils.get_path(in_or_out=utils.OUT, viola=True, data_fold=fold) 
-            pipe_path = utils.get_path(in_or_out=utils.OUT, pipe=True, data_fold=fold)
+    #for full_dataset in [True, False]:
+    for fold in [utils.VALIDATION]:
+        viola_path = utils.get_path(in_or_out=utils.OUT, viola=True, data_fold=fold) 
+        pipe_path = utils.get_path(in_or_out=utils.OUT, pipe=True, data_fold=fold)
 
-            #for path in [viola_path, pipe_path]:
-            for path in [viola_path]:
-                for folder in os.listdir(path):
-                    if os.path.isfile(path+folder+'/report.txt'):
-                        paths[fold].append((path, folder))
-            #print viola_paths
-            process_viola_reports(paths[fold], fold=fold)
+        #for path in [viola_path, pipe_path]:
+        for path in [viola_path]:
+            for folder in os.listdir(path):
+                if os.path.isfile(path+folder+'/report.txt'):
+                    paths[fold].append((path, folder))
+        #print viola_paths
+        process_viola_reports(paths[fold], fold=fold)
+
     '''
-
     #same but with the easy reports
     print '\n\n\n'
     paths = defaultdict(list)
@@ -114,7 +113,7 @@ def main():
 
             #print viola_paths
             process_viola_reports(paths[fold], fold=fold, title='_easy')
-
+    '''
 
 if __name__ == '__main__':
     main()

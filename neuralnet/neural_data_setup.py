@@ -16,6 +16,7 @@ import get_data
 from get_data import DataLoader
 from augmentation import DataAugmentation
 import utils
+from FlipBatchIterator import FlipBatchIterator as flip
 
 '''
 ViolaDataSetup is used to:
@@ -26,12 +27,16 @@ The .vec files are needed to train a cascade from the ViolaTrainer class
 
 
 class NeuralDataLoad(object):
-    def __init__(self, data_path = None, full_dataset=False):
+    def __init__(self, data_path = None, full_dataset=False, method='viola'):
         self.full_dataset=full_dataset
-        if full_dataset == False:
-            path = utils.get_path(data_fold=utils.TRAINING, neural=True, in_or_out = utils.IN)
-        else:
-            path = '../training_data_full_dataset_neural/'
+        self.method = method
+        #if full_dataset == False and method=='viola':
+        path = utils.get_path(data_fold=utils.TRAINING, neural=True, in_or_out = utils.IN, method=method, full_dataset=full_dataset)
+        #elif full_dataset == False:
+        #    path = '../slide_data_training_neural/'    
+        #else:
+            #this data is now in your harddrive!!!!
+            #path = '../training_data_full_dataset_neural/'
         self.background_FP_viola_path = '{}{}/falsepos/'.format(path, data_path)
         self.thatch_metal_TP_viola_path = '{}{}/truepos/'.format(path, data_path)
         print self.background_FP_viola_path
@@ -72,10 +77,12 @@ class NeuralDataLoad(object):
                 for patch in data_source:
                     index = self.process_patch(patch, label, index)                    
 
+        
+
         #limit the number of background patches
         self.non_roof_limit = (non_roofs*index) + index
         #BACKGROUND
-        if self.full_dataset: #if we want the full dataset (sliding window only( then we have to access it in batches)
+        if self.method == 'slide': #self.full_dataset: #if we want the full dataset (sliding window only( then we have to access it in batches)
             self.viola_background = self.get_background_patches_from_batches(self.background_FP_viola_path, roof_type, starting_batch=starting_batch)
         else:
             if roof_type != 'Both':
@@ -93,12 +100,15 @@ class NeuralDataLoad(object):
 
         #remove the end if index<len(X) -- some patches failed to load
         self.X = self.X[:index, :,:,:]
-        self.X = self.X.astype(np.float32)
+        #self.X = self.X.astype(np.float32)
         self.y = self.y[:index]
         self.y = self.y.astype(np.int32)
         
+
         print np.bincount(self.y)
         self.X, self.y = sklearn.utils.shuffle(self.X, self.y, random_state=42)  # shuffle train data    
+
+        #utils.debug_data(self.X, self.y, index, roof_type, flip(batch_size=128))
         return self.X, self.y
 
 

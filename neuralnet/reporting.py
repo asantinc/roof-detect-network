@@ -1,6 +1,7 @@
 from collections import defaultdict
 import numpy as np
 from os import listdir
+import os.path
 import sys
 import pdb
 import cv2
@@ -156,7 +157,7 @@ class Evaluation(object):
                         detector_names=None, 
                         mergeFalsePos=False,
                         separateDetections=True,
-                        vocGood=0.1, negThres = 0.3):
+                        vocGood=0.1, negThres = 0.3, auc_threshold=0.5, correct_roofs=None):
         '''
         Will score the detections class it contains.
 
@@ -176,6 +177,7 @@ class Evaluation(object):
         self.save_imgs = save_imgs
         #these two are related to saving the FP and TP for neural training
         self.mergeFalsePos=mergeFalsePos
+        self.auc_threshold = auc_threshold
 
         self.keep_detections_separate = separateDetections  
 
@@ -187,32 +189,39 @@ class Evaluation(object):
         self.detection_portion_threshold = 0.50
         self.negThres = negThres
 
-        self.detections = detections    #detection class
-
+        self.detections = detections
         self.in_path = in_path          #the path from which the images are taken
         self.img_names = [f for f in listdir(self.in_path) if f.endswith('.jpg')]
 
         #the ground truth roofs for every image and roof type
-        self.correct_roofs = dict()
-        for roof_type in utils.ROOF_TYPES:
-            self.correct_roofs[roof_type] = dict()
-        self.full_dataset = full_dataset
-        if full_dataset == False:
-            for img_name in self.img_names:
-                for roof_type in utils.ROOF_TYPES:
-                    self.correct_roofs[roof_type][img_name] = DataLoader.get_polygons(roof_type=roof_type, 
-                                                                xml_name=img_name[:-3]+'xml' , xml_path=self.in_path)
-                    self.detections.update_roof_num(self.correct_roofs[roof_type][img_name], roof_type)
-        else:
-            for img_name in self.img_names:
-                current_roofs = DataLoader.get_all_roofs_full_dataset(xml_name=img_name[:-3]+'xml' , xml_path=self.in_path)
-                for roof_type in utils.ROOF_TYPES:
-                    if roof_type not in current_roofs:
-                        self.correct_roofs[roof_type][img_name] = []
-                    else:
-                        self.correct_roofs[roof_type][img_name] = current_roofs[roof_type] 
+        if correct_roofs is None:
+            self.correct_roofs = dict()
+            for roof_type in utils.ROOF_TYPES:
+                self.correct_roofs[roof_type] = dict()
+            self.full_dataset = full_dataset
+            if full_dataset == False:
+                for img_name in self.img_names:
+                    for roof_type in utils.ROOF_TYPES:
+                        #we receive polygons, so we convert them into boxes so we can use the fast scoring
+                        temp_roofs =  DataLoader.get_polygons(roof_type=roof_type, 
+                                                                    xml_name=img_name[:-3]+'xml' , xml_path=self.in_path)
+                        if len(temp_roofs)>0:
+                            self.correct_roofs[roof_type][img_name] = utils.polygons2boxes(temp_roofs)
+                        else:
+                            self.correct_roofs[roof_type][img_name] = []
+                        self.detections.update_roof_num(self.correct_roofs[roof_type][img_name], roof_type)
+            else:
+                for img_name in self.img_names:
+                    current_roofs = DataLoader.get_all_roofs_full_dataset(xml_name=img_name[:-3]+'xml' , xml_path=self.in_path)
+                    for roof_type in utils.ROOF_TYPES:
+                        if roof_type not in current_roofs:
+                            self.correct_roofs[roof_type][img_name] = []
+                        else:
+                            self.correct_roofs[roof_type][img_name] = current_roofs[roof_type] 
 
-                    self.detections.update_roof_num(self.correct_roofs[roof_type][img_name], roof_type)
+                        self.detections.update_roof_num(self.correct_roofs[roof_type][img_name], roof_type)
+        else:
+            self.correct_roofs = correct_roofs
  
 
         #init the report file
@@ -297,8 +306,8 @@ class Evaluation(object):
                         best_score_per_detection[roof_type].append([detection, -1])
 
                     #detection_roof_portion is how much of the detection is covered by roof
-                    if fast_scoring:
-                         voc_score, detection_roof_portion = self.get_score_fast(roof=roof, detection=detection)
+                    if True: #fast_scoring:
+                        voc_score, detection_roof_portion = self.get_score_fast(roof=roof, detection=detection)
                     else:
                         voc_score, detection_roof_portion = self.get_score(contours=work_with_contours, 
                                                         rows=img_shape[0], cols=img_shape[1], roof=roof, detection=detection)
@@ -326,7 +335,7 @@ class Evaluation(object):
 
         self.update_scores(img_name, detections, false_pos_logical, bad_detection_logical, 
                                     best_score_per_detection, easy_false_pos_logical, easy_false_negative_logical)
-        self.save_images(img_name)
+        #self.save_images(img_name)
 
        
 
@@ -370,23 +379,38 @@ class Evaluation(object):
                 bad_d = detects[bad_detection_logical[roof_type]]
                 self.detections.update_bad_detections(roof_type=roof_type,bad_detections=bad_d, img_name=img_name) 
             
-            print '-------- Roof Type: {0} --------'.format(roof_type)
-            print 'Roofs: {0}'.format(len(self.correct_roofs[roof_type][img_name]))
-            print 'False pos: {0}'.format(len(false_d))
-            print 'True pos: {0}'.format(len(pos_d))
+            score_list = list()
+            score_list.append('-------- Roof Type: {0} --------'.format(roof_type))
+            score_list.append('Roofs: {0}'.format(len(self.correct_roofs[roof_type][img_name])))
+            score_list.append('False pos: {0}'.format(len(false_d)))
+            score_list.append('True pos: {0}'.format(len(pos_d)))
             #if self.output_patches:
-            print 'Good det: {0}'.format(len(good_d))
+            score_list.append('Good det: {0}'.format(len(good_d)))
             if self.mergeFalsePos == False:
-                print 'Bad detections: {0}'.format(len(bad_d))
-            print 'EASIER METRICS'
-            print 'True pos: {}'.format(len(easy_true_pos))
-            print 'False neg: {}'.format(len(easy_false_neg))
-            print 'False pos: {}'.format(len(easy_false_pos))
+                score_list.append('Bad detections: {0}'.format(len(bad_d)))
+            score_list.append('EASIER METRICS')
+            score_list.append('True pos: {}'.format(len(easy_true_pos)))
+            score_list.append('False neg: {}'.format(len(easy_false_neg)))
+            score_list.append('False pos: {}'.format(len(easy_false_pos)))
+            
+            #PER IMAGE REPORT FILE
+            true_roofs = len(self.correct_roofs[roof_type][img_name])
 
-        print '---'
-        print 'All Detections: {0}'.format(len(detections['metal']+detections['thatch']))
+            per_roof_report = self.out_path+'per_image_detections.txt'
+            mode = 'a' if os.path.isfile(per_roof_report) else 'w'
+            with open(per_roof_report, mode) as f:
+                if mode == 'w':
+                    header = ['img_name', 'threshold', 'roof_type', 'true_pos', 'false_neg', 'false_pos', 'easy_true_pos', 'easy_false_pos', 'easy_false_neg', '\n']
+                    f.write('\t'.join(header))
+                scores = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(img_name, self.auc_threshold, roof_type, len(pos_d), len(false_d), true_roofs-len(pos_d), 
+                                            len(easy_true_pos), len(easy_false_pos), len(easy_false_neg))
+                f.write(scores)
+
+        score_list.append('---')
+        score_list.append('All Detections: {0}'.format(len(detections['metal']+detections['thatch'])))
         if self.mergeFalsePos: #self.output_patches 
-            print 'All Bad det: {0}'.format(len(bad_d))
+            score_list.append('All Bad det: {0}'.format(len(bad_d)))
+        print '\n'.join(score_list)
 
 
     def get_score(self, contours=False, rows=1200, cols=2000, roof=None, detection=None):
@@ -428,6 +452,11 @@ class Evaluation(object):
     def get_score_fast(self, roof, detection):
         '''Can use this method if we don't have rotated rectangles
         '''
+        try:
+            if roof.shape == (4,2):
+                roof = utils.polygons2boxes(np.array([roof]))[0]
+        except:
+            pass
         intersection_area = 0
         roof_xmin, roof_ymin, roof_xmax, roof_ymax = roof
         detection_xmin, detection_ymin, detection_xmax, detection_ymax = detection
@@ -475,7 +504,6 @@ class Evaluation(object):
             true_pos = self.detections.true_positive_num[roof_type]
             false_pos = self.detections.false_positive_num[roof_type]
             cur_type_roofs = self.detections.roof_num[roof_type] 
-            pdb.set_trace()
 
             if detection_num > 0 and cur_type_roofs > 0:
                 recall = float(true_pos) / cur_type_roofs 
@@ -505,7 +533,7 @@ class Evaluation(object):
                 else:
                     easy_F1 = 0
             else:
-                recall = precision = F1 = 0
+                easy_recall = easy_precision = easy_F1 = 0
             if stage is None:
                 easy_log.append('{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(roof_type, 
                         cur_type_roofs, self.detections.total_time, detection_num, easy_recall, easy_precision,easy_F1))
@@ -595,7 +623,7 @@ class Evaluation(object):
         '''use the voc scores to decide if a patch should be saved as a TP or FP or not
         '''
         general_path = utils.get_path(neural=neural, viola=viola, data_fold=utils.TRAINING, in_or_out=utils.IN, out_folder_name=self.folder_name)
-        general_path = '../training_data_full_dataset_neural/{}'.format(self.folder_name)
+        general_path = '../slide_training_data_neural/{}'.format(self.folder_name)
         utils.mkdir(out_folder_path=general_path)
         
         path_true = general_path+'truepos/'
