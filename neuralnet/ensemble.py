@@ -11,7 +11,8 @@ from collections import defaultdict
 
 
 class Ensemble(object):
-    def __init__(self, preloaded_paths, scoring_strategy=None):
+    def __init__(self, preloaded_paths, scoring_strategy=None, method=None):
+        self.method = method
         self.process_preloaded_paths(preloaded_paths)
         self.process_paths_get_nets()
         self.net_threshold = 0.5
@@ -85,6 +86,8 @@ class Ensemble(object):
                 print 'Starting batch is:{}'.format(starting_batch)
                 neural_params = dict() #one set of parameters per roof type
                 neural_param_num = (utils.get_param_value_from_filename(path, 'params'))
+                if neural_param_num is None:
+                    neural_param_num = (utils.get_param_value_from_filename(path, 'violaNet'))
 
                 #small hack to pick up right param file number in two cases where I foolishly didn't print it out in the name....
                 if neural_param_num is None:
@@ -107,6 +110,6 @@ class Ensemble(object):
                 neural_params['net_name'] = path[:-len('.pickle')] 
                 neural_params['roof_type'] = roof_type
                 #for each net in the ensemble, we start at a different data batch, that way we get a variety of data for training
-                current_net = Experiment(pipeline=True, starting_batch=starting_batch, **neural_params) 
+                current_net = Experiment(pipeline=True, method=self.method, starting_batch=starting_batch, **neural_params) 
                 self.neural_nets[roof_type].append(current_net) 
 

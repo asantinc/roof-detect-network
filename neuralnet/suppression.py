@@ -1,11 +1,13 @@
 # import the necessary packages
 import numpy as np
- 
+import pdb
 
 # Malisiewicz et al.
 def non_max_suppression(boxes, class_probs, overlapThres=0.3):
     #required boxes in the form of x1, y1, x2, y2
     # if there are no boxes, return an empty list
+    boxes = np.array(boxes).squeeze()
+
     if len(boxes) == 0:
         return []
 
@@ -26,7 +28,7 @@ def non_max_suppression(boxes, class_probs, overlapThres=0.3):
     # compute the area of the bounding boxes and sort the bounding
     # boxes by the bottom-right y-coordinate of the bounding box
     area = (x2 - x1 + 1) * (y2 - y1 + 1)
-    idxs = np.argsort(y2)
+    idxs = np.argsort(class_probs)
 
     # keep looping while some indexes still remain in the indexes
     # list
@@ -51,14 +53,12 @@ def non_max_suppression(boxes, class_probs, overlapThres=0.3):
 
         # compute the ratio of overlap
         overlap = (w * h) / area[idxs[:last]]
-
         # delete all indexes from the index list that have
         idxs = np.delete(idxs, np.concatenate(([last],
             np.where(overlap > overlapThres)[0])))
-
     # return only the bounding boxes that were picked using the
     # integer data type
-    return boxes[pick].astype("int")
+    return boxes[pick].astype("int"), class_probs[pick]
     
 
 

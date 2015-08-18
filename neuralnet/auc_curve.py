@@ -3,7 +3,7 @@ from collections import defaultdict
 from matplotlib import pyplot as plt
 import numpy as np
 from reporting import Detections, Evaluation
-from scipy.integrate import simps
+from sklearn.metrics import auc
 import pdb
 
 class AucCurve(object):
@@ -103,11 +103,11 @@ class AucCurve(object):
         for roof_type in utils.ROOF_TYPES:
             self.recall[roof_type] = np.array(self.recall[roof_type])
             self.precision[roof_type] = np.array(self.precision[roof_type])
-            self.area[roof_type] = simps(self.recall[roof_type], self.precision[roof_type])
+            self.area[roof_type] = auc(self.recall[roof_type], self.precision[roof_type])
 
             self.easy_recall[roof_type] = np.array(self.easy_recall[roof_type])
             self.easy_precision[roof_type] = np.array(self.easy_precision[roof_type])
-            self.easy_area[roof_type] = simps(self.easy_recall[roof_type], self.easy_precision[roof_type])
+            self.easy_area[roof_type] = auc(self.easy_recall[roof_type], self.easy_precision[roof_type])
         print self.area
         print self.easy_area
 
@@ -130,7 +130,6 @@ class AucCurve(object):
             print roof_type
             print self.recall[roof_type]
             print self.precision[roof_type]
-        pdb.set_trace()
 
         for roof_type in utils.ROOF_TYPES:
             # Plot Precision-Recall curve

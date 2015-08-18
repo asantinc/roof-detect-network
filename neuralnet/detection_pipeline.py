@@ -39,7 +39,7 @@ DEBUG = False
 class Pipeline(object):
     def __init__(self, method=None,
                     full_dataset=True,
-                    groupThres=0, groupBounds=False, erosion=0, suppress=None, overlapThresh=0.3,
+                    groupThres=0.1, groupBounds=False, erosion=0, suppress=None, 
                     pickle_viola=None,# single_detector=True, 
                     in_path=None, out_path=None, neural=None, 
                     ensemble=None, 
@@ -52,16 +52,14 @@ class Pipeline(object):
         method:string
             Can be either 'viola' or 'sliding_window'
         '''
-        assert method=='viola' or method=='sliding_window'
+        assert method=='viola' or method=='slide'
 
         self.method = method
         self.full_dataset = full_dataset
 
-        self.groupThreshold = groupThres
+        self.groupThres = groupThres
         self.groupBounds = groupBounds
         self.erosion = erosion
-        self.suppress = pipe['suppress']
-        self.overlapThresh = overlapThresh
 
         #self.single_detector = single_detector
         self.in_path = in_path
@@ -82,8 +80,10 @@ class Pipeline(object):
                     self.viola_evaluation = pickle.load(f) 
                     self.viola_evaluation.in_path = self.in_path
                     self.viola_evaluation.out_path = self.out_path
+
+
         #Setup the sliding window
-        elif self.method == 'sliding_window':
+        elif self.method == 'slide':
             self.slider = SlidingWindowNeural(full_dataset=self.full_dataset, in_path=self.in_path, out_path=self.out_path, **detector_params) 
         else:
             raise ValueError('Need to specific either viola or sliding window')
@@ -121,9 +121,6 @@ class Pipeline(object):
             if self.method == 'viola':
                 if self.pickle_viola is None:
                     img = self.viola.detect_roofs(img_name=img_name)
-                    #this next line will fail because you dont get the image shape!
-                    #self.viola.evaluation.score_img(img_name, img.shape[:2])
-                    #self.viola.evaluation.save_images(img_name, fname='beforeNeural')
                     current_viola_detections = self.viola.viola_detections 
                     viola_time = self.viola.evaluation.detections.total_time
                 else:#use the pickled detections for speed in testing the neural network
@@ -133,8 +130,8 @@ class Pipeline(object):
                 for roof_type in utils.ROOF_TYPES:
                     rect_detections[roof_type] = utils.polygons2boxes(proposal_coords[roof_type])
 
-            #SLIDING WINDOW
-            elif self.method == 'sliding_window':
+                        #SLIDING WINDOW
+            elif self.method == 'slide':
                 with Timer() as t:
                     #get the roofs with sliding detector
                     proposal_coords, rect_detections = self.slider.get_windows(img_name) 
@@ -145,18 +142,29 @@ class Pipeline(object):
                 print 'Unknown detection method {}'.format(self.method)
                 sys.exit(-1)
 
-            self.auc.set_detections(rect_detections, img_name)
+            '''
+            with open('combo11.pickle', 'wb') as f:
+                pickle.dump(self.viola, f)
+            sys.exit()
+            '''
 
-            #self.print_detections(None, img_name, '')
+            #self.auc.set_detections(rect_detections, img_name)
             self.print_detections(rect_detections, img_name, '_viola')
            
             #NEURALNET
             print 'Starting neural classification of image {}'.format(img_name)
             with Timer() as t:
+                #NOTE: classified detections only has roofs with prob >= 0.5
                 classified_detections, probs  = self.neural_classification_AUC(proposal_patches, rect_detections) 
             print 'Classification took {} secs'.format(t.secs)
             neural_time += t.secs
-            
+
+            #GROUPING
+            rect_detections, probs, grouping_time  = self.nonmax_suppression(rect_detections, probs)   
+            neural_time += grouping_time
+
+            #AUC USING THE GROUPED DETECTIONS
+            self.auc.set_detections(rect_detections, img_name)
             self.auc.set_probs(probs, img_name)
 
             #SCORING THE CURRENT IMAGE
@@ -173,7 +181,7 @@ class Pipeline(object):
                 self.evaluation_after_neural[t].score_img(img_name, img_shape[:2], fast_scoring=fast_scoring, contours=self.groupBounds)
 
         
-            self.print_detections({'metal':classified_detections['metal'][4],'thatch':classified_detections['thatch'][4] }, 
+            self.print_detections({'metal':classified_detections['metal'][0],'thatch':classified_detections['thatch'][0] }, 
                                                         img_name, '_neural0.5')
 
         #FINAL EVALUATION
@@ -186,7 +194,7 @@ class Pipeline(object):
             self.evaluation_after_neural[t].detections.total_time = neural_time+viola_time
             header = False if self.method=='viola' else True
             self.evaluation_after_neural[t].print_report(print_header=header, stage='neural', report_name='report_thres{}.txt'.format(thres))
-
+        
 
     def print_detections(self, detections, img_name, title):
         img = cv2.imread(self.in_path+img_name)
@@ -198,6 +206,16 @@ class Pipeline(object):
                 color = (0, 0,0) if roof_type == 'metal' else (255,255,255)
                 utils.draw_detections(self.evaluation_after_neural[0].correct_roofs[roof_type][img_name], img, rects=True, color=color, thickness=10)
             cv2.imwrite('debug/{}{}.jpg'.format(img_name[:-4], title), img)
+
+
+    def nonmax_suppression(self, rect_detections, probs):
+        with Timer() as t:
+            #set detections and score
+            for roof_type in utils.ROOF_TYPES:
+                #proper non max suppression from Felzenszwalb et al.
+                rect_detections[roof_type], probs[roof_type] = suppression.non_max_suppression(rect_detections[roof_type], probs[roof_type], overlapThres = self.groupThres)
+        print 'Grouping took {} seconds'.format(t.secs)
+        return rect_detections, probs, t.secs
 
 
 
@@ -220,7 +238,7 @@ class Pipeline(object):
         return correct_classes
 
 
-
+    '''
     def non_max_suppression(self,polygons):
         #we start with polygons, get the bounding box of it
         rects = utils.get_bounding_boxes(np.array(polygons))
@@ -229,10 +247,7 @@ class Pipeline(object):
         boxes_suppressed = suppression.non_max_suppression(boxes, overlapThresh=self.overlapThresh)
         polygons_suppressed = utils.boxes2polygons(boxes_suppressed)
         return polygons_suppressed 
-
-
-    def non_max_suppression_rects(self, rects, probs):
-        return suppression.non_max_suppression(rects, probs, overlapThres = self.suppress)
+    '''
 
     def group_min_bound(self, polygons, img_shape, erosion=0):
         '''
@@ -412,9 +427,9 @@ def setup_params(parameters, pipe_fname, method=None, decision='decideMean'):
     #metal_net, thatch_net = check_preloaded_paths_correct(preloaded_paths)
     #preloaded_paths_dict = {'metal': metal_net, 'thatch': thatch_net}
     pipe_params = dict() 
-    pipe_params = {'suppress':parameters['suppress']}#, 'preloaded_paths': preloaded_paths_dict}
+    pipe_params = {}#, 'preloaded_paths': preloaded_paths_dict}
 
-    neural_ensemble = Ensemble(preloaded_paths, scoring_strategy=decision)
+    neural_ensemble = Ensemble(preloaded_paths, scoring_strategy=decision, method=method)
     assert neural_ensemble is not None
 
     if method=='viola':
@@ -433,8 +448,9 @@ def setup_params(parameters, pipe_fname, method=None, decision='decideMean'):
                 viola_params[param]= utils.get_param_value_from_filename(viola_data, param)
         detector_params = viola_params
 
-    elif method=='sliding_window': #sliding window
+    elif method=='slide': #sliding window
         detector_params = dict()
+        '''WE KNOW WHAT THESE PARAMS ARE, SO USE THEM DIRECTLY
         for param in ['scale', 'minSize', 'windowSize', 'stepSize']:
             if param == 'scale':
                 detector_params[param] = float(parameters[param])
@@ -442,6 +458,12 @@ def setup_params(parameters, pipe_fname, method=None, decision='decideMean'):
                 detector_params[param] = int(float(parameters[param]))
             else:
                 detector_params[param] = (int(float(parameters[param])),int(float(parameters[param])))
+        '''
+        detector_params['scale'] = 1.3
+        detector_params['minSize'] = (50,50)
+        detector_params['windowSize'] = (15,15)
+        detector_params['stepSize'] = 4
+
     else:
         print 'Unknown method of detection {}'.format(method)
         sys.exit(-1)
@@ -452,9 +474,9 @@ def get_main_param_filenum():
     #get the pipeline number
     viola_num = -1
     sliding_num = -1
-    decision = None
+    groupThres = None
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "v:s:d:")
+        opts, args = getopt.getopt(sys.argv[1:], "v:s:d:g:")
     except getopt.GetoptError:
         print 'Command line error'
         sys.exit(2)  
@@ -463,71 +485,66 @@ def get_main_param_filenum():
             viola_num = int(float(arg))
         elif opt == '-s':
             sliding_num = int(float(arg))
-        elif opt == '-d':
-            if arg == 'a':
-                decision = 'decideAll'
-            elif arg == 'm':
-                decision = 'decideMean'
-            elif arg == 'j':
-                decision = 'decideMajority'
-    return viola_num, sliding_num, decision 
+        elif opt == '-g':
+            groupThres = float(arg)
+    return viola_num, sliding_num, groupThres 
 
 
 if __name__ == '__main__':
-    viola_num, sliding_num, decision = get_main_param_filenum()
-    if decision is None:
-        decision = 'decideMean'
+    viola_num, sliding_num, groupThres = get_main_param_filenum()
+    decision = 'decideMean'
 
-    pickle_viola = False
-    overlapThresh = 1 
+    pickle_viola = False 
     groupBounds = False
-    groupThres = 0
     erosion = 0  
 
 
+    
     #get the parameters from the pipeline
     if viola_num > 0:
         pipe_fname = 'viola{}.csv'.format(viola_num)
         method = 'viola'
     elif sliding_num > 0:
         pipe_fname = 'slide{}.csv'.format(sliding_num)
-        method = 'sliding_window'
+        method = 'slide'
 
 
     full_dataset = False 
     if full_dataset:
         print 'WARNING: USING FULL DATASET !!!!!!!!!!!!!!!!!!! '
     if method=='viola' and pickle_viola: 
-        pickle_viola = utils.get_path(neural=True, in_or_out=utils.IN, data_fold=utils.TRAINING)+'evaluation_validation_set_combo11.pickle' 
+        pickle_viola = None 
     else:
         pickle_viola = None
 
+    print pipe_fname
+    print method
     parameters = utils.get_params_from_file( '{0}{1}'.format(utils.get_path(params=True, pipe=True), pipe_fname))
     neural_ensemble, detector_params, pipe_params, single_detector_bool = setup_params(parameters, pipe_fname[:-len('.csv')], method=method, decision=decision)
-
-    #I/O
-    out_folder_name = pipe_fname[:-len('.csv')] if decision is None else pipe_fname[:-len('.csv')]+decision
-    in_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.IN, pipe=True, full_dataset=full_dataset) 
-    out_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.OUT, 
-                                pipe=True, out_folder_name=out_folder_name, full_dataset=full_dataset)   
-    print out_path
-    pickle_auc = True 
-    pipe = Pipeline(method=method, 
-                    full_dataset=full_dataset,
-                    pickle_viola=pickle_viola,# single_detector=single_detector_bool, 
-                    in_path=in_path, out_path=out_path, 
-                    pipe=pipe_params, 
-                    groupThres = groupThres, groupBounds=groupBounds,overlapThresh=overlapThresh, 
-                    ensemble=neural_ensemble, 
-                    detector_params=detector_params, out_folder_name=pipe_fname)
-    if pickle_auc == False:
-        pipe.run()
-        with open(out_path+'auc.pickle', 'wb') as f:
-            pickle.dump(pipe.auc, f)
-        pipe.auc.plot_auc()
-    else:
-        with open(out_path+'auc.pickle', 'rb') as f:
-            auc = pickle.load(f)
-        auc.plot_auc()
+    
+    for groupThres in [.1,.2,.3,.4,.5]:
+        #I/O
+        out_folder_name = '{0}_group{1}'.format(pipe_fname[:-len('.csv')], groupThres) 
+        in_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.IN, pipe=True, full_dataset=full_dataset) 
+        out_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.OUT, 
+                                    pipe=True, out_folder_name=out_folder_name, full_dataset=full_dataset)   
+        pickle_auc = False 
+        pipe = Pipeline(method=method, 
+                        full_dataset=full_dataset,
+                        pickle_viola=pickle_viola,# single_detector=single_detector_bool, 
+                        in_path=in_path, out_path=out_path, 
+                        pipe=pipe_params, 
+                        groupThres = groupThres,groupBounds=groupBounds, 
+                        ensemble=neural_ensemble, 
+                        detector_params=detector_params, out_folder_name=pipe_fname)
+        if pickle_auc == False:
+            pipe.run()
+            with open(out_path+'auc.pickle', 'wb') as f:
+                pickle.dump(pipe.auc, f)
+            pipe.auc.plot_auc()
+        else:
+            with open(out_path+'auc.pickle', 'rb') as f:
+                auc = pickle.load(f)
+            auc.plot_auc()
 
 
