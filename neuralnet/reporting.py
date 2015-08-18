@@ -157,7 +157,7 @@ class Evaluation(object):
                         detector_names=None, 
                         mergeFalsePos=False,
                         separateDetections=True,
-                        vocGood=0.1, negThres = 0.3, auc_threshold=0.5, correct_roofs=None):
+                        vocGood=0.1, negThres = 0.3, auc_threshold=0.5, correct_roofs=None, img_names=None):
         '''
         Will score the detections class it contains.
 
@@ -191,7 +191,10 @@ class Evaluation(object):
 
         self.detections = detections
         self.in_path = in_path          #the path from which the images are taken
-        self.img_names = [f for f in listdir(self.in_path) if f.endswith('.jpg')]
+        if img_names is None:
+            self.img_names = [f for f in listdir(self.in_path) if f.endswith('.jpg')]
+        else:
+            self.img_names = img_names
 
         #the ground truth roofs for every image and roof type
         if correct_roofs is None:
@@ -222,12 +225,12 @@ class Evaluation(object):
                         self.detections.update_roof_num(self.correct_roofs[roof_type][img_name], roof_type)
         else:
             self.correct_roofs = correct_roofs
- 
 
         #init the report file
         self.out_path = out_path
-        if detector_names is not None:
-            self.init_report(detector_names, report_name=report_name)
+        if report_name is not None:
+            if detector_names is not None:
+                self.init_report(detector_names, report_name=report_name)
 
         #variables needed to pickle the FP and TP to a file that makes sense
         assert method is not None
@@ -253,7 +256,7 @@ class Evaluation(object):
             report.close()
 
     
-    def score_img(self, img_name, img_shape, contours=False, fast_scoring=False):
+    def score_img(self, img_name, img_shape, contours=False, fast_scoring=False, write_file=True):
         '''Find best overlap between each roof in an img and the detections,
         according the VOC score
         '''
@@ -334,13 +337,13 @@ class Evaluation(object):
                     false_pos_logical[roof_type][best_detection] = 0 #this detection is not a false positive
 
         self.update_scores(img_name, detections, false_pos_logical, bad_detection_logical, 
-                                    best_score_per_detection, easy_false_pos_logical, easy_false_negative_logical)
+                                    best_score_per_detection, easy_false_pos_logical, easy_false_negative_logical, write_file=write_file)
         #self.save_images(img_name)
 
        
 
     def update_scores(self, img_name, detections, false_pos_logical, bad_detection_logical, 
-                                                best_score_per_detection, easy_false_pos_logical, easy_false_negative_logical):
+                                                best_score_per_detection, easy_false_pos_logical, easy_false_negative_logical, write_file=None):
         self.detections.best_score_per_detection[img_name] = best_score_per_detection
 
         if self.mergeFalsePos: #self.output_patches 
@@ -351,6 +354,8 @@ class Evaluation(object):
             self.detections.update_bad_detections(bad_detections=bad_d, img_name=img_name) 
 
         print '----- METHOD: {}'.format(self.method)
+
+        score_list = list()
         for roof_type in utils.ROOF_TYPES: 
             detects = np.array(detections[roof_type])
             false_d = detects[false_pos_logical[roof_type]]
@@ -379,7 +384,6 @@ class Evaluation(object):
                 bad_d = detects[bad_detection_logical[roof_type]]
                 self.detections.update_bad_detections(roof_type=roof_type,bad_detections=bad_d, img_name=img_name) 
             
-            score_list = list()
             score_list.append('-------- Roof Type: {0} --------'.format(roof_type))
             score_list.append('Roofs: {0}'.format(len(self.correct_roofs[roof_type][img_name])))
             score_list.append('False pos: {0}'.format(len(false_d)))
@@ -396,15 +400,16 @@ class Evaluation(object):
             #PER IMAGE REPORT FILE
             true_roofs = len(self.correct_roofs[roof_type][img_name])
 
-            per_roof_report = self.out_path+'per_image_detections.txt'
-            mode = 'a' if os.path.isfile(per_roof_report) else 'w'
-            with open(per_roof_report, mode) as f:
-                if mode == 'w':
-                    header = ['img_name', 'threshold', 'roof_type', 'true_pos', 'false_neg', 'false_pos', 'easy_true_pos', 'easy_false_pos', 'easy_false_neg', '\n']
-                    f.write('\t'.join(header))
-                scores = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(img_name, self.auc_threshold, roof_type, len(pos_d), len(false_d), true_roofs-len(pos_d), 
-                                            len(easy_true_pos), len(easy_false_pos), len(easy_false_neg))
-                f.write(scores)
+            if write_file:
+                per_roof_report = self.out_path+'per_image_detections.txt'
+                mode = 'a' if os.path.isfile(per_roof_report) else 'w'
+                with open(per_roof_report, mode) as f:
+                    if mode == 'w':
+                        header = ['img_name', 'threshold', 'roof_type', 'true_pos', 'false_neg', 'false_pos', 'easy_true_pos', 'easy_false_pos', 'easy_false_neg', '\n']
+                        f.write('\t'.join(header))
+                    scores = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(img_name, self.auc_threshold, roof_type, len(pos_d), len(false_d), true_roofs-len(pos_d), 
+                                                len(easy_true_pos), len(easy_false_pos), len(easy_false_neg))
+                    f.write(scores)
 
         score_list.append('---')
         score_list.append('All Detections: {0}'.format(len(detections['metal']+detections['thatch'])))

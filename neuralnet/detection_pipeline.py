@@ -32,8 +32,9 @@ from timer import Timer
 import suppression
 from slide_neural import SlidingWindowNeural
 from ensemble import Ensemble
+from auc_curve import AucCurve
 
-DEBUG = True
+DEBUG = False 
 
 class Pipeline(object):
     def __init__(self, method=None,
@@ -52,9 +53,6 @@ class Pipeline(object):
             Can be either 'viola' or 'sliding_window'
         '''
         assert method=='viola' or method=='sliding_window'
-        self.AUC = namedtuple('AUC', 'correct_classes neural_probabilities')
-        self.AUC.correct_classes = defaultdict(list)
-        self.AUC.neural_probabilities = defaultdict(list)
 
         self.method = method
         self.full_dataset = full_dataset
@@ -68,6 +66,7 @@ class Pipeline(object):
         #self.single_detector = single_detector
         self.in_path = in_path
         self.img_names = [img_name for img_name in os.listdir(self.in_path) if img_name.endswith('jpg')]
+        self.img_names = self.img_names if DEBUG==False else self.img_names[:1]
         self.out_path = out_path
         
         #Setup Viola: if we are given an evaluation directly, don't bother running viola 
@@ -102,6 +101,9 @@ class Pipeline(object):
             self.evaluation_after_neural.append(Evaluation(detections=detections, 
                                         method='pipeline', save_imgs=True, out_path=self.out_path,
                                         auc_threshold=thres, folder_name=out_folder_name, in_path=self.in_path, detector_names=detector_names))
+
+        self.auc = AucCurve(self.img_names, self.evaluation_after_neural[0].correct_roofs, self.out_path, self.method)
+        print self.img_names
 
     def run(self):
         '''
@@ -143,15 +145,19 @@ class Pipeline(object):
                 print 'Unknown detection method {}'.format(self.method)
                 sys.exit(-1)
 
+            self.auc.set_detections(rect_detections, img_name)
+
             #self.print_detections(None, img_name, '')
             self.print_detections(rect_detections, img_name, '_viola')
            
             #NEURALNET
             print 'Starting neural classification of image {}'.format(img_name)
             with Timer() as t:
-                classified_detections  = self.neural_classification_AUC(proposal_patches, rect_detections) 
+                classified_detections, probs  = self.neural_classification_AUC(proposal_patches, rect_detections) 
             print 'Classification took {} secs'.format(t.secs)
             neural_time += t.secs
+            
+            self.auc.set_probs(probs, img_name)
 
             #SCORING THE CURRENT IMAGE
             fast_scoring = True# False
@@ -379,7 +385,7 @@ class Pipeline(object):
             else:
                 print 'No {0} detections'.format(roof_type)
                 raise ValueError('Need to fix this to support this case')
-        return classified_detections 
+        return classified_detections, probs 
  
 
     def save_img_detections(self, img_name, proposal_coords, predictions):
@@ -505,6 +511,7 @@ if __name__ == '__main__':
     out_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.OUT, 
                                 pipe=True, out_folder_name=out_folder_name, full_dataset=full_dataset)   
     print out_path
+    pickle_auc = False
     pipe = Pipeline(method=method, 
                     full_dataset=full_dataset,
                     pickle_viola=pickle_viola,# single_detector=single_detector_bool, 
@@ -513,6 +520,14 @@ if __name__ == '__main__':
                     groupThres = groupThres, groupBounds=groupBounds,overlapThresh=overlapThresh, 
                     ensemble=neural_ensemble, 
                     detector_params=detector_params, out_folder_name=pipe_fname)
-    pipe.run()
+    if pickle_auc == False:
+        pipe.run()
+        with open(out_path+'auc.pickle', 'wb') as f:
+            pickle.dump(pipe.auc, f)
+        pipe.auc.plot_auc()
+    else:
+        with open(out_path+'auc.pickle', 'rb') as f:
+            auc = pickle.load(f)
+        auc.plot_auc()
 
 
