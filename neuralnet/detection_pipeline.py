@@ -91,7 +91,7 @@ class Pipeline(object):
         self.ensemble = ensemble
 
         #EVALUATION OBJECTS
-        self.auc_thresholds = [0.1,.2,.3,.4,.5,.6,.7,.8,.9]
+        self.auc_thresholds = [.5]
         self.detections_after_neural = list()
         self.evaluation_after_neural = list()
         detector_names = detector_params['detector_names'] if self.method=='viola' else None
@@ -511,7 +511,7 @@ if __name__ == '__main__':
     out_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.OUT, 
                                 pipe=True, out_folder_name=out_folder_name, full_dataset=full_dataset)   
     print out_path
-    pickle_auc = False
+    pickle_auc = True 
     pipe = Pipeline(method=method, 
                     full_dataset=full_dataset,
                     pickle_viola=pickle_viola,# single_detector=single_detector_bool, 
