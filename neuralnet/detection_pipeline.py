@@ -39,7 +39,8 @@ DEBUG = False
 class Pipeline(object):
     def __init__(self, method=None,
                     full_dataset=True,
-                    groupThres=0.1, groupBounds=False, erosion=0, suppress=None, 
+                    metal_groupThres=0.1, thatch_groupThres=0.1, 
+                    groupBounds=False, erosion=0, suppress=None, 
                     pickle_viola=None,# single_detector=True, 
                     in_path=None, out_path=None, neural=None, 
                     ensemble=None, 
@@ -57,7 +58,9 @@ class Pipeline(object):
         self.method = method
         self.full_dataset = full_dataset
 
-        self.groupThres = groupThres
+        self.groupThres = dict()
+        self.groupThres['thatch'] = metal_groupThres
+        self.groupThres['metal'] = thatch_groupThres
         self.groupBounds = groupBounds
         self.erosion = erosion
 
@@ -112,6 +115,7 @@ class Pipeline(object):
         3. Net returns a list of the roof coordinates of each type - saved in roof_coords
         '''
         neural_time = 0
+        viola_time = 0
         self.img_names = self.img_names[:15] if DEBUG else self.img_names
         for i, img_name in enumerate(self.img_names):
             print '***************** Image {0}: {1}/{2} *****************'.format(img_name, i, len(self.img_names)-1)
@@ -162,6 +166,14 @@ class Pipeline(object):
             #GROUPING
             rect_detections, probs, grouping_time  = self.nonmax_suppression(rect_detections, probs)   
             neural_time += grouping_time
+            
+            self.print_detections({'metal':classified_detections['metal'][0],'thatch':classified_detections['thatch'][0]}, img_name, '_neural')
+
+
+            det = dict()
+            for roof_type in utils.ROOF_TYPES:
+                det[roof_type] = rect_detections[roof_type][probs[roof_type]>0.5]
+            self.print_detections(det, img_name, '_grouped')
 
             #AUC USING THE GROUPED DETECTIONS
             self.auc.set_detections(rect_detections, img_name)
@@ -181,8 +193,7 @@ class Pipeline(object):
                 self.evaluation_after_neural[t].score_img(img_name, img_shape[:2], fast_scoring=fast_scoring, contours=self.groupBounds)
 
         
-            self.print_detections({'metal':classified_detections['metal'][0],'thatch':classified_detections['thatch'][0] }, 
-                                                        img_name, '_neural0.5')
+            #self.print_detections({'metal':classified_detections['metal'][0],'thatch':classified_detections['thatch'][0] }, img_name, '_neural0.5')
 
         #FINAL EVALUATION
         if self.method == 'viola': 
@@ -197,15 +208,14 @@ class Pipeline(object):
         
 
     def print_detections(self, detections, img_name, title):
-        img = cv2.imread(self.in_path+img_name)
         if detections is not None:
             for roof_type, detects in detections.iteritems():
-                color = (0,0,255) if roof_type == 'metal' else (255,0,0)
-                utils.draw_detections(detects, img, rects=True, color=color)
+                img = cv2.imread(self.in_path+img_name)
 
-                color = (0, 0,0) if roof_type == 'metal' else (255,255,255)
-                utils.draw_detections(self.evaluation_after_neural[0].correct_roofs[roof_type][img_name], img, rects=True, color=color, thickness=10)
-            cv2.imwrite('debug/{}{}.jpg'.format(img_name[:-4], title), img)
+                utils.draw_detections(self.evaluation_after_neural[0].correct_roofs[roof_type][img_name], img, rects=True, color=(0,255,0), thickness=6)
+                utils.draw_detections(detects, img, rects=True, color=(255,0,0), thickness=3)
+
+                cv2.imwrite('debug/{}_{}_{}.jpg'.format(self.groupThres[roof_type], img_name[:-4],roof_type, title), img)
 
 
     def nonmax_suppression(self, rect_detections, probs):
@@ -213,7 +223,7 @@ class Pipeline(object):
             #set detections and score
             for roof_type in utils.ROOF_TYPES:
                 #proper non max suppression from Felzenszwalb et al.
-                rect_detections[roof_type], probs[roof_type] = suppression.non_max_suppression(rect_detections[roof_type], probs[roof_type], overlapThres = self.groupThres)
+                rect_detections[roof_type], probs[roof_type] = suppression.non_max_suppression(rect_detections[roof_type], probs[roof_type], overlapThres = self.groupThres[roof_type])
         print 'Grouping took {} seconds'.format(t.secs)
         return rect_detections, probs, t.secs
 
@@ -237,17 +247,6 @@ class Pipeline(object):
             correct_classes[roof_type] = list(correct_classes[roof_type])
         return correct_classes
 
-
-    '''
-    def non_max_suppression(self,polygons):
-        #we start with polygons, get the bounding box of it
-        rects = utils.get_bounding_boxes(np.array(polygons))
-        #covert the bounding box to what's requested by the non_max_suppression
-        boxes = utils.rects2boxes(rects)
-        boxes_suppressed = suppression.non_max_suppression(boxes, overlapThresh=self.overlapThresh)
-        polygons_suppressed = utils.boxes2polygons(boxes_suppressed)
-        return polygons_suppressed 
-    '''
 
     def group_min_bound(self, polygons, img_shape, erosion=0):
         '''
@@ -328,7 +327,6 @@ class Pipeline(object):
             all_proposal_patches[roof_type] = patches  
 
         return all_proposal_patches, img_shape
-
 
 
 
@@ -423,11 +421,12 @@ def setup_params(parameters, pipe_fname, method=None, decision='decideMean'):
     preloaded_paths = parameters['preloaded_path'].split() #there can be more than one network, separated by space
     single_detector_boolean = False if len(preloaded_paths) == 2 else True
 
-    #PIPE PARAMS:the step size (probably not needed) and the neural nets to be used
-    #metal_net, thatch_net = check_preloaded_paths_correct(preloaded_paths)
-    #preloaded_paths_dict = {'metal': metal_net, 'thatch': thatch_net}
+    #PIPE PARAMS: the grouping for each roof class parameter
     pipe_params = dict() 
-    pipe_params = {}#, 'preloaded_paths': preloaded_paths_dict}
+    if 'metal_groupThres' in parameters:
+        pipe_params['metal_groupThres'] = parameters['metal_groupThres']
+    if 'thatch_groupThres' in parameters:
+        pipe_params['thatch_groupThres'] = parameters['thatch_groupThres']
 
     neural_ensemble = Ensemble(preloaded_paths, scoring_strategy=decision, method=method)
     assert neural_ensemble is not None
@@ -498,8 +497,6 @@ if __name__ == '__main__':
     groupBounds = False
     erosion = 0  
 
-
-    
     #get the parameters from the pipeline
     if viola_num > 0:
         pipe_fname = 'viola{}.csv'.format(viola_num)
@@ -521,30 +518,42 @@ if __name__ == '__main__':
     print method
     parameters = utils.get_params_from_file( '{0}{1}'.format(utils.get_path(params=True, pipe=True), pipe_fname))
     neural_ensemble, detector_params, pipe_params, single_detector_bool = setup_params(parameters, pipe_fname[:-len('.csv')], method=method, decision=decision)
+
+    #if the groupthres is defined in the pipeline paramter file, we take it
+    if 'thatch_groupThres' not in pipe_params:
+        thatch_groupThres = groupThres
+    else:
+        thatch_groupThres = pipe_params['thatch_groupThres']
+    if 'metal_groupThres' not in pipe_params:
+        metal_groupThres = groupThres
+    else:
+        metal_groupThres = pipe_params['metal_groupThres']
+
     
-    for groupThres in [.1,.2,.3,.4,.5]:
-        #I/O
-        out_folder_name = '{0}_group{1}'.format(pipe_fname[:-len('.csv')], groupThres) 
-        in_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.IN, pipe=True, full_dataset=full_dataset) 
-        out_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.OUT, 
-                                    pipe=True, out_folder_name=out_folder_name, full_dataset=full_dataset)   
-        pickle_auc = False 
-        pipe = Pipeline(method=method, 
-                        full_dataset=full_dataset,
-                        pickle_viola=pickle_viola,# single_detector=single_detector_bool, 
-                        in_path=in_path, out_path=out_path, 
-                        pipe=pipe_params, 
-                        groupThres = groupThres,groupBounds=groupBounds, 
-                        ensemble=neural_ensemble, 
-                        detector_params=detector_params, out_folder_name=pipe_fname)
-        if pickle_auc == False:
-            pipe.run()
-            with open(out_path+'auc.pickle', 'wb') as f:
-                pickle.dump(pipe.auc, f)
-            pipe.auc.plot_auc()
-        else:
-            with open(out_path+'auc.pickle', 'rb') as f:
-                auc = pickle.load(f)
-            auc.plot_auc()
+    #UNCOMMENT THIS TO TEST NEW NETS WITH MULTTIPLE GROUPINGS
+    #group = [.1,.2,.3,.4,.5] if groupThres is None else [groupThres]
+    #for groupThres in group:
+    #I/O
+    out_folder_name = '{0}_metalGroup{1}_thatchGroup{2}'.format(pipe_fname[:-len('.csv')], metal_groupThres, thatch_groupThres) 
+    in_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.IN, pipe=True, full_dataset=full_dataset) 
+    out_path = utils.get_path(data_fold=utils.VALIDATION, in_or_out = utils.OUT, 
+                                pipe=True, out_folder_name=out_folder_name, full_dataset=full_dataset)   
+    pickle_auc = False 
+    pipe = Pipeline(method=method, 
+                    full_dataset=full_dataset,
+                    pickle_viola=pickle_viola,# single_detector=single_detector_bool, 
+                    in_path=in_path, out_path=out_path, 
+                    groupBounds=groupBounds, 
+                    ensemble=neural_ensemble, 
+                    detector_params=detector_params, out_folder_name=pipe_fname, **pipe_params)  
+    if pickle_auc == False:
+        pipe.run()
+        with open(out_path+'auc.pickle', 'wb') as f:
+            pickle.dump(pipe.auc, f)
+        pipe.auc.plot_auc()
+    else:
+        with open(out_path+'auc.pickle', 'rb') as f:
+            auc = pickle.load(f)
+        auc.plot_auc()
 
 

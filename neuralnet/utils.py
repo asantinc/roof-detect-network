@@ -45,7 +45,7 @@ ROOF_TYPES = ['metal', 'thatch']
 ###################################
 #Viola constants
 RECTIFIED_COORDINATES = '/afs/inf.ed.ac.uk/group/ANC/s0839470/data_original/bounding_inhabited/'
-UNINHABITED_PATH = '../data/source/uninhabited/'
+UNINHABITED_PATH = '/afs/inf.ed.ac.uk/group/ANC/s0839470/data/source/uninhabited/'
 BG_FILE = '../viola_jones/bg.txt'
 DAT_PATH = '../viola_jones/all_dat/'
 VEC_PATH = '../viola_jones/vec_files/'
@@ -824,7 +824,7 @@ def draw_detections(polygon_list, img, rects=False, fill=False, color=(0, 0, 255
             draw_polygon(polygon, img, fill=fill, color=color, number=num, thickness=thickness)
     else:
         for i, rect in enumerate(polygon_list):
-            cv2.rectangle(img, (rect[0], rect[1]), (rect[2], rect[3]), color=color)
+            cv2.rectangle(img, (rect[0], rect[1]), (rect[2], rect[3]), color=color, thickness=thickness)
 
 
 ############################

@@ -21,7 +21,7 @@ from reporting import Evaluation, Detections
 import viola_detector_helpers
 import suppression
 
-DEBUG = False
+DEBUG =True 
 
 class ViolaDetector(object):
     def __init__(self, 
@@ -138,7 +138,6 @@ class ViolaDetector(object):
             with open(self.out_folder+'evaluation.pickle', 'rb') as f:
                 self.evaluation = pickle.load(f)
 
-
     def setup_detectors(self, detector_names=None, old_detector=False):
         '''Given a list of detector names, get the detectors specified
         '''
@@ -222,7 +221,7 @@ class ViolaDetector(object):
                         if DEBUG:
                             rgb_to_write = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
                             utils.draw_detections(detections, rgb_to_write)
-                            cv2.imwrite('{0}{1}_{2}.jpg'.format(self.out_folder, img_name[:-4], angle), rgb_to_write)
+                            cv2.imwrite('{0}{3}{1}_{2}.jpg'.format(self.out_folder, img_name[:-4], angle, roof_type), rgb_to_write)
             return rgb_unrotated
 
 
@@ -318,6 +317,7 @@ def main(pickled_evaluation=False, combo_f_name=None, output_patches=True,
 
     viola = False if data_fold == utils.TRAINING else True
     in_path = utils.get_path(viola=viola, in_or_out=utils.IN, data_fold=data_fold)
+    in_path = utils.UNINHABITED_PATH
 
     #name the output_folder
     folder_name = ['combo'+combo_f_name]
@@ -326,6 +326,7 @@ def main(pickled_evaluation=False, combo_f_name=None, output_patches=True,
     folder_name = '_'.join(folder_name)
 
     out_path = utils.get_path(out_folder_name=folder_name, viola=True, in_or_out=utils.OUT, data_fold=data_fold)
+    out_path = 'output_viola_uninhabited/'
     viola = ViolaDetector(pickled_evaluation=pickled_evaluation, output_patches=output_patches,  
                             out_path=out_path, in_path=in_path, folder_name = folder_name, 
                             save_imgs=save_imgs, detector_names=detector,  **detector_params)
@@ -343,7 +344,7 @@ if __name__ == '__main__':
         data_fold=utils.TRAINING
     else: 
         data_fold=utils.VALIDATION
-    #data_fold = utils.SMALL_TEST
+    #data_fold = utils.UNINHABITED
 
     # removeOff: whether to remove the roofs that fall off the image when rotating (especially the ones on the edge
     # group: can be None, group_rectangles, group_bounding
