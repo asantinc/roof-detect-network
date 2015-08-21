@@ -127,7 +127,7 @@ class MyNeuralNet(NeuralNet):
 
         @staticmethod
         def produce_layers(num_layers=1, dropout=0):
-            assert num_layers<=5 and num_layers>=0
+            assert (num_layers<=6 and num_layers>=0)
             if num_layers<5:
                 assert dropout==0
 
@@ -234,6 +234,44 @@ class MyNeuralNet(NeuralNet):
                     params_dict['dropout2_p'] =0.4 
                     params_dict['dropout3_p'] =0.5 
                     params_dict['dropout4_p'] =0.5 
+            elif num_layers == 6:
+                net_layers=[
+                    ('input', layers.InputLayer),
+                    ('conv1', layers.Conv2DLayer),
+                    ('pool1', layers.MaxPool2DLayer),
+                    ('dropout1', layers.DropoutLayer),
+                    ('conv2', layers.Conv2DLayer),
+                    ('pool2', layers.MaxPool2DLayer),
+                    ('dropout2', layers.DropoutLayer),
+                    ('conv3', layers.Conv2DLayer),
+                    ('pool3', layers.MaxPool2DLayer),
+                    ('dropout3', layers.DropoutLayer),
+                    ('conv4', layers.Conv2DLayer),
+                    ('pool4', layers.MaxPool2DLayer),
+                    ('dropout4', layers.DropoutLayer),
+                    ('hidden5', layers.DenseLayer),
+                    ('dropout5', layers.DropoutLayer),
+                    ('hidden6', layers.DenseLayer),
+                    ('output', layers.DenseLayer),
+                    ]
+                params_dict = {'conv1_num_filters':32, 'conv1_filter_size':(3, 3), 'pool1_pool_size':(2, 2),
+                        'conv2_num_filters':64, 'conv2_filter_size':(2, 2), 'pool2_pool_size':(2, 2),
+                        'conv3_num_filters':128, 'conv3_filter_size':(2, 2), 'pool3_pool_size':(2, 2),
+                        'conv4_num_filters':256, 'conv4_filter_size':(2, 2), 'pool4_pool_size':(2, 2),
+                        'hidden5_num_units':500, 'hidden6_num_units':500}
+                if dropout == 1:
+                    params_dict['dropout1_p'] =0.1 
+                    params_dict['dropout2_p'] =0.2 
+                    params_dict['dropout3_p'] =0.3 
+                    params_dict['dropout4_p'] =0.4 
+                    params_dict['dropout5_p'] =0.4 
+                elif dropout == 2:
+                    params_dict['dropout1_p'] =0.3 
+                    params_dict['dropout2_p'] =0.4 
+                    params_dict['dropout3_p'] =0.5 
+                    params_dict['dropout4_p'] =0.5 
+                    params_dict['dropout5_p'] =0.5 
+
             return net_layers, params_dict 
 
 
