@@ -21,7 +21,7 @@ from reporting import Evaluation, Detections
 import viola_detector_helpers
 import suppression
 
-DEBUG =True 
+DEBUG =False 
 
 class ViolaDetector(object):
     def __init__(self, 
@@ -172,21 +172,22 @@ class ViolaDetector(object):
                 img = self.detect_roofs_group(img_name)
             else:
                 img = self.detect_roofs(img_name)
+        '''
             self.evaluation.score_img(img_name, img.shape)
         self.evaluation.print_report()
 
         with open('{0}evaluation.pickle'.format(self.out_folder), 'wb') as f:
             pickle.dump(self.evaluation, f) 
-
         if self.output_patches:
             self.evaluation.save_training_TP_FP_using_voc()
-            
+        
         open(self.out_folder+'DONE', 'w').close() 
+        '''
 
-
-    def detect_roofs(self, img_name):
+    def detect_roofs(self, img_name, in_path=None):
+        in_path = self.in_path if in_path is None else in_path 
         try:
-            rgb_unrotated = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
+            rgb_unrotated = cv2.imread(in_path+img_name, flags=cv2.IMREAD_COLOR)
             gray = cv2.cvtColor(rgb_unrotated, cv2.COLOR_BGR2GRAY)
             gray = cv2.equalizeHist(gray)
 
@@ -210,7 +211,8 @@ class ViolaDetector(object):
 
                         with Timer() as t: 
                             rotated_image = utils.rotate_image(gray, angle) if angle>0 else gray
-                            detections, _ = self.detect_and_rectify(detector, rotated_image, angle, rgb_unrotated.shape[:2]) 
+                            delete_image = utils.rotate_image_RGB(rgb_unrotated, angle) if angle>0 else gray
+                            detections, _ = self.detect_and_rectify(detector, rotated_image, angle, rgb_unrotated.shape[:2], rgb_rotated=delete_image) 
                             if self.downsized:
                                 detections = detections*2
                             self.viola_detections.set_detections(roof_type=roof_type, img_name=img_name, 
@@ -219,15 +221,23 @@ class ViolaDetector(object):
                         print 'Time detection: {0}'.format(t.secs)
                         self.viola_detections.total_time += t.secs
                         if DEBUG:
-                            rgb_to_write = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
-                            utils.draw_detections(detections, rgb_to_write)
-                            cv2.imwrite('{0}{3}{1}_{2}.jpg'.format(self.out_folder, img_name[:-4], angle, roof_type), rgb_to_write)
+                            rgb_to_write = cv2.imread(in_path+img_name, flags=cv2.IMREAD_COLOR)
+                            utils.draw_detections(detections, rgb_to_write, color=(255,0,0))
+                            cv2.imwrite('{0}{3}{1}_{2}.jpg'.format('', img_name[:-4], angle, roof_type), rgb_to_write)
             return rgb_unrotated
 
 
-    def detect_and_rectify(self, detector, image, angle, dest_img_shape):
+    def detect_and_rectify(self, detector, image, angle, dest_img_shape, rgb_rotated=None):
         #do the detection
         detections = detector.detectMultiScale(image, scaleFactor=self.scale, minNeighbors=self.min_neighbors)
+        '''
+        print 'were about to save the rotated images, if you dont want this, quit and remove this from like 232 in viola_detector.py'
+        pdb.set_trace()
+        for d in detections:
+            cv2.rectangle(rgb_rotated, (d[0], d[1]), (d[0]+d[2], d[1]+d[3]), (255,255,255), 4) 
+        cv2.imwrite('rotated.jpg', rgb_rotated)
+        pdb.set_trace()
+        '''
         #convert to proper coordinate system
         polygons = utils.convert_detections_to_polygons(detections)
 
@@ -246,6 +256,7 @@ class ViolaDetector(object):
         return rectified_detections, bounding_boxes
 
 
+    '''
     def detect_roofs_group(self, img_name):
         try:
             rgb_unrotated = cv2.imread(self.in_path+img_name, flags=cv2.IMREAD_COLOR)
@@ -285,7 +296,7 @@ class ViolaDetector(object):
                 print 'Detections for {0}'.format(roof_type)
                 print len(self.viola_detections.get_detections(roof_type=roof_type, img_name=img_name))
             return rgb_unrotated
-
+    '''
 
     def mark_save_current_rotation(self, img_name, img, detections, angle, out_folder=None):
         out_folder = self.out_folder if out_folder is None else out_folder
@@ -317,7 +328,6 @@ def main(pickled_evaluation=False, combo_f_name=None, output_patches=True,
 
     viola = False if data_fold == utils.TRAINING else True
     in_path = utils.get_path(viola=viola, in_or_out=utils.IN, data_fold=data_fold)
-    in_path = utils.UNINHABITED_PATH
 
     #name the output_folder
     folder_name = ['combo'+combo_f_name]
@@ -357,9 +367,8 @@ if __name__ == '__main__':
 
     if pickled_evaluation == False:
         viola.detect_roofs_in_img_folder()
-    
+
     if pickled_evaluation and output_patches:
         #viola.save_training_FP_and_TP(viola=True)
         viola.save_training_FP_TP_using_voc(neural=True)
-
 

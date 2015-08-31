@@ -59,9 +59,10 @@ class SlidingWindowNeural(object):
         return (w<2000 and h<1000)
 
 
-    def get_windows(self, img_name):
+    def get_windows(self, img_name, in_path=None):
+        in_path = in_path if in_path is not None else self.in_path
         try:
-            image = cv2.imread(self.in_path+img_name)
+            image = cv2.imread(in_path+img_name)
         except IOError:
             print 'Could not open file'
             sys.exit(-1)
@@ -156,12 +157,12 @@ class SlidingWindowNeural(object):
 
 def main():
     full_dataset = False 
-    output_patches = True 
+    output_patches = False# True 
     stepSize = 50 if output_patches else 4
     scale = 1.3
     minSize = (50,50)
     windowSize = (15,15)
-    data_fold = None #utils.VALIDATION
+    data_fold = utils.VALIDATION
     slider = SlidingWindowNeural(data_fold=data_fold, windowSize=windowSize, full_dataset=full_dataset, 
                                 output_patches=output_patches, stepSize=stepSize, scale=scale, minSize=minSize)
     slider.get_windows_in_folder()

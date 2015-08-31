@@ -8,6 +8,10 @@ import utils
 import math
 
 from collections import defaultdict
+from nolearn.lasagne.visualize import plot_loss
+from nolearn.lasagne.visualize import plot_conv_weights
+from nolearn.lasagne.visualize import plot_conv_activity
+from nolearn.lasagne.visualize import plot_occlusion
 
 
 class Ensemble(object):
@@ -113,3 +117,5 @@ class Ensemble(object):
                 current_net = Experiment(pipeline=True, method=self.method, starting_batch=starting_batch, **neural_params) 
                 self.neural_nets[roof_type].append(current_net) 
 
+if __name__ == '__main__':
+    pass

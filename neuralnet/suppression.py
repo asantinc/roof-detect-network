@@ -5,9 +5,12 @@ import pdb
 # Malisiewicz et al.
 def non_max_suppression(boxes, class_probs, overlapThres=0.3):
     #required boxes in the form of x1, y1, x2, y2
-    # if there are no boxes, return an empty list
-    boxes = np.array(boxes).squeeze()
 
+    #if the box list has an extra single dimension, get rid of it
+    if len(boxes.shape) > 2:
+        boxes = np.array(boxes).squeeze()
+
+    # if there are no boxes, return an empty list
     if len(boxes) == 0:
         return []
 
@@ -15,6 +18,7 @@ def non_max_suppression(boxes, class_probs, overlapThres=0.3):
     # this is important since we'll be doing a bunch of divisions
     if boxes.dtype.kind == "i":
         boxes = boxes.astype("float")
+
 
     # initialize the list of picked indexes	
     pick = []

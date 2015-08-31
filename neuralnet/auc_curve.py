@@ -1,6 +1,8 @@
 import utils
 from collections import defaultdict
-from matplotlib import pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 import numpy as np
 from reporting import Detections, Evaluation
 from sklearn.metrics import auc
@@ -44,18 +46,16 @@ class AucCurve(object):
         self.easy_area = dict()
 
         #TODO: find the unique prob points
-        unique_probs = [0.0,0.1,.2,.3,.4,.5,.6,.7,.8,.9]
-        unique_probs = set()
-        unique_probs.update([1.])
+        self.unique_probs = set()
+        self.unique_probs.update([1.])
         for roof_type in utils.ROOF_TYPES:
             for img_name in self.img_names:
                 probs = [int(100*p) for p in list(self.probs[roof_type][img_name])]
                 probs = [(float(p)/100) for p in probs]
-                unique_probs.update((probs))
-        print unique_probs
+                self.unique_probs.update((probs))
 
-        unique_probs = sorted(unique_probs)
-        for thres in unique_probs:
+        self.unique_probs = sorted(self.unique_probs)
+        for thres in self.unique_probs:
             print 'TRESHOLD: {}'.format(thres)
             #find true pos
             #for current threshold, for each roof type separately
@@ -110,6 +110,17 @@ class AucCurve(object):
             self.easy_area[roof_type] = auc(self.easy_recall[roof_type], self.easy_precision[roof_type])
         print self.area
         print self.easy_area
+
+        for roof_type in utils.ROOF_TYPES:
+            with open(self.out_path+roof_type+'_auc.csv', 'w') as f:
+                for i, prob in enumerate(self.unique_probs): 
+                    f.write('{},{},{}\n'.format(prob, self.recall[roof_type][i], self.precision[roof_type][i]))
+
+            with open(self.out_path+roof_type+'_auc_easy.csv', 'w') as f:
+                for i, prob in enumerate(self.unique_probs): 
+                    f.write('{},{},{}\n'.format(prob, self.easy_recall[roof_type][i], self.easy_precision[roof_type][i]))
+
+
 
 
     def plot_auc(self):

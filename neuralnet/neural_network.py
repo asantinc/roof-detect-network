@@ -20,6 +20,7 @@ sys.path.append('~/roof/nolearn/nolearn')
 from nolearn.lasagne.handlers import PrintLog, PrintLayerInfo 
 from nolearn.lasagne.base import BatchIterator
 from nolearn.lasagne.util import is_conv2d
+
 from sklearn.metrics import classification_report, confusion_matrix
 from scipy.stats import uniform as sp_rand
 from scipy.stats import randint
@@ -437,4 +438,5 @@ if __name__ == '__main__':
         experiment.train_test() 
     else:
         pass
+
 
